@@ -909,8 +909,8 @@ function getAdminHTML() {
 })();
 </script>
 <style>
-:root{--bg:#f5f5f5;--surface:#fff;--ink:#1a1a1a;--muted:#666;--line:#e0e0e0;--teal:#087f78;--teal-soft:#e6f7f5;--red:#d32f2f;--red-soft:#fdeaea;--amber:#f57c00;--amber-soft:#fff3e0;--radius:6px;--font:system-ui,-apple-system,sans-serif;--hover:#f0f0f0;--th-bg:#fafafa;--tag-bg:#eee;--shadow:0 1px 3px rgba(0,0,0,.08)}
-[data-theme=dark]{--bg:#1a1d21;--surface:#23262b;--ink:#e0e0e0;--muted:#999;--line:#3a3d42;--teal:#4ecdc4;--teal-soft:#1a3a38;--red:#ef5350;--red-soft:#3a1a1a;--amber:#ffb74d;--amber-soft:#3a2a10;--hover:#2a2d32;--th-bg:#2a2d32;--tag-bg:#3a3d42;--shadow:0 1px 3px rgba(0,0,0,.3)}
+:root{--bg:#f5f5f5;--surface:#fff;--ink:#1a1a1a;--muted:#666;--line:#e0e0e0;--teal:#087f78;--teal-soft:#e6f7f5;--red:#d32f2f;--red-soft:#fdeaea;--coral:#d32f2f;--amber:#f57c00;--amber-soft:#fff3e0;--green:#2e7d32;--radius:6px;--font:system-ui,-apple-system,sans-serif;--hover:#f0f0f0;--th-bg:#fafafa;--tag-bg:#eee;--shadow:0 1px 3px rgba(0,0,0,.08)}
+[data-theme=dark]{--bg:#1a1d21;--surface:#23262b;--ink:#e0e0e0;--muted:#999;--line:#3a3d42;--teal:#4ecdc4;--teal-soft:#1a3a38;--red:#ef5350;--red-soft:#3a1a1a;--coral:#ef5350;--amber:#ffb74d;--amber-soft:#3a2a10;--green:#66bb6a;--hover:#2a2d32;--th-bg:#2a2d32;--tag-bg:#3a3d42;--shadow:0 1px 3px rgba(0,0,0,.3)}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--font);background:var(--bg);color:var(--ink);line-height:1.5;font-size:14px}
 a{color:var(--teal);text-decoration:none}
@@ -956,7 +956,7 @@ th:last-child{position:sticky;right:0;background:var(--th-bg);border-left:1px so
 .toggle{position:relative;display:inline-block;width:36px;height:20px;cursor:pointer}
 .toggle input{opacity:0;width:0;height:0}
 .toggle .slider{position:absolute;inset:0;background:var(--line);border-radius:20px;transition:.3s}
-.toggle .slider::before{content:"";position:absolute;left:2px;bottom:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:.3s}
+.toggle .slider::before{content:"";position:absolute;left:2px;bottom:2px;width:16px;height:16px;background:var(--surface);border-radius:50%;transition:.3s}
 .toggle input:checked+.slider{background:var(--teal)}
 .toggle input:checked+.slider::before{transform:translateX(16px)}
 /* ── 提交审核 ── */
@@ -996,7 +996,7 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
 /* ── Toast ── */
 .toast{position:fixed;bottom:20px;right:20px;padding:12px 20px;border-radius:var(--radius);color:#fff;font-size:13px;font-weight:600;z-index:200;transform:translateY(80px);opacity:0;transition:.3s}
 .toast.show{transform:translateY(0);opacity:1}
-.toast.success{background:#2e7d32}
+.toast.success{background:var(--green)}
 .toast.error{background:var(--red)}
 /* ── 响应式 ── */
 @media(max-width:768px){.toolbar{flex-direction:column}.toolbar input[type="search"]{min-width:0;width:100%}th,td{padding:6px 8px}}
@@ -1950,7 +1950,7 @@ export default {
         // 全局超时保护：25s（Workers 总限制 30s，留 5s 余量给 KV 写入）
         const GLOBAL_TIMEOUT_MS = 25000;
         const PER_URL_TIMEOUT_MS = 3000;
-        const BATCH_SIZE = 20;
+        const BATCH_SIZE = 10; // Workers 限制 50 subreq/次，每个 URL 最坏 2 subreq(HEAD+GET)
         const globalStart = Date.now();
         const results = [];
         let timedOut = false;
