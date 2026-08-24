@@ -1274,8 +1274,8 @@ function previewImport(input) {
         let line = "• " + s.name;
         if (s.url) line += " → " + s.url.slice(0, 50) + (s.url.length > 50 ? "..." : "");
         return line;
-      }).join("\n");
-      document.getElementById("importPreviewText").value = preview + (sites.length > 10 ? "\n... 共 " + sites.length + " 条" : "");
+      }).join("\\n");
+      document.getElementById("importPreviewText").value = preview + (sites.length > 10 ? "\\n... 共 " + sites.length + " 条" : "");
       document.getElementById("importPreview").style.display = "block";
       document.getElementById("importBtn").disabled = false;
     } catch (err) {
@@ -1297,7 +1297,7 @@ async function doImport() {
     if (data.updated) msg += "，更新 " + data.updated + " 条";
     if (data.skipped) msg += "，跳过 " + data.skipped + " 条";
     if (data.duplicates && data.duplicates.length > 0) {
-      msg += "\n重复站点：" + data.duplicates.map((d) => d.existingName).join(", ");
+      msg += "\\n重复站点：" + data.duplicates.map((d) => d.existingName).join(", ");
     }
     toast(msg, "success");
     closeImportModal();
