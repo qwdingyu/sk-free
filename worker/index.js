@@ -49,6 +49,7 @@ const SITES_KEY = "sites.json";
 const VOTES_KEY = "votes.json";
 const RATE_KEY = "rate_limits";
 const SUBMISSIONS_KEY = "submissions.json";
+const DEAD_URLS_KEY = "dead_urls.json";
 
 // 用户提交速率限制：每 IP 每天最多提交次数
 const SUBMIT_RATE_LIMIT = 5; // 每 IP 每天 5 次
@@ -246,6 +247,47 @@ async function updateRateLimit(kv, siteName, ip) {
   }
 
   await kv.put(RATE_KEY, JSON.stringify(limits));
+}
+
+/**
+ * 检查 URL 是否可达
+ * 使用 HEAD 请求 + 5 秒超时，失败后降级为 GET
+ * @param {string} url - 要检查的 URL
+ * @returns {Promise<{ok: boolean, status: number, error?: string}>}
+ */
+async function checkUrlHealth(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    // 先尝试 HEAD（轻量）
+    let res;
+    try {
+      res = await fetch(url, { method: "HEAD", signal: controller.signal, redirect: "follow" });
+    } catch {
+      // HEAD 失败（如 405）降级为 GET
+      res = await fetch(url, { method: "GET", signal: controller.signal, redirect: "follow" });
+    }
+    clearTimeout(timer);
+    return { ok: res.ok, status: res.status };
+  } catch (e) {
+    clearTimeout(timer);
+    return { ok: false, status: 0, error: e.name === "AbortError" ? "timeout" : e.message };
+  }
+}
+
+/**
+ * 获取死链接列表
+ */
+async function getDeadUrls(kv) {
+  const raw = await kv.get(DEAD_URLS_KEY);
+  return raw ? JSON.parse(raw) : {};
+}
+
+/**
+ * 保存死链接列表
+ */
+async function saveDeadUrls(kv, deadUrls) {
+  await kv.put(DEAD_URLS_KEY, JSON.stringify(deadUrls));
 }
 
 /**
@@ -533,11 +575,21 @@ async function handleAdminImportSites(kv, request) {
     existingCleanUrls.set(cleanUrl, i);
   });
 
-  let added = 0, skipped = 0, updated = 0;
+  // 加载死链接列表，导入时过滤
+  const deadUrls = await getDeadUrls(kv);
+
+  let added = 0, skipped = 0, updated = 0, deadFiltered = 0;
   const duplicates = [];
 
   for (const item of incoming) {
     if (!item.name || !item.url) { skipped++; continue; }
+
+    // 死链接过滤：URL 在死名单中则跳过
+    const { cleanUrl: checkUrl } = parseSiteUrl(item.url);
+    if (deadUrls[checkUrl] || deadUrls[item.url]) {
+      deadFiltered++;
+      continue;
+    }
 
     const { originalUrl, cleanUrl, ref } = parseSiteUrl(item.url);
     const existingIdx = existingCleanUrls.get(cleanUrl);
@@ -584,6 +636,7 @@ async function handleAdminImportSites(kv, request) {
     added,
     updated,
     skipped,
+    deadFiltered: deadFiltered > 0 ? deadFiltered : undefined,
     duplicates: duplicates.length > 0 ? duplicates : undefined
   }, 200, request);
 }
@@ -706,7 +759,8 @@ td.name{font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis}
 td.tags{max-width:200px}
 .tag{display:inline-block;padding:2px 6px;border-radius:3px;font-size:11px;font-weight:700;background:#eee;margin:1px}
 td.summary{max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
-td.actions{white-space:nowrap}
+td.actions{white-space:nowrap;position:sticky;right:0;background:var(--surface);border-left:1px solid var(--line);z-index:1}
+th:last-child{position:sticky;right:0;background:#fafafa;border-left:1px solid var(--line);z-index:2}
 /* ── 启用开关 ── */
 .toggle{position:relative;display:inline-block;width:36px;height:20px;cursor:pointer}
 .toggle input{opacity:0;width:0;height:0}
@@ -783,6 +837,7 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
   <div class="tab-bar">
     <button class="tab-btn active" onclick="switchTab('sites')">站点管理</button>
     <button class="tab-btn" onclick="switchTab('submissions')">提交审核 <span id="subCount" class="tag" style="display:none;background:var(--red);color:#fff"></span></button>
+    <button class="tab-btn" onclick="switchTab('health')">🔗 链接健康</button>
   </div>
 
   <!-- ═══ 站点管理面板 ═══ -->
@@ -827,6 +882,17 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
   <!-- ═══ 提交审核面板 ═══ -->
   <div id="panelSubmissions" class="tab-panel">
     <div id="submissionsList"></div>
+  </div>
+
+  <!-- ═══ 链接健康面板 ═══ -->
+  <div id="panelHealth" class="tab-panel">
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+      <button class="btn btn-primary btn-sm" onclick="batchCheckUrls()">🔍 批量检查所有站点</button>
+      <span id="healthStatus" style="color:var(--muted);font-size:13px"></span>
+    </div>
+    <div id="healthResults"></div>
+    <h4 style="margin:16px 0 8px">死链接名单 <span id="deadCount" style="color:var(--muted);font-size:13px"></span></h4>
+    <div id="deadUrlsList"></div>
   </div>
 </div>
 
@@ -1179,11 +1245,13 @@ async function batchDisable() {
 // ── 标签页切换 ──────────────────────────────────────────
 function switchTab(tab) {
   document.querySelectorAll(".tab-btn").forEach((btn, i) => {
-    btn.classList.toggle("active", (tab === "sites" && i === 0) || (tab === "submissions" && i === 1));
+    btn.classList.toggle("active", (tab === "sites" && i === 0) || (tab === "submissions" && i === 1) || (tab === "health" && i === 2));
   });
   document.getElementById("panelSites").classList.toggle("active", tab === "sites");
   document.getElementById("panelSubmissions").classList.toggle("active", tab === "submissions");
+  document.getElementById("panelHealth").classList.toggle("active", tab === "health");
   if (tab === "submissions") loadSubmissions();
+  if (tab === "health") loadDeadUrls();
 }
 
 // ── 提交审核 ──────────────────────────────────────────
@@ -1235,6 +1303,77 @@ async function rejectSubmission(id) {
     toast("已驳回", "success");
     await loadSubmissions();
   } catch (e) { toast(e.message, "error"); }
+}
+
+// ── 链接健康检查 ──────────────────────────────────────────
+async function loadDeadUrls() {
+  try {
+    const data = await api("/api/admin/dead-urls");
+    const list = document.getElementById("deadUrlsList");
+    const countEl = document.getElementById("deadCount");
+    const urls = Object.keys(data.deadUrls || {});
+    countEl.textContent = urls.length > 0 ? ("(" + urls.length + " 个)") : "(空)";
+    if (urls.length === 0) {
+      list.innerHTML = '<div style="color:var(--muted);padding:12px">暂无死链接</div>';
+      return;
+    }
+    list.innerHTML = urls.map(url => {
+      const info = data.deadUrls[url];
+      const time = info.addedAt ? new Date(info.addedAt).toLocaleString() : "";
+      const reason = info.error || info.reason || "";
+      return '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--line);font-size:13px">' +
+        '<span style="flex:1;word-break:break-all;color:var(--coral)">' + esc(url) + '</span>' +
+        '<span style="color:var(--muted);font-size:11px;white-space:nowrap">' + esc(reason) + ' ' + time + '</span>' +
+        '<button class="btn btn-sm btn-danger" data-url="' + esc(url) + '" data-action="remove-dead">移除</button>' +
+      '</div>';
+    }).join("");
+  } catch (e) { toast("加载死链接失败: " + e.message, "error"); }
+}
+
+async function removeDeadUrl(url) {
+  try {
+    await api("/api/admin/dead-urls", { method: "POST", body: JSON.stringify({ url, action: "remove" }) });
+    toast("已移除");
+    await loadDeadUrls();
+  } catch (e) { toast(e.message, "error"); }
+}
+
+async function batchCheckUrls() {
+  const statusEl = document.getElementById("healthStatus");
+  const resultsEl = document.getElementById("healthResults");
+  statusEl.textContent = "正在检查中，请稍候...";
+  resultsEl.innerHTML = "";
+  try {
+    const data = await api("/api/admin/check-batch", { method: "POST", body: JSON.stringify({}) });
+    statusEl.textContent = "检查完成：共 " + data.total + " 个，" + data.alive + " 个正常，" + data.dead + " 个不可达" + (data.newDead > 0 ? "（新增 " + data.newDead + " 个死链接）" : "");
+    // 按状态分组显示
+    const dead = data.results.filter(r => !r.ok);
+    const alive = data.results.filter(r => r.ok);
+    let html = "";
+    if (dead.length > 0) {
+      html += '<div style="margin-bottom:12px"><strong style="color:var(--coral)">❌ 不可达 (' + dead.length + ')</strong></div>';
+      html += dead.map(r => {
+        const detail = r.error || ("HTTP " + r.status);
+        return '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)">' +
+          '<span style="flex:1;word-break:break-all">' + esc(r.url) + '</span>' +
+          '<span style="color:var(--coral);white-space:nowrap">' + esc(detail) + '</span>' +
+        '</div>';
+      }).join("");
+    }
+    if (alive.length > 0) {
+      html += '<div style="margin:12px 0 8px"><strong style="color:var(--teal)">✅ 正常 (' + alive.length + ')</strong></div>';
+      html += alive.map(r => {
+        return '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)">' +
+          '<span style="flex:1;word-break:break-all">' + esc(r.url) + '</span>' +
+          '<span style="color:var(--teal);white-space:nowrap">HTTP ' + r.status + '</span>' +
+        '</div>';
+      }).join("");
+    }
+    resultsEl.innerHTML = html;
+    await loadDeadUrls(); // 刷新死链接列表
+  } catch (e) {
+    statusEl.textContent = "检查失败: " + e.message;
+  }
 }
 
 // ── 导出 ──────────────────────────────────────────────────
@@ -1356,6 +1495,7 @@ document.addEventListener("click", function(e) {
     case "delete-site":      deleteSite(name); break;
     case "approve-submission": approveSubmission(id); break;
     case "reject-submission":  rejectSubmission(id); break;
+    case "remove-dead":       removeDeadUrl(el.getAttribute("data-url")); break;
   }
 });
 document.addEventListener("change", function(e) {
@@ -1441,6 +1581,77 @@ export default {
       // DELETE /api/admin/sites/:name
       if (putMatch && request.method === "DELETE") {
         return handleAdminDeleteSite(kv, request, decodeURIComponent(putMatch[1]));
+      }
+
+      // GET /api/admin/dead-urls — 获取死链接列表
+      if (path === "/api/admin/dead-urls" && request.method === "GET") {
+        const deadUrls = await getDeadUrls(kv);
+        return json({ ok: true, deadUrls }, 200, request);
+      }
+      // POST /api/admin/dead-urls — 添加/移除死链接
+      // body: { url, action: "add" | "remove" }
+      if (path === "/api/admin/dead-urls" && request.method === "POST") {
+        const parsed = await parseJsonBody(request);
+        if (!parsed.ok) return parsed.response;
+        const { url, action } = parsed.data;
+        if (!url || !action) return json({ ok: false, error: "需要 url 和 action 参数" }, 400, request);
+        const deadUrls = await getDeadUrls(kv);
+        if (action === "add") {
+          deadUrls[url] = { addedAt: Date.now(), reason: "unreachable" };
+        } else if (action === "remove") {
+          delete deadUrls[url];
+        } else {
+          return json({ ok: false, error: "action 只能是 add 或 remove" }, 400, request);
+        }
+        await saveDeadUrls(kv, deadUrls);
+        return json({ ok: true, count: Object.keys(deadUrls).length }, 200, request);
+      }
+
+      // POST /api/admin/check-url — 检查单个 URL
+      // body: { url }
+      if (path === "/api/admin/check-url" && request.method === "POST") {
+        const parsed = await parseJsonBody(request);
+        if (!parsed.ok) return parsed.response;
+        const { url } = parsed.data;
+        if (!url) return json({ ok: false, error: "需要 url 参数" }, 400, request);
+        const result = await checkUrlHealth(url);
+        return json({ ok: true, url, ...result }, 200, request);
+      }
+
+      // POST /api/admin/check-batch — 批量检查所有站点 URL
+      // body: { urls?: string[] }（不传则检查所有站点）
+      if (path === "/api/admin/check-batch" && request.method === "POST") {
+        const parsed = await parseJsonBody(request);
+        if (!parsed.ok) return parsed.response;
+        let urls = parsed.data.urls;
+        if (!urls || !Array.isArray(urls)) {
+          // 默认检查所有站点
+          const sitesData = await handleGetSites(kv);
+          urls = sitesData.map(s => s.url).filter(Boolean);
+        }
+        // 并发检查（每批 10 个）
+        const results = [];
+        for (let i = 0; i < urls.length; i += 10) {
+          const batch = urls.slice(i, i + 10);
+          const batchResults = await Promise.all(batch.map(async (url) => {
+            const r = await checkUrlHealth(url);
+            return { url, ...r };
+          }));
+          results.push(...batchResults);
+        }
+        // 自动将不可达的 URL 加入死链接列表
+        const deadUrls = await getDeadUrls(kv);
+        let newDead = 0;
+        for (const r of results) {
+          if (!r.ok && !deadUrls[r.url]) {
+            deadUrls[r.url] = { addedAt: Date.now(), status: r.status, error: r.error, reason: "auto-detected" };
+            newDead++;
+          }
+        }
+        if (newDead > 0) await saveDeadUrls(kv, deadUrls);
+        const alive = results.filter(r => r.ok).length;
+        const dead = results.filter(r => !r.ok).length;
+        return json({ ok: true, total: results.length, alive, dead, newDead, results }, 200, request);
       }
 
       return json({ ok: false, error: "Not Found" }, 404, request);
