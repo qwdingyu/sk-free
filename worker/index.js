@@ -363,7 +363,8 @@ function requireAuth(request, env) {
  */
 async function handleGetVotes(kv, request) {
   const raw = await kv.get(VOTES_KEY);
-  const votes = raw ? JSON.parse(raw) : {};
+  let votes;
+  try { votes = raw ? JSON.parse(raw) : {}; } catch { votes = {}; }
   return json({ ok: true, votes }, 200, request);
 }
 
@@ -372,7 +373,8 @@ async function handleGetVotes(kv, request) {
  */
 async function checkRateLimit(kv, siteName, ip) {
   const raw = await kv.get(RATE_KEY);
-  const limits = raw ? JSON.parse(raw) : {};
+  let limits;
+  try { limits = raw ? JSON.parse(raw) : {}; } catch { limits = {}; }
   const lastVote = limits[siteName]?.[ip] || 0;
   const now = Date.now();
 
@@ -388,7 +390,8 @@ async function checkRateLimit(kv, siteName, ip) {
  */
 async function updateRateLimit(kv, siteName, ip) {
   const raw = await kv.get(RATE_KEY);
-  const limits = raw ? JSON.parse(raw) : {};
+  let limits;
+  try { limits = raw ? JSON.parse(raw) : {}; } catch { limits = {}; }
 
   if (!limits[siteName]) limits[siteName] = {};
   limits[siteName][ip] = Date.now();
@@ -436,7 +439,7 @@ async function checkUrlHealth(url, timeoutMs = 5000) {
  */
 async function getDeadUrls(kv) {
   const raw = await kv.get(DEAD_URLS_KEY);
-  return raw ? JSON.parse(raw) : {};
+  try { return raw ? JSON.parse(raw) : {}; } catch { return {}; }
 }
 
 /**
@@ -472,7 +475,8 @@ async function handleVote(request, kv) {
   }
 
   const raw = await kv.get(VOTES_KEY);
-  const votes = raw ? JSON.parse(raw) : {};
+  let votes;
+  try { votes = raw ? JSON.parse(raw) : {}; } catch { votes = {}; }
 
   if (!votes[site]) votes[site] = { up: 0, down: 0 };
   votes[site][vote] = (votes[site][vote] || 0) + 1;
@@ -694,7 +698,8 @@ async function handleAdminBatch(kv, request) {
  */
 async function handleAdminSubmissionAction(kv, request, action, id) {
   const raw = await kv.get(SUBMISSIONS_KEY);
-  const subs = raw ? JSON.parse(raw) : [];
+  let subs;
+  try { subs = raw ? JSON.parse(raw) : []; } catch { subs = []; }
   const idx = subs.findIndex((s) => s.id === id);
   if (idx === -1) return json({ ok: false, error: "提交不存在" }, 404, request);
 
@@ -839,7 +844,8 @@ async function handleSubmitSite(request, kv) {
   // 速率限制：每 IP 每天最多 5 次提交
   const ip = request.headers.get("CF-Connecting-IP") || "unknown";
   const raw = await kv.get(SUBMISSIONS_KEY);
-  const subs = raw ? JSON.parse(raw) : [];
+  let subs;
+  try { subs = raw ? JSON.parse(raw) : []; } catch { subs = []; }
   const now = Date.now();
   const ipSubmissions = subs.filter((s) => s.ip === ip && (now - s.createdAt) < SUBMIT_RATE_WINDOW_MS);
   if (ipSubmissions.length >= SUBMIT_RATE_LIMIT) {
@@ -883,7 +889,8 @@ async function handleSubmitSite(request, kv) {
  */
 async function handleAdminGetSubmissions(kv, request) {
   const raw = await kv.get(SUBMISSIONS_KEY);
-  const subs = raw ? JSON.parse(raw) : [];
+  let subs;
+  try { subs = raw ? JSON.parse(raw) : []; } catch { subs = []; }
   const pending = subs.filter((s) => s.status === "pending");
   return json({ ok: true, submissions: pending, total: subs.length }, 200, request);
 }
@@ -939,7 +946,7 @@ a{color:var(--teal);text-decoration:none}
 .btn-sm{padding:4px 10px;font-size:12px}
 /* ── 工具栏 ── */
 .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
-.toolbar input[type="search"]{flex:1;min-width:200px;padding:8px 12px;border:1px solid var(--line);border-radius:var(--radius);font-size:13px}
+.toolbar input[type="search"]{flex:1;min-width:200px;padding:8px 12px;border:1px solid var(--line);border-radius:var(--radius);font-size:13px;background:var(--surface);color:var(--ink)}
 /* ── 表格 ── */
 .table-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
 table{width:100%;border-collapse:collapse;font-size:13px}
@@ -985,7 +992,7 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
 .modal h3{margin-bottom:16px;font-size:16px}
 .form-row{margin-bottom:12px}
 .form-row label{display:block;margin-bottom:4px;font-weight:600;font-size:13px}
-.form-row input,.form-row textarea,.form-row select{width:100%;padding:8px;border:1px solid var(--line);border-radius:var(--radius);font-size:13px;font-family:inherit}
+.form-row input,.form-row textarea,.form-row select{width:100%;padding:8px;border:1px solid var(--line);border-radius:var(--radius);font-size:13px;font-family:inherit;background:var(--surface);color:var(--ink)}
 .form-row textarea{min-height:60px;resize:vertical}
 .form-row .hint{font-size:11px;color:var(--muted);margin-top:2px}
 .form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
@@ -1041,7 +1048,7 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
   <div id="panelSites" class="tab-panel active">
     <div class="toolbar">
       <input type="search" id="searchInput" placeholder="搜索站名、域名、标签..." oninput="filterTable()">
-      <select id="tagFilter" onchange="filterTable()" style="padding:8px;border:1px solid var(--line);border-radius:var(--radius);font-size:13px">
+      <select id="tagFilter" onchange="filterTable()" style="padding:8px;border:1px solid var(--line);border-radius:var(--radius);font-size:13px;background:var(--surface);color:var(--ink)">
         <option value="">全部标签</option>
       </select>
     </div>
