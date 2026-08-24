@@ -547,9 +547,9 @@
 
     node.querySelector(".tag-list-top").replaceChildren(...makeTags(site.tags));
 
-    // 插入投票按钮组到卡片头部（标签列表右侧）
-    const cardHead = node.querySelector(".card-head");
-    cardHead.appendChild(makeVoteBar(site.name));
+    // 插入投票按钮组到底部栏（访问按钮右侧）
+    const cardFoot = node.querySelector(".card-foot");
+    cardFoot.appendChild(makeVoteBar(site.name));
 
     // 在签到事实行旁追加额度徽章
     const checkinFact = facts.querySelector("div:first-child");
