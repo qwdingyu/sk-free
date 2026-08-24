@@ -127,6 +127,23 @@ function parseSiteUrl(rawUrl) {
 }
 
 /**
+ * 校验 URL 协议是否为 http/https（拒绝 javascript:/file:/data: 等）
+ * @param {string} rawUrl - 原始 URL
+ * @returns {{ ok: boolean, error?: string }}
+ */
+function validateUrlProtocol(rawUrl) {
+  try {
+    const url = new URL(rawUrl);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return { ok: false, error: "仅支持 http/https 协议" };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "URL 格式无效" };
+  }
+}
+
+/**
  * 安全解析请求体 JSON
  * 返回 { ok: true, data } 或 { ok: false, response }
  */
@@ -391,6 +408,12 @@ async function handleAdminCreateSite(kv, request) {
     return json({ ok: false, error: "name 和 url 为必填项" }, 400, request);
   }
 
+  // URL 协议校验：仅接受 http/https
+  const urlCheck = validateUrlProtocol(url);
+  if (!urlCheck.ok) {
+    return json({ ok: false, error: urlCheck.error }, 400, request);
+  }
+
   const data = await handleGetSites(kv);
 
   // 检查重名
@@ -425,6 +448,14 @@ async function handleAdminUpdateSite(kv, request, siteName) {
   const index = data.sites.findIndex((s) => s.name === siteName);
   if (index === -1) {
     return json({ ok: false, error: `站点 "${siteName}" 不存在` }, 404, request);
+  }
+
+  // URL 协议校验：仅接受 http/https
+  if (body.url) {
+    const urlCheck = validateUrlProtocol(body.url);
+    if (!urlCheck.ok) {
+      return json({ ok: false, error: urlCheck.error }, 400, request);
+    }
   }
 
   // 合并更新（保留未提供的字段）
@@ -662,6 +693,12 @@ async function handleSubmitSite(request, kv) {
   }
   if (typeof name !== "string" || typeof url !== "string") {
     return json({ ok: false, error: "参数格式错误" }, 400, request);
+  }
+
+  // URL 协议校验：仅接受 http/https
+  const urlCheck = validateUrlProtocol(url);
+  if (!urlCheck.ok) {
+    return json({ ok: false, error: urlCheck.error }, 400, request);
   }
 
   // 速率限制：每 IP 每天最多 5 次提交
