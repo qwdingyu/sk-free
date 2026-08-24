@@ -764,24 +764,39 @@ function getAdminHTML() {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>sk-free 管理后台</title>
+<script>
+(() => {
+  var k="admin-theme",c="system";
+  try{c=localStorage.getItem(k)||"system"}catch{}
+  var pd=window.matchMedia&&window.matchMedia("(prefers-color-scheme:dark)").matches;
+  document.documentElement.dataset.theme=(c==="system"?(pd?"dark":"light"):c);
+  document.documentElement.dataset.themeChoice=c;
+})();
+</script>
 <style>
-:root{--bg:#f5f5f5;--surface:#fff;--ink:#1a1a1a;--muted:#666;--line:#e0e0e0;--teal:#087f78;--teal-soft:#e6f7f5;--red:#d32f2f;--red-soft:#fdeaea;--amber:#f57c00;--amber-soft:#fff3e0;--radius:6px;--font:system-ui,-apple-system,sans-serif}
+:root{--bg:#f5f5f5;--surface:#fff;--ink:#1a1a1a;--muted:#666;--line:#e0e0e0;--teal:#087f78;--teal-soft:#e6f7f5;--red:#d32f2f;--red-soft:#fdeaea;--amber:#f57c00;--amber-soft:#fff3e0;--radius:6px;--font:system-ui,-apple-system,sans-serif;--hover:#f0f0f0;--th-bg:#fafafa;--tag-bg:#eee;--shadow:0 1px 3px rgba(0,0,0,.08)}
+[data-theme=dark]{--bg:#1a1d21;--surface:#23262b;--ink:#e0e0e0;--muted:#999;--line:#3a3d42;--teal:#4ecdc4;--teal-soft:#1a3a38;--red:#ef5350;--red-soft:#3a1a1a;--amber:#ffb74d;--amber-soft:#3a2a10;--hover:#2a2d32;--th-bg:#2a2d32;--tag-bg:#3a3d42;--shadow:0 1px 3px rgba(0,0,0,.3)}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--font);background:var(--bg);color:var(--ink);line-height:1.5;font-size:14px}
 a{color:var(--teal);text-decoration:none}
 .container{max-width:1200px;margin:0 auto;padding:16px}
 /* ── 登录 ── */
-.login-box{max-width:360px;margin:80px auto;padding:24px;background:var(--surface);border-radius:var(--radius);border:1px solid var(--line);text-align:center}
+.login-box{max-width:360px;margin:80px auto;padding:24px;background:var(--surface);border-radius:var(--radius);border:1px solid var(--line);text-align:center;box-shadow:var(--shadow)}
 .login-box h2{margin-bottom:16px;font-size:18px}
-.login-box input{width:100%;padding:10px;border:1px solid var(--line);border-radius:var(--radius);font-size:14px;margin-bottom:12px}
+.login-box input{width:100%;padding:10px;border:1px solid var(--line);border-radius:var(--radius);font-size:14px;margin-bottom:12px;background:var(--surface);color:var(--ink)}
 .login-box button{width:100%;padding:10px;background:var(--teal);color:#fff;border:none;border-radius:var(--radius);font-size:14px;cursor:pointer;font-weight:700}
 .login-box button:hover{opacity:.9}
-/* ── 顶栏 ── */
-.header{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);margin-bottom:16px}
+/* ── 顶栏（固定） ── */
+.header{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);margin-bottom:16px;position:sticky;top:0;z-index:50;background:var(--bg);backdrop-filter:blur(8px)}
 .header h1{font-size:18px;flex:1}
 .header .count{color:var(--muted);font-size:13px}
+/* ── 主题切换按钮 ── */
+.theme-toggle{display:inline-flex;gap:2px;padding:2px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);cursor:pointer}
+.theme-toggle button{padding:4px 8px;border:none;background:none;cursor:pointer;font-size:13px;border-radius:4px;color:var(--muted);transition:.15s}
+.theme-toggle button.active{background:var(--teal);color:#fff}
+.theme-toggle button:hover:not(.active){background:var(--hover)}
 .btn{padding:6px 14px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);cursor:pointer;font-size:13px;font-weight:600}
-.btn:hover{background:#f0f0f0}
+.btn:hover{background:var(--hover)}
 .btn-primary{background:var(--teal);color:#fff;border-color:var(--teal)}
 .btn-primary:hover{opacity:.9}
 .btn-danger{background:var(--red);color:#fff;border-color:var(--red)}
@@ -794,18 +809,18 @@ a{color:var(--teal);text-decoration:none}
 .table-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
-th{background:#fafafa;font-weight:700;position:sticky;top:0}
-tr:hover{background:#f9f9f9}
+th{background:var(--th-bg);font-weight:700;position:sticky;top:0}
+tr:hover{background:var(--hover)}
 td.name{font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis}
 td.tags{max-width:200px}
-.tag{display:inline-block;padding:2px 6px;border-radius:3px;font-size:11px;font-weight:700;background:#eee;margin:1px}
+.tag{display:inline-block;padding:2px 6px;border-radius:3px;font-size:11px;font-weight:700;background:var(--tag-bg);margin:1px}
 td.summary{max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
 td.actions{white-space:nowrap;position:sticky;right:0;background:var(--surface);border-left:1px solid var(--line);z-index:1}
-th:last-child{position:sticky;right:0;background:#fafafa;border-left:1px solid var(--line);z-index:2}
+th:last-child{position:sticky;right:0;background:var(--th-bg);border-left:1px solid var(--line);z-index:2}
 /* ── 启用开关 ── */
 .toggle{position:relative;display:inline-block;width:36px;height:20px;cursor:pointer}
 .toggle input{opacity:0;width:0;height:0}
-.toggle .slider{position:absolute;inset:0;background:#ccc;border-radius:20px;transition:.3s}
+.toggle .slider{position:absolute;inset:0;background:var(--line);border-radius:20px;transition:.3s}
 .toggle .slider::before{content:"";position:absolute;left:2px;bottom:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:.3s}
 .toggle input:checked+.slider{background:var(--teal)}
 .toggle input:checked+.slider::before{transform:translateX(16px)}
@@ -868,6 +883,11 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
   <div class="header">
     <h1>📋 站点管理</h1>
     <span class="count" id="siteCount"></span>
+    <div class="theme-toggle">
+      <button type="button" data-admin-theme="light" title="亮色">☀️</button>
+      <button type="button" data-admin-theme="dark" title="暗色">🌙</button>
+      <button type="button" data-admin-theme="system" title="跟随系统">💻</button>
+    </div>
     <button class="btn" onclick="loadSites()">🔄 刷新</button>
     <button class="btn" onclick="showCreate()">➕ 新增</button>
     <button class="btn" onclick="showImport()">📥 导入</button>
@@ -1041,6 +1061,32 @@ async function api(path, opts = {}) {
   if (!data.ok) throw new Error(data.error || "请求失败");
   return data;
 }
+
+// ── 主题切换 ──────────────────────────────────────────────
+(function() {
+  var KEY = "admin-theme";
+  function applyTheme(choice) {
+    var resolved = choice === "system"
+      ? (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+      : choice;
+    document.documentElement.dataset.theme = resolved;
+    document.documentElement.dataset.themeChoice = choice;
+    document.querySelectorAll("[data-admin-theme]").forEach(function(btn) {
+      btn.classList.toggle("active", btn.dataset.adminTheme === choice);
+    });
+    try { localStorage.setItem(KEY, choice); } catch {}
+  }
+  // 绑定按钮事件
+  document.addEventListener("click", function(e) {
+    var btn = e.target.closest("[data-admin-theme]");
+    if (!btn) return;
+    applyTheme(btn.dataset.adminTheme);
+  });
+  // 初始化
+  var saved = "system";
+  try { saved = localStorage.getItem(KEY) || "system"; } catch {}
+  applyTheme(saved);
+})();
 
 // ── 认证 ──────────────────────────────────────────────────
 function doLogin() {
