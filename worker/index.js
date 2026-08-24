@@ -782,7 +782,7 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
 
   <div class="tab-bar">
     <button class="tab-btn active" onclick="switchTab('sites')">站点管理</button>
-    <button class="tab-btn" onclick="switchTab('submissions')">提交审核 <span id="subCount" style="display:none" class="tag" style="background:var(--red);color:#fff"></span></button>
+    <button class="tab-btn" onclick="switchTab('submissions')">提交审核 <span id="subCount" class="tag" style="display:none;background:var(--red);color:#fff"></span></button>
   </div>
 
   <!-- ═══ 站点管理面板 ═══ -->
@@ -971,7 +971,7 @@ function buildTagFilter() {
   const tags = [...new Set(SITES.flatMap((s) => s.tags || []))].sort();
   const sel = document.getElementById("tagFilter");
   const current = sel.value;
-  sel.innerHTML = '<option value="">全部标签</option>' + tags.map((t) => '<option value="' + t + '">' + t + '</option>').join("");
+  sel.innerHTML = '<option value="">全部标签</option>' + tags.map((t) => '<option value="' + esc(t) + '">' + esc(t) + '</option>').join("");
   sel.value = current;
 }
 
@@ -1239,7 +1239,20 @@ async function rejectSubmission(id) {
 
 // ── 导出 ──────────────────────────────────────────────────
 function exportSites() {
-  window.open("/api/admin/export?token=" + encodeURIComponent(TOKEN), "_blank");
+  fetch("/api/admin/export", {
+    headers: { "Authorization": "Bearer " + TOKEN }
+  }).then(function(res) {
+    if (!res.ok) { toast("导出失败: " + res.status, "error"); return; }
+    return res.text();
+  }).then(function(text) {
+    if (!text) return;
+    var blob = new Blob([text], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = "sites-export.json"; a.click();
+    URL.revokeObjectURL(url);
+    toast("导出成功");
+  }).catch(function() { toast("网络错误", "error"); });
 }
 
 // ── 导入 ──────────────────────────────────────────────────
