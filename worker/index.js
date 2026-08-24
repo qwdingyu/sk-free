@@ -937,7 +937,7 @@ a{color:var(--teal);text-decoration:none}
 .theme-toggle button{padding:4px 8px;border:none;background:none;cursor:pointer;font-size:13px;border-radius:4px;color:var(--muted);transition:.15s}
 .theme-toggle button.active{background:var(--teal);color:#fff}
 .theme-toggle button:hover:not(.active){background:var(--hover)}
-.btn{padding:6px 14px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);cursor:pointer;font-size:13px;font-weight:600}
+.btn{padding:6px 14px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);color:var(--ink);cursor:pointer;font-size:13px;font-weight:600}
 .btn:hover{background:var(--hover)}
 .btn-primary{background:var(--teal);color:#fff;border-color:var(--teal)}
 .btn-primary:hover{opacity:.9}
@@ -1096,6 +1096,11 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
     </div>
     <div id="healthResults"></div>
     <h4 style="margin:16px 0 8px">死链接名单 <span id="deadCount" style="color:var(--muted);font-size:13px"></span></h4>
+    <div class="batch-bar" id="deadBatchBar">
+      <span>已选 <span class="count" id="deadBatchCount">0</span> 项</span>
+      <button class="btn btn-sm btn-danger" onclick="batchRemoveDead()">🗑️ 批量移除</button>
+      <button class="btn btn-sm" onclick="clearDeadSelection()">取消选择</button>
+    </div>
     <div id="deadUrlsList"></div>
   </div>
 
@@ -1568,28 +1573,75 @@ async function rejectSubmission(id) {
 }
 
 // ── 链接健康检查 ──────────────────────────────────────────
+let DEAD_SELECTED = new Set();
 async function loadDeadUrls() {
   try {
     const data = await api("/api/admin/dead-urls");
     const list = document.getElementById("deadUrlsList");
     const countEl = document.getElementById("deadCount");
     const urls = Object.keys(data.deadUrls || {});
+    DEAD_SELECTED.clear();
+    updateDeadBatchBar();
     countEl.textContent = urls.length > 0 ? ("(" + urls.length + " 个)") : "(空)";
     if (urls.length === 0) {
       list.innerHTML = '<div style="color:var(--muted);padding:12px">暂无死链接</div>';
       return;
     }
-    list.innerHTML = urls.map(url => {
+    list.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:2px solid var(--line);font-size:13px;font-weight:700">' +
+      '<input type="checkbox" id="deadSelectAll" data-action="toggle-dead-select-all">' +
+      '<span style="width:30px;text-align:center">全选</span>' +
+      '<span style="flex:1">URL</span>' +
+      '<span style="width:120px">原因</span>' +
+      '<span style="width:60px">操作</span>' +
+    '</div>' + urls.map(url => {
       const info = data.deadUrls[url];
       const time = info.addedAt ? new Date(info.addedAt).toLocaleString() : "";
       const reason = info.error || info.reason || "";
       return '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--line);font-size:13px">' +
+        '<input type="checkbox" data-url="' + esc(url) + '" data-action="toggle-dead-select">' +
+        '<span style="width:30px;text-align:center;color:var(--muted);font-size:11px">●</span>' +
         '<span style="flex:1;word-break:break-all;color:var(--coral)">' + esc(url) + '</span>' +
-        '<span style="color:var(--muted);font-size:11px;white-space:nowrap">' + esc(reason) + ' ' + time + '</span>' +
+        '<span style="width:120px;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + esc(reason) + '">' + esc(reason) + ' ' + time + '</span>' +
         '<button class="btn btn-sm btn-danger" data-url="' + esc(url) + '" data-action="remove-dead">移除</button>' +
       '</div>';
     }).join("");
   } catch (e) { toast("加载死链接失败: " + e.message, "error"); }
+}
+function toggleDeadSelect(url, checked) {
+  if (checked) DEAD_SELECTED.add(url); else DEAD_SELECTED.delete(url);
+  updateDeadBatchBar();
+}
+function toggleDeadSelectAll(checked) {
+  document.querySelectorAll('#deadUrlsList input[data-action="toggle-dead-select"]').forEach((cb) => {
+    cb.checked = checked;
+    const url = cb.getAttribute("data-url");
+    if (checked) DEAD_SELECTED.add(url); else DEAD_SELECTED.delete(url);
+  });
+  updateDeadBatchBar();
+}
+function clearDeadSelection() {
+  DEAD_SELECTED.clear();
+  document.getElementById("deadSelectAll").checked = false;
+  document.querySelectorAll('#deadUrlsList input[data-action="toggle-dead-select"]').forEach((cb) => cb.checked = false);
+  updateDeadBatchBar();
+}
+function updateDeadBatchBar() {
+  const bar = document.getElementById("deadBatchBar");
+  const count = DEAD_SELECTED.size;
+  document.getElementById("deadBatchCount").textContent = count;
+  bar.classList.toggle("active", count > 0);
+}
+async function batchRemoveDead() {
+  if (DEAD_SELECTED.size === 0) return;
+  if (!confirm("确认移除选中的 " + DEAD_SELECTED.size + " 个死链接？")) return;
+  try {
+    for (const url of DEAD_SELECTED) {
+      await api("/api/admin/dead-urls", { method: "POST", body: JSON.stringify({ url, action: "remove" }) });
+    }
+    toast("已移除 " + DEAD_SELECTED.size + " 个死链接", "success");
+    DEAD_SELECTED.clear();
+    await loadDeadUrls();
+  } catch (e) { toast(e.message, "error"); }
 }
 
 async function removeDeadUrl(url) {
@@ -1819,6 +1871,7 @@ document.addEventListener("click", function(e) {
     case "approve-submission": approveSubmission(id); break;
     case "reject-submission":  rejectSubmission(id); break;
     case "remove-dead":       removeDeadUrl(el.getAttribute("data-url")); break;
+    case "toggle-dead-select-all": toggleDeadSelectAll(el.checked); break;
   }
 });
 document.addEventListener("change", function(e) {
@@ -1828,6 +1881,7 @@ document.addEventListener("change", function(e) {
   var name = el.getAttribute("data-name") || "";
   if (action === "toggle-select") toggleSelect(name, el.checked);
   if (action === "toggle-enable") toggleEnable(name, el.checked);
+  if (action === "toggle-dead-select") toggleDeadSelect(el.getAttribute("data-url"), el.checked);
 });
 </script>
 </body>
@@ -1957,7 +2011,7 @@ export default {
         // 全局超时保护：25s（Workers 总限制 30s，留 5s 余量给 KV 写入）
         const GLOBAL_TIMEOUT_MS = 25000;
         const PER_URL_TIMEOUT_MS = 3000;
-        const BATCH_SIZE = 10; // Workers 限制 50 subreq/次，每个 URL 最坏 2 subreq(HEAD+GET)
+        const BATCH_SIZE = 5; // Workers 限制 50 subreq/次，每个 URL 最坏 2 subreq(HEAD+GET) + KV 操作开销
         const globalStart = Date.now();
         const results = [];
         let timedOut = false;

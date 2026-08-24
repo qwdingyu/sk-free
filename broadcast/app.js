@@ -681,7 +681,7 @@
     try {
       const data = await loadJson();
       state.metadata = data.metadata || {};
-      state.sites = (data.sites || []).filter(isCurrentDatedSite);
+      state.sites = (data.sites || []).filter((s) => s.enabled !== false);
 
       // 并行加载投票数据（不阻塞站点列表渲染）
       await loadVotes();
