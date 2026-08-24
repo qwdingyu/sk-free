@@ -276,9 +276,9 @@ async function updateRateLimit(kv, siteName, ip) {
  * @param {string} url - 要检查的 URL
  * @returns {Promise<{ok: boolean, status: number, error?: string}>}
  */
-async function checkUrlHealth(url) {
+async function checkUrlHealth(url, timeoutMs = 5000) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 5000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     // 先尝试 HEAD（轻量）
     let res;
@@ -1386,7 +1386,10 @@ async function batchCheckUrls() {
   resultsEl.innerHTML = "";
   try {
     const data = await api("/api/admin/check-batch", { method: "POST", body: JSON.stringify({}) });
-    statusEl.textContent = "检查完成：共 " + data.total + " 个，" + data.alive + " 个正常，" + data.dead + " 个不可达" + (data.newDead > 0 ? "（新增 " + data.newDead + " 个死链接）" : "");
+    var statusMsg = "检查完成：共 " + data.total + " 个，" + data.alive + " 个正常，" + data.dead + " 个不可达";
+    if (data.newDead > 0) statusMsg += "（新增 " + data.newDead + " 个死链接）";
+    if (data.truncated) statusMsg += "（因超时跳过 " + (data.totalAvailable - data.checked) + " 个）";
+    statusEl.textContent = statusMsg;
     // 按状态分组显示
     const dead = data.results.filter(r => !r.ok);
     const alive = data.results.filter(r => r.ok);
@@ -1670,16 +1673,28 @@ export default {
           const sitesData = await handleGetSites(kv);
           urls = sitesData.map(s => s.url).filter(Boolean);
         }
-        // 并发检查（每批 10 个）
+
+        // 全局超时保护：25s（Workers 总限制 30s，留 5s 余量给 KV 写入）
+        const GLOBAL_TIMEOUT_MS = 25000;
+        const PER_URL_TIMEOUT_MS = 3000;
+        const BATCH_SIZE = 20;
+        const globalStart = Date.now();
         const results = [];
-        for (let i = 0; i < urls.length; i += 10) {
-          const batch = urls.slice(i, i + 10);
+        let timedOut = false;
+
+        for (let i = 0; i < urls.length; i += BATCH_SIZE) {
+          if (Date.now() - globalStart > GLOBAL_TIMEOUT_MS) {
+            timedOut = true;
+            break;
+          }
+          const batch = urls.slice(i, i + BATCH_SIZE);
           const batchResults = await Promise.all(batch.map(async (url) => {
-            const r = await checkUrlHealth(url);
+            const r = await checkUrlHealth(url, PER_URL_TIMEOUT_MS);
             return { url, ...r };
           }));
           results.push(...batchResults);
         }
+
         // 自动将不可达的 URL 加入死链接列表
         const deadUrls = await getDeadUrls(kv);
         let newDead = 0;
@@ -1692,7 +1707,10 @@ export default {
         if (newDead > 0) await saveDeadUrls(kv, deadUrls);
         const alive = results.filter(r => r.ok).length;
         const dead = results.filter(r => !r.ok).length;
-        return json({ ok: true, total: results.length, alive, dead, newDead, results }, 200, request);
+        return json({
+          ok: true, total: results.length, alive, dead, newDead, results,
+          ...(timedOut ? { truncated: true, checked: results.length, totalAvailable: urls.length, message: "部分检查因超时跳过" } : {})
+        }, 200, request);
       }
 
       return json({ ok: false, error: "Not Found" }, 404, request);
