@@ -1,0 +1,34 @@
+{
+  "name": "资源导航站",
+  "description": "收录优质资源、工具、站点的导航目录",
+  "fields": [
+    { "key": "name", "label": "名称", "type": "text", "required": true, "unique": true },
+    { "key": "url", "label": "链接", "type": "url", "required": true, "healthCheck": true },
+    { "key": "tags", "label": "标签", "type": "tags", "options": ["AI", "设计", "开发", "效率", "限免"] },
+    { "key": "summary", "label": "简介", "type": "textarea", "max": 200 },
+    { "key": "rating", "label": "评分", "type": "rating" }
+  ],
+  "tags": ["AI", "设计", "开发", "效率", "限免"],
+  "display": {
+    "layout": "grid",
+    "columns": 3,
+    "sortBy": "default",
+    "priorityTags": ["全部", "AI", "设计", "开发"]
+  },
+  "submit": {
+    "enabled": true,
+    "rateLimit": { "max": 5, "window": "24h" },
+    "fields": ["name", "url", "tags", "summary"]
+  },
+  "healthCheck": {
+    "enabled": true,
+    "timeout": 5000,
+    "autoBlock": true,
+    "blockOnImport": true
+  },
+  "theme": {
+    "primary": "#6366f1",
+    "accent": "#fbbf24",
+    "style": "minimal"
+  }
+}

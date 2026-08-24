@@ -1,0 +1,34 @@
+{
+  "name": "反馈收集站",
+  "description": "收集用户反馈、建议、Bug 报告的平台",
+  "fields": [
+    { "key": "name", "label": "标题", "type": "text", "required": true },
+    { "key": "url", "label": "相关链接", "type": "url" },
+    { "key": "tags", "label": "类型", "type": "tags", "options": ["Bug", "建议", "咨询", "投诉", "表扬"] },
+    { "key": "summary", "label": "详细描述", "type": "textarea", "max": 500 },
+    { "key": "priority", "label": "优先级", "type": "select", "options": ["低", "中", "高", "紧急"] }
+  ],
+  "tags": ["Bug", "建议", "咨询", "投诉", "表扬"],
+  "display": {
+    "layout": "grid",
+    "columns": 1,
+    "sortBy": "default",
+    "priorityTags": ["全部", "Bug", "建议", "紧急"]
+  },
+  "submit": {
+    "enabled": true,
+    "rateLimit": { "max": 20, "window": "24h" },
+    "fields": ["name", "tags", "summary", "priority", "url"]
+  },
+  "healthCheck": {
+    "enabled": false,
+    "timeout": 5000,
+    "autoBlock": false,
+    "blockOnImport": false
+  },
+  "theme": {
+    "primary": "#ef4444",
+    "accent": "#3b82f6",
+    "style": "minimal"
+  }
+}

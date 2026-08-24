@@ -1,0 +1,36 @@
+{
+  "name": "产品/服务目录",
+  "description": "展示产品、服务、价格对比的目录平台",
+  "fields": [
+    { "key": "name", "label": "产品名称", "type": "text", "required": true, "unique": true },
+    { "key": "url", "label": "产品链接", "type": "url", "required": true, "healthCheck": true },
+    { "key": "tags", "label": "分类", "type": "tags", "options": ["SaaS", "开源", "免费", "付费", "企业"] },
+    { "key": "summary", "label": "产品描述", "type": "textarea", "max": 300 },
+    { "key": "price", "label": "价格", "type": "text" },
+    { "key": "features", "label": "核心功能", "type": "list" },
+    { "key": "rating", "label": "评分", "type": "rating" }
+  ],
+  "tags": ["SaaS", "开源", "免费", "付费", "企业"],
+  "display": {
+    "layout": "grid",
+    "columns": 3,
+    "sortBy": "rating",
+    "priorityTags": ["全部", "SaaS", "开源", "免费"]
+  },
+  "submit": {
+    "enabled": true,
+    "rateLimit": { "max": 5, "window": "24h" },
+    "fields": ["name", "url", "tags", "summary", "price"]
+  },
+  "healthCheck": {
+    "enabled": true,
+    "timeout": 5000,
+    "autoBlock": true,
+    "blockOnImport": true
+  },
+  "theme": {
+    "primary": "#f59e0b",
+    "accent": "#10b981",
+    "style": "minimal"
+  }
+}

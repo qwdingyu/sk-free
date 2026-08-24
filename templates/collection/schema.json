@@ -1,0 +1,34 @@
+{
+  "name": "内容聚合站",
+  "description": "聚合新闻、博客、论文等内容的聚合平台",
+  "fields": [
+    { "key": "name", "label": "标题", "type": "text", "required": true, "unique": true },
+    { "key": "url", "label": "链接", "type": "url", "required": true },
+    { "key": "tags", "label": "分类", "type": "tags", "options": ["新闻", "博客", "论文", "教程", "工具"] },
+    { "key": "summary", "label": "摘要", "type": "textarea", "max": 300 },
+    { "key": "date", "label": "发布日期", "type": "date" }
+  ],
+  "tags": ["新闻", "博客", "论文", "教程", "工具"],
+  "display": {
+    "layout": "grid",
+    "columns": 2,
+    "sortBy": "date",
+    "priorityTags": ["全部", "新闻", "博客", "论文"]
+  },
+  "submit": {
+    "enabled": true,
+    "rateLimit": { "max": 10, "window": "24h" },
+    "fields": ["name", "url", "tags", "summary", "date"]
+  },
+  "healthCheck": {
+    "enabled": true,
+    "timeout": 5000,
+    "autoBlock": false,
+    "blockOnImport": false
+  },
+  "theme": {
+    "primary": "#0ea5e9",
+    "accent": "#f97316",
+    "style": "minimal"
+  }
+}

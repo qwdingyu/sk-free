@@ -1,0 +1,35 @@
+{
+  "name": "人员/团队目录",
+  "description": "展示团队成员、人才库的目录平台",
+  "fields": [
+    { "key": "name", "label": "姓名", "type": "text", "required": true, "unique": true },
+    { "key": "url", "label": "个人主页", "type": "url" },
+    { "key": "tags", "label": "角色", "type": "tags", "options": ["前端", "后端", "设计", "产品", "运营"] },
+    { "key": "summary", "label": "简介", "type": "textarea", "max": 200 },
+    { "key": "avatar", "label": "头像URL", "type": "url" },
+    { "key": "links", "label": "社交链接", "type": "list" }
+  ],
+  "tags": ["前端", "后端", "设计", "产品", "运营"],
+  "display": {
+    "layout": "grid",
+    "columns": 4,
+    "sortBy": "default",
+    "priorityTags": ["全部", "前端", "后端", "设计"]
+  },
+  "submit": {
+    "enabled": false,
+    "rateLimit": { "max": 3, "window": "24h" },
+    "fields": ["name", "url", "tags", "summary"]
+  },
+  "healthCheck": {
+    "enabled": false,
+    "timeout": 5000,
+    "autoBlock": false,
+    "blockOnImport": false
+  },
+  "theme": {
+    "primary": "#8b5cf6",
+    "accent": "#10b981",
+    "style": "minimal"
+  }
+}
