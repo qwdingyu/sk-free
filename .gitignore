@@ -1,2 +1,12 @@
 .DS_Store
 broadcast/data/.local_backups/
+worker/node_modules/
+worker/.wrangler/
+wrangler.toml.bak
+.env
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example

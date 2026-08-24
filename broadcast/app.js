@@ -1,23 +1,44 @@
 (function () {
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 常量配置
+  // ═══════════════════════════════════════════════════════════════════════════════
   const DATA_URL = "./data/sites.json";
   const NOTICE_URL = "./data/notice.md";
+  // 投票 Worker API 地址（留空则隐藏投票区域）
+  const VOTE_API_URL = "https://sk-free-vote.mailforwdy.workers.dev";
+  // Worker API 地址（用于获取已过滤的站点列表和提交新站点，留空则使用本地 sites.json）
+  const WORKER_API_URL = "https://sk-free-vote.mailforwdy.workers.dev";
+  const VOTE_CACHE_TTL = 5 * 60 * 1000;  // 投票数据缓存 5 分钟
   const CACHE_BUSTER = () => `v=${Date.now()}`;
   const THEME_KEY = "broadcast-theme";
+  const VOTE_STORAGE_KEY = "sk-free-votes";
   const THEME_CHOICES = ["light", "dark", "system"];
   const PRIORITY_TAGS = ["全部", "签到", "生图", "DC系", "半DC", "非DC", "抽奖"];
+  const SORT_OPTIONS = [
+    { value: "default", label: "默认排序" },
+    { value: "score",   label: "按评分排序" }
+  ];
   const TAG_CLASS = {
     "签到": "checkin",
     "生图": "image"
   };
   const DATE_PATTERN = /(20\d{2})\s*[-/.年]\s*(\d{1,2})\s*[-/.月]\s*(\d{1,2})\s*(?:日)?/g;
 
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 全局状态
+  // ═══════════════════════════════════════════════════════════════════════════════
   const state = {
     sites: [],
     metadata: {},
     activeTag: "全部",
-    query: ""
+    query: "",
+    sortBy: "default",
+    votes: {}
   };
 
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // DOM 引用
+  // ═══════════════════════════════════════════════════════════════════════════════
   const els = {
     searchInput: document.getElementById("searchInput"),
     summaryStrip: document.getElementById("summaryStrip"),
@@ -29,12 +50,177 @@
     themeButtons: document.querySelectorAll("[data-theme-choice]")
   };
 
-  const colorSchemeQuery =
-    window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)");
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 工具函数
+  // ═══════════════════════════════════════════════════════════════════════════════
 
   function unique(values) {
     return Array.from(new Set(values.filter(Boolean)));
   }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 投票系统
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  /**
+   * 从 Cloudflare Worker API 获取所有站点的投票数据
+   * 支持 5 分钟本地缓存，减少 API 调用
+   * API 不可用时静默降级，不影响站点列表渲染
+   */
+  async function loadVotes() {
+    if (!VOTE_API_URL) return;
+
+    // 优先使用内存缓存（避免页面内重复请求）
+    if (state._voteCache && Date.now() - state._voteCache.ts < VOTE_CACHE_TTL) {
+      state.votes = state._voteCache.data;
+      return;
+    }
+
+    try {
+      const res = await fetch(`${VOTE_API_URL}/api/votes?${CACHE_BUSTER()}`, {
+        cache: "no-store"
+      });
+      if (!res.ok) throw new Error(`votes ${res.status}`);
+      const data = await res.json();
+      if (data.ok) {
+        state.votes = data.votes || {};
+        state._voteCache = { data: state.votes, ts: Date.now() };
+      }
+    } catch {
+      // API 不可用时静默降级，投票区域将被隐藏
+    }
+  }
+
+  /**
+   * 从 localStorage 读取当前用户的投票记录
+   * 结构：{ "站点名": "up" | "down" }
+   */
+  function loadPersonalVotes() {
+    try {
+      return JSON.parse(localStorage.getItem(VOTE_STORAGE_KEY) || "{}");
+    } catch {
+      return {};
+    }
+  }
+
+  /**
+   * 将用户的投票记录持久化到 localStorage
+   */
+  function savePersonalVotes(votes) {
+    try {
+      localStorage.setItem(VOTE_STORAGE_KEY, JSON.stringify(votes));
+    } catch {
+      // localStorage 不可用时忽略（隐私模式等）
+    }
+  }
+
+  /**
+   * 计算站点的净得分（👍数 - 👎数）
+   * @param {string} siteName - 站点名称
+   * @returns {number} 净得分
+   */
+  function netVotes(siteName) {
+    const v = state.votes[siteName];
+    if (!v) return 0;
+    return (v.up || 0) - (v.down || 0);
+  }
+
+  /**
+   * 处理用户点击投票按钮
+   * 流程：前端校验 → API 请求 → 乐观更新 → 持久化
+   * @param {string} siteName - 站点名称
+   * @param {string} vote - "up" 或 "down"
+   * @param {HTMLElement} voteBar - 投票按钮组的容器元素
+   */
+  async function handleVote(siteName, vote, voteBar) {
+    if (!VOTE_API_URL) return;
+
+    // 从 localStorage 读取当前用户的所有投票记录
+    const personalVotes = loadPersonalVotes();
+
+    // 检查是否已对该站点投过票
+    if (personalVotes[siteName]) {
+      voteBar.classList.add("vote-flash");
+      setTimeout(() => voteBar.classList.remove("vote-flash"), 600);
+      return;
+    }
+
+    // 禁用按钮防止重复点击
+    const buttons = voteBar.querySelectorAll(".vote-btn");
+    buttons.forEach((b) => (b.disabled = true));
+
+    try {
+      const res = await fetch(`${VOTE_API_URL}/api/vote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ site: siteName, vote })
+      });
+
+      const data = await res.json();
+
+      if (data.ok) {
+        // 乐观更新：直接使用服务端返回的最新计数
+        state.votes[siteName] = data.votes;
+        // 清除缓存，确保下次获取最新数据
+        state._voteCache = null;
+        // 记录用户投票（防止重复投票）
+        personalVotes[siteName] = vote;
+        savePersonalVotes(personalVotes);
+        // 更新 UI
+        refreshVoteBar(voteBar, siteName);
+      } else if (res.status === 429) {
+        // 被速率限制：提示用户
+        voteBar.classList.add("vote-flash");
+        setTimeout(() => voteBar.classList.remove("vote-flash"), 600);
+        alert(data.error || "投票过于频繁，请稍后再试");
+      } else {
+        alert(data.error || "投票失败");
+      }
+    } catch {
+      alert("网络错误，请稍后重试");
+    } finally {
+      buttons.forEach((b) => (b.disabled = false));
+    }
+  }
+
+  /**
+   * 刷新投票按钮组的视觉状态
+   * 更新计数显示、激活状态、禁用状态
+   * @param {HTMLElement} voteBar - 投票按钮组容器
+   * @param {string} siteName - 站点名称
+   */
+  function refreshVoteBar(voteBar, siteName) {
+    const personalVotes = loadPersonalVotes();
+    const userVote = personalVotes[siteName] || null;
+    const score = netVotes(siteName);
+
+    // 更新得分数字及颜色
+    const scoreEl = voteBar.querySelector(".vote-score");
+    if (scoreEl) {
+      scoreEl.textContent = score > 0 ? `+${score}` : String(score);
+      scoreEl.className = "vote-score" + (score > 0 ? " positive" : score < 0 ? " negative" : "");
+    }
+
+    // 更新按钮激活状态
+    const upBtn = voteBar.querySelector("[data-vote='up']");
+    const downBtn = voteBar.querySelector("[data-vote='down']");
+
+    if (upBtn) {
+      upBtn.classList.toggle("is-active", userVote === "up");
+      upBtn.disabled = !!userVote;
+    }
+    if (downBtn) {
+      downBtn.classList.toggle("is-active", userVote === "down");
+      downBtn.disabled = !!userVote;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 主题系统
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  const colorSchemeQuery =
+    window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)");
 
   function getStoredTheme() {
     try {
@@ -94,6 +280,10 @@
     applyTheme(getStoredTheme());
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 日期工具
+  // ═══════════════════════════════════════════════════════════════════════════════
+
   function todayInShanghai() {
     const parts = new Intl.DateTimeFormat("en", {
       timeZone: "Asia/Shanghai",
@@ -128,6 +318,10 @@
     return !dates.length || dates.every((date) => date === todayInShanghai());
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 过滤与排序
+  // ═══════════════════════════════════════════════════════════════════════════════
+
   function matches(site) {
     const haystack = [
       site.name,
@@ -145,9 +339,23 @@
     return queryMatch && tagMatch;
   }
 
+  /**
+   * 获取过滤后的站点列表，并根据当前排序方式排序
+   */
   function filteredSites() {
-    return state.sites.filter(matches);
+    const list = state.sites.filter(matches);
+
+    if (state.sortBy === "score") {
+      // 按评分排序：高分在前
+      list.sort((a, b) => netVotes(b.name) - netVotes(a.name));
+    }
+
+    return list;
   }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 渲染
+  // ═══════════════════════════════════════════════════════════════════════════════
 
   function renderSummary() {
     const visible = filteredSites();
@@ -191,6 +399,34 @@
         return button;
       })
     );
+
+    // 追加排序选择器到筛选行末尾
+    const sortGroup = document.createElement("div");
+    sortGroup.className = "sort-group";
+
+    const sortLabel = document.createElement("span");
+    sortLabel.className = "sort-label";
+    sortLabel.textContent = "排序";
+
+    const sortSelect = document.createElement("select");
+    sortSelect.className = "sort-select";
+    sortSelect.setAttribute("aria-label", "排序方式");
+
+    SORT_OPTIONS.forEach((opt) => {
+      const option = document.createElement("option");
+      option.value = opt.value;
+      option.textContent = opt.label;
+      option.selected = opt.value === state.sortBy;
+      sortSelect.appendChild(option);
+    });
+
+    sortSelect.addEventListener("change", (e) => {
+      state.sortBy = e.target.value;
+      renderCards();
+    });
+
+    sortGroup.append(sortLabel, sortSelect);
+    els.filterRow.appendChild(sortGroup);
   }
 
   function appendFact(list, label, value) {
@@ -215,6 +451,88 @@
     });
   }
 
+  /**
+   * 构建投票按钮组 DOM 元素
+   * 包含 👍 按钮、得分显示、👎 按钮
+   * @param {string} siteName - 站点名称（用于 API 请求和状态查找）
+   * @returns {HTMLElement} 投票按钮组容器
+   */
+  function makeVoteBar(siteName) {
+    const bar = document.createElement("div");
+    bar.className = "vote-bar";
+
+    const personalVotes = loadPersonalVotes();
+    const userVote = personalVotes[siteName] || null;
+    const score = netVotes(siteName);
+
+    // 👍 按钮
+    const upBtn = document.createElement("button");
+    upBtn.type = "button";
+    upBtn.className = "vote-btn vote-up" + (userVote === "up" ? " is-active" : "");
+    upBtn.setAttribute("aria-label", "支持");
+    upBtn.textContent = "👍";
+    upBtn.disabled = !!userVote;
+    upBtn.addEventListener("click", () => handleVote(siteName, "up", bar));
+
+    // 得分显示
+    const scoreEl = document.createElement("span");
+    scoreEl.className = "vote-score" + (score > 0 ? " positive" : score < 0 ? " negative" : "");
+    scoreEl.textContent = score > 0 ? `+${score}` : String(score);
+
+    // 👎 按钮
+    const downBtn = document.createElement("button");
+    downBtn.type = "button";
+    downBtn.className = "vote-btn vote-down" + (userVote === "down" ? " is-active" : "");
+    downBtn.setAttribute("aria-label", "不推荐");
+    downBtn.textContent = "👎";
+    downBtn.disabled = !!userVote;
+    downBtn.addEventListener("click", () => handleVote(siteName, "down", bar));
+
+    bar.append(upBtn, scoreEl, downBtn);
+    return bar;
+  }
+
+  /**
+   * 根据站点的签到额度生成醒目徽章
+   * 解析 checkin 字段中的数字，按阈值分级显示
+   * @param {Object} site - 站点数据对象
+   * @returns {HTMLElement|null} 徽章元素，无签到数据时返回 null
+   */
+  function makeCheckinBadge(site) {
+    if (!site.checkin) return null;
+
+    // 从 checkin 文本中提取最大数值（如 "5-50刀" → 50）
+    const numbers = site.checkin.match(/\d+(\.\d+)?/g);
+    if (!numbers) return null;
+
+    const maxVal = Math.max(...numbers.map(Number));
+    if (maxVal <= 0) return null;
+
+    // 按阈值分级：≥20 高额度、≥5 中额度、<5 低额度
+    let level, label;
+    if (maxVal >= 20) {
+      level = "high";
+      label = `${maxVal}+`;
+    } else if (maxVal >= 5) {
+      level = "mid";
+      label = String(maxVal);
+    } else {
+      level = "low";
+      label = String(maxVal);
+    }
+
+    const badge = document.createElement("span");
+    badge.className = `checkin-badge checkin-${level}`;
+    badge.textContent = `${label} 刀`;
+    badge.title = `签到额度参考：${site.checkin}`;
+    return badge;
+  }
+
+  /**
+   * 构建单个站点卡片 DOM
+   * @param {Object} site - 站点数据对象
+   * @returns {HTMLElement} 卡片元素
+   */
   function makeCard(site) {
     const node = els.template.content.firstElementChild.cloneNode(true);
 
@@ -228,6 +546,32 @@
     appendFact(facts, "倍率", site.rate);
 
     node.querySelector(".tag-list-top").replaceChildren(...makeTags(site.tags));
+
+    // 插入投票按钮组到卡片头部（标签列表右侧）
+    const cardHead = node.querySelector(".card-head");
+    cardHead.appendChild(makeVoteBar(site.name));
+
+    // 在签到事实行旁追加额度徽章
+    const checkinFact = facts.querySelector("div:first-child");
+    if (checkinFact) {
+      const badge = makeCheckinBadge(site);
+      if (badge) checkinFact.appendChild(badge);
+    }
+
+    // 卡片视觉分级：根据签到标签和额度添加边框色阶
+    const tags = site.tags || [];
+    if (tags.includes("签到")) {
+      const badge = makeCheckinBadge(site);
+      if (badge) {
+        node.classList.add("card-graded");
+        // 高额度卡片添加顶部色条
+        if (badge.classList.contains("checkin-high")) {
+          node.classList.add("card-tier-high");
+        } else if (badge.classList.contains("checkin-mid")) {
+          node.classList.add("card-tier-mid");
+        }
+      }
+    }
 
     const notes = node.querySelector(".notes");
     (site.notes || []).forEach((text) => {
@@ -256,6 +600,13 @@
     grid.className = "card-grid";
     grid.replaceChildren(...visible.map(makeCard));
     els.cardsArea.replaceChildren(grid);
+
+    // 如果投票 API 不可用，隐藏所有投票区域
+    if (!VOTE_API_URL) {
+      els.cardsArea.querySelectorAll(".vote-bar").forEach((bar) => {
+        bar.hidden = true;
+      });
+    }
   }
 
   function renderNotice(markdown) {
@@ -278,16 +629,39 @@
     els.noticeBand.hidden = false;
   }
 
+  /**
+   * 主渲染函数：依次渲染摘要、筛选器（含排序）、卡片
+   */
   function render() {
     renderSummary();
     renderFilters();
     renderCards();
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 数据加载
+  // ═══════════════════════════════════════════════════════════════════════════════
+
   async function loadJson() {
+    // 优先从 Worker API 获取（自动过滤 disabled 站点）
+    if (WORKER_API_URL) {
+      try {
+        const res = await fetch(`${WORKER_API_URL}/api/sites?${CACHE_BUSTER()}`, { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.ok && data.sites) return data;
+        }
+      } catch {
+        // Worker 不可用时降级到本地 JSON
+      }
+    }
+    // 降级：使用本地 sites.json（此时前端也需过滤 disabled）
     const res = await fetch(`${DATA_URL}?${CACHE_BUSTER()}`, { cache: "no-store" });
     if (!res.ok) throw new Error(`sites.json ${res.status}`);
-    return res.json();
+    const data = await res.json();
+    // 本地 JSON 也需过滤 disabled 站点
+    if (data.sites) data.sites = data.sites.filter((s) => s.enabled !== false);
+    return data;
   }
 
   async function loadNotice() {
@@ -299,11 +673,19 @@
     }
   }
 
+  /**
+   * 应用初始化
+   * 加载站点数据 → 并行加载投票数据 → 合并 → 渲染
+   */
   async function init() {
     try {
       const data = await loadJson();
       state.metadata = data.metadata || {};
       state.sites = (data.sites || []).filter(isCurrentDatedSite);
+
+      // 并行加载投票数据（不阻塞站点列表渲染）
+      await loadVotes();
+
       render();
       loadNotice();
     } catch (error) {
@@ -316,11 +698,79 @@
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 提交站点
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  function initSubmitForm() {
+    const btn = document.getElementById("submitSiteBtn");
+    const modal = document.getElementById("submitModal");
+    const form = document.getElementById("submitForm");
+    const confirmBtn = document.getElementById("submitConfirmBtn");
+
+    if (!btn || !modal || !form) return;
+
+    btn.addEventListener("click", () => {
+      if (!WORKER_API_URL) {
+        alert("站点提交功能需要 Worker API 支持，请联系管理员。");
+        return;
+      }
+      form.reset();
+      modal.showModal();
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = "提交中...";
+
+      const body = {
+        name: document.getElementById("submitName").value.trim(),
+        url: document.getElementById("submitUrl").value.trim(),
+        tags: document.getElementById("submitTags").value.split(",").map((t) => t.trim()).filter(Boolean),
+        summary: document.getElementById("submitSummary").value.trim(),
+        checkin: document.getElementById("submitCheckin").value.trim() || undefined,
+        models: document.getElementById("submitModels").value.trim() || undefined,
+        register: document.getElementById("submitRegister").value.trim() || undefined
+      };
+
+      try {
+        const res = await fetch(`${WORKER_API_URL}/api/submit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (data.ok) {
+          modal.close();
+          // 显示成功提示
+          const toast = document.createElement("div");
+          toast.className = "submit-toast";
+          toast.textContent = "✅ " + (data.message || "提交成功，等待管理员审核");
+          document.body.appendChild(toast);
+          setTimeout(() => toast.remove(), 4000);
+        } else {
+          alert(data.error || "提交失败");
+        }
+      } catch {
+        alert("网络错误，请稍后重试");
+      } finally {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = "提交审核";
+      }
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 事件绑定 & 启动
+  // ═══════════════════════════════════════════════════════════════════════════════
+
   els.searchInput.addEventListener("input", (event) => {
     state.query = event.target.value.trim();
     render();
   });
 
   initTheme();
+  initSubmitForm();
   init();
 })();
