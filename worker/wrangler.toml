@@ -1,0 +1,16 @@
+# sk-free Worker 配置
+# 部署命令：npx wrangler deploy
+# 前提：npx wrangler login（已登录 Cloudflare）
+
+name = "sk-free-vote"
+main = "index.js"
+compatibility_date = "2026-08-24"
+
+# KV 命名空间绑定（已创建）
+[[kv_namespaces]]
+binding = "SKFREE_KV"
+id = "547b7b9b5dcd4abeb505d1dfe5f82ac4"
+
+# 管理员认证 Token（通过 secret 设置，不要硬编码）
+# 首次部署时执行：npx wrangler secret put ADMIN_TOKEN
+# 输入一个强密码作为管理密码

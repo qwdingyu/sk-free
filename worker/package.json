@@ -1,0 +1,13 @@
+{
+  "name": "sk-free-vote",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "create-kv": "wrangler kv:namespace create VOTES_KV"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}
