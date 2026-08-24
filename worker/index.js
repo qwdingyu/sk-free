@@ -108,6 +108,10 @@ function parseSiteUrl(rawUrl) {
   const originalUrl = rawUrl;
   try {
     const url = new URL(rawUrl);
+    // 仅允许 http/https 协议，拒绝 javascript:、file:、data: 等
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return { originalUrl, cleanUrl: rawUrl, ref: undefined, error: "仅支持 http/https 协议" };
+    }
     const stripParams = ["aff", "ref", "invite", "invite_code", "start"];
     const stripped = [];
     for (const key of stripParams) {
