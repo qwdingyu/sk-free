@@ -1561,6 +1561,7 @@ document.addEventListener("change", function(e) {
 
 export default {
   async fetch(request, env) {
+    try {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -1671,7 +1672,7 @@ export default {
         if (!urls || !Array.isArray(urls)) {
           // 默认检查所有站点
           const sitesData = await handleGetSites(kv);
-          urls = sitesData.map(s => s.url).filter(Boolean);
+          urls = (sitesData.sites || []).map(s => s.url).filter(Boolean);
         }
 
         // 全局超时保护：25s（Workers 总限制 30s，留 5s 余量给 KV 写入）
@@ -1746,5 +1747,9 @@ export default {
 
     // 404
     return json({ ok: false, error: "Not Found" }, 404, request);
+
+    } catch (e) {
+      return json({ ok: false, error: "Internal error: " + e.message }, 500, request);
+    }
   }
 };
