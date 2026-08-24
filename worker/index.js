@@ -432,7 +432,11 @@ async function checkUrlHealth(url, timeoutMs = 5000) {
  */
 async function getDeadUrls(kv) {
   const raw = await kv.get(DEAD_URLS_KEY);
-  try { return raw ? JSON.parse(raw) : {}; } catch { return {}; }
+  try {
+    const parsed = raw ? JSON.parse(raw) : {};
+    // 兼容旧格式：{ "deadUrls": { ... } } → 取内层
+    return parsed.deadUrls && typeof parsed.deadUrls === "object" ? parsed.deadUrls : parsed;
+  } catch { return {}; }
 }
 
 /**
@@ -1632,7 +1636,7 @@ async function batchRemoveDead() {
       method: "POST",
       body: JSON.stringify({ urls: [...DEAD_SELECTED] })
     });
-    toast("已移除 " + data.removed + " 个死链接", "success");
+    toast("已移除 " + data.changed + " 个死链接", "success");
     DEAD_SELECTED.clear();
     await loadDeadUrls();
   } catch (e) { toast(e.message, "error"); }
@@ -1652,18 +1656,40 @@ async function batchCheckUrls() {
   statusEl.textContent = "正在检查中，请稍候...";
   resultsEl.innerHTML = "";
   try {
-    const data = await api("/api/admin/check-batch", { method: "POST", body: JSON.stringify({}) });
-    var statusMsg = "检查完成：共 " + data.total + " 个，" + data.alive + " 个正常，" + data.dead + " 个不可达";
-    if (data.newDead > 0) statusMsg += "（新增 " + data.newDead + " 个死链接）";
-    if (data.truncated) statusMsg += "（因超时跳过 " + (data.totalAvailable - data.checked) + " 个）";
+    // Workers Free 限制 50 subreq/次：2 KV读 + N fetch → 每批最多 45 个 URL
+    const BATCH_SIZE = 45;
+    const allUrls = SITES.map(s => s.url).filter(Boolean);
+    const allResults = [];
+    let allNewDead = [];
+    const totalBatches = Math.ceil(allUrls.length / BATCH_SIZE);
+
+    for (let i = 0; i < allUrls.length; i += BATCH_SIZE) {
+      const batchIdx = Math.floor(i / BATCH_SIZE) + 1;
+      statusEl.textContent = "正在检查中... 批次 " + batchIdx + "/" + totalBatches + "（" + Math.min(i + BATCH_SIZE, allUrls.length) + "/" + allUrls.length + "）";
+      const batchUrls = allUrls.slice(i, i + BATCH_SIZE);
+      const data = await api("/api/admin/check-batch", { method: "POST", body: JSON.stringify({ urls: batchUrls }) });
+      allResults.push(...data.results);
+      if (data.newDeadUrls && data.newDeadUrls.length > 0) allNewDead.push(...data.newDeadUrls);
+    }
+
+    // 批量添加新死链接
+    if (allNewDead.length > 0) {
+      await api("/api/admin/dead-urls/batch", { method: "POST", body: JSON.stringify({ urls: allNewDead, action: "add" }) });
+    }
+
+    const alive = allResults.filter(r => r.ok).length;
+    const dead = allResults.filter(r => !r.ok).length;
+    var statusMsg = "检查完成：共 " + allResults.length + " 个，" + alive + " 个正常，" + dead + " 个不可达";
+    if (allNewDead.length > 0) statusMsg += "（新增 " + allNewDead.length + " 个死链接）";
     statusEl.textContent = statusMsg;
+
     // 按状态分组显示
-    const dead = data.results.filter(r => !r.ok);
-    const alive = data.results.filter(r => r.ok);
+    const deadList = allResults.filter(r => !r.ok);
+    const aliveList = allResults.filter(r => r.ok);
     let html = "";
-    if (dead.length > 0) {
-      html += '<div style="margin-bottom:12px"><strong style="color:var(--coral)">❌ 不可达 (' + dead.length + ')</strong></div>';
-      html += dead.map(r => {
+    if (deadList.length > 0) {
+      html += '<div style="margin-bottom:12px"><strong style="color:var(--coral)">❌ 不可达 (' + deadList.length + ')</strong></div>';
+      html += deadList.map(r => {
         const detail = r.error || ("HTTP " + r.status);
         return '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)">' +
           '<span style="flex:1;word-break:break-all">' + esc(r.url) + '</span>' +
@@ -1671,9 +1697,9 @@ async function batchCheckUrls() {
         '</div>';
       }).join("");
     }
-    if (alive.length > 0) {
-      html += '<div style="margin:12px 0 8px"><strong style="color:var(--teal)">✅ 正常 (' + alive.length + ')</strong></div>';
-      html += alive.map(r => {
+    if (aliveList.length > 0) {
+      html += '<div style="margin:12px 0 8px"><strong style="color:var(--teal)">✅ 正常 (' + aliveList.length + ')</strong></div>';
+      html += aliveList.map(r => {
         return '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)">' +
           '<span style="flex:1;word-break:break-all">' + esc(r.url) + '</span>' +
           '<span style="color:var(--teal);white-space:nowrap">HTTP ' + r.status + '</span>' +
@@ -1681,7 +1707,7 @@ async function batchCheckUrls() {
       }).join("");
     }
     resultsEl.innerHTML = html;
-    await loadDeadUrls(); // 刷新死链接列表
+    await loadDeadUrls();
   } catch (e) {
     statusEl.textContent = "检查失败: " + e.message;
   }
@@ -1979,22 +2005,28 @@ export default {
         return json({ ok: true, count: Object.keys(deadUrls).length }, 200, request);
       }
 
-      // POST /api/admin/dead-urls/batch — 批量移除死链接
-      // body: { urls: string[] }
+      // POST /api/admin/dead-urls/batch — 批量添加/移除死链接
+      // body: { urls: string[], action?: "add" | "remove" }（默认 remove）
       if (path === "/api/admin/dead-urls/batch" && request.method === "POST") {
         const parsed = await parseJsonBody(request);
         if (!parsed.ok) return parsed.response;
-        const { urls } = parsed.data;
+        const { urls, action = "remove" } = parsed.data;
         if (!Array.isArray(urls) || urls.length === 0) {
           return json({ ok: false, error: "需要 urls 数组" }, 400, request);
         }
         const deadUrls = await getDeadUrls(kv);
-        let removed = 0;
-        for (const u of urls) {
-          if (deadUrls[u]) { delete deadUrls[u]; removed++; }
+        let changed = 0;
+        if (action === "add") {
+          for (const u of urls) {
+            if (!deadUrls[u]) { deadUrls[u] = { addedAt: Date.now(), reason: "auto-detected" }; changed++; }
+          }
+        } else {
+          for (const u of urls) {
+            if (deadUrls[u]) { delete deadUrls[u]; changed++; }
+          }
         }
-        if (removed > 0) await saveDeadUrls(kv, deadUrls);
-        return json({ ok: true, removed, count: Object.keys(deadUrls).length }, 200, request);
+        if (changed > 0) await saveDeadUrls(kv, deadUrls);
+        return json({ ok: true, changed, action, count: Object.keys(deadUrls).length }, 200, request);
       }
 
       // POST /api/admin/check-url — 检查单个 URL
@@ -2008,54 +2040,30 @@ export default {
         return json({ ok: true, url, ...result }, 200, request);
       }
 
-      // POST /api/admin/check-batch — 批量检查所有站点 URL
-      // body: { urls?: string[] }（不传则检查所有站点）
+      // POST /api/admin/check-batch — 批量检查 URL 健康状态
+      // body: { urls: string[] } — 必传，由前端分页调用（每批 ≤45）
+      // Workers Free 限制 50 subreq/次：2 KV读(sites+deadUrls) + N fetch → N ≤ 48
       if (path === "/api/admin/check-batch" && request.method === "POST") {
         const parsed = await parseJsonBody(request);
         if (!parsed.ok) return parsed.response;
-        let urls = parsed.data.urls;
-        if (!urls || !Array.isArray(urls)) {
-          // 默认检查所有站点
-          const sitesData = await handleGetSites(kv);
-          urls = (sitesData.sites || []).map(s => s.url).filter(Boolean);
+        const urls = parsed.data.urls;
+        if (!Array.isArray(urls) || urls.length === 0) {
+          return json({ ok: false, error: "需要 urls 数组" }, 400, request);
         }
 
-        // 全局超时保护：25s（Workers 总限制 30s，留 5s 余量给 KV 写入）
-        const GLOBAL_TIMEOUT_MS = 25000;
         const PER_URL_TIMEOUT_MS = 1500;
-        const BATCH_SIZE = 40; // Workers 限制 50 subreq/次，每个 URL 1 subreq(GET) + KV 操作开销
-        const globalStart = Date.now();
-        const results = [];
-        let timedOut = false;
-
-        for (let i = 0; i < urls.length; i += BATCH_SIZE) {
-          if (Date.now() - globalStart > GLOBAL_TIMEOUT_MS) {
-            timedOut = true;
-            break;
-          }
-          const batch = urls.slice(i, i + BATCH_SIZE);
-          const batchResults = await Promise.all(batch.map(async (url) => {
-            const r = await checkUrlHealth(url, PER_URL_TIMEOUT_MS);
-            return { url, ...r };
-          }));
-          results.push(...batchResults);
-        }
-
-        // 自动将不可达的 URL 加入死链接列表
         const deadUrls = await getDeadUrls(kv);
-        let newDead = 0;
-        for (const r of results) {
-          if (!r.ok && !deadUrls[r.url]) {
-            deadUrls[r.url] = { addedAt: Date.now(), status: r.status, error: r.error, reason: "auto-detected" };
-            newDead++;
-          }
-        }
-        if (newDead > 0) await saveDeadUrls(kv, deadUrls);
+
+        const results = await Promise.all(urls.slice(0, 48).map(async (url) => {
+          const r = await checkUrlHealth(url, PER_URL_TIMEOUT_MS);
+          return { url, ...r };
+        }));
+
+        const newDeadUrls = results.filter(r => !r.ok && !deadUrls[r.url]).map(r => r.url);
         const alive = results.filter(r => r.ok).length;
         const dead = results.filter(r => !r.ok).length;
         return json({
-          ok: true, total: results.length, alive, dead, newDead, results,
-          ...(timedOut ? { truncated: true, checked: results.length, totalAvailable: urls.length, message: "部分检查因超时跳过" } : {})
+          ok: true, total: results.length, alive, dead, newDeadUrls, results
         }, 200, request);
       }
 
