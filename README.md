@@ -1,9 +1,18 @@
 # Sk-free API Broadcast
 
-Static GitHub Pages deployment for the Sk-free API broadcast page.
+公益 API 站点速查 — 静态 GitHub Pages 导航站。
 
-- Public page entry: `/broadcast/`
-- Editable data file: `broadcast/data/sites.json`
-- Optional notice file: `broadcast/data/notice.md`
+- 线上地址：https://free.eforge.xyz/broadcast/
+- 数据文件：`broadcast/data/sites.json`
+- 公告文件：`broadcast/data/notice.md`
 
-Use the local editor in `/Users/chenjh/.chenjh/llm/edit` to update data and publish changes.
+## 本地预览
+
+```bash
+python3 -m http.server 8080
+# 访问 http://localhost:8080/broadcast/
+```
+
+## 更新数据
+
+编辑 `broadcast/data/sites.json`，`git push` 后 GitHub Pages 自动部署。
