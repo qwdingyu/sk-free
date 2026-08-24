@@ -418,14 +418,7 @@ async function checkUrlHealth(url, timeoutMs = 5000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    // 先尝试 HEAD（轻量）
-    let res;
-    try {
-      res = await fetch(url, { method: "HEAD", signal: controller.signal, redirect: "follow" });
-    } catch {
-      // HEAD 失败（如 405）降级为 GET
-      res = await fetch(url, { method: "GET", signal: controller.signal, redirect: "follow" });
-    }
+    const res = await fetch(url, { method: "GET", signal: controller.signal, redirect: "follow" });
     clearTimeout(timer);
     return { ok: res.ok, status: res.status };
   } catch (e) {
@@ -1635,10 +1628,11 @@ async function batchRemoveDead() {
   if (DEAD_SELECTED.size === 0) return;
   if (!confirm("确认移除选中的 " + DEAD_SELECTED.size + " 个死链接？")) return;
   try {
-    for (const url of DEAD_SELECTED) {
-      await api("/api/admin/dead-urls", { method: "POST", body: JSON.stringify({ url, action: "remove" }) });
-    }
-    toast("已移除 " + DEAD_SELECTED.size + " 个死链接", "success");
+    const data = await api("/api/admin/dead-urls/batch", {
+      method: "POST",
+      body: JSON.stringify({ urls: [...DEAD_SELECTED] })
+    });
+    toast("已移除 " + data.removed + " 个死链接", "success");
     DEAD_SELECTED.clear();
     await loadDeadUrls();
   } catch (e) { toast(e.message, "error"); }
@@ -1985,6 +1979,24 @@ export default {
         return json({ ok: true, count: Object.keys(deadUrls).length }, 200, request);
       }
 
+      // POST /api/admin/dead-urls/batch — 批量移除死链接
+      // body: { urls: string[] }
+      if (path === "/api/admin/dead-urls/batch" && request.method === "POST") {
+        const parsed = await parseJsonBody(request);
+        if (!parsed.ok) return parsed.response;
+        const { urls } = parsed.data;
+        if (!Array.isArray(urls) || urls.length === 0) {
+          return json({ ok: false, error: "需要 urls 数组" }, 400, request);
+        }
+        const deadUrls = await getDeadUrls(kv);
+        let removed = 0;
+        for (const u of urls) {
+          if (deadUrls[u]) { delete deadUrls[u]; removed++; }
+        }
+        if (removed > 0) await saveDeadUrls(kv, deadUrls);
+        return json({ ok: true, removed, count: Object.keys(deadUrls).length }, 200, request);
+      }
+
       // POST /api/admin/check-url — 检查单个 URL
       // body: { url }
       if (path === "/api/admin/check-url" && request.method === "POST") {
@@ -2010,8 +2022,8 @@ export default {
 
         // 全局超时保护：25s（Workers 总限制 30s，留 5s 余量给 KV 写入）
         const GLOBAL_TIMEOUT_MS = 25000;
-        const PER_URL_TIMEOUT_MS = 3000;
-        const BATCH_SIZE = 5; // Workers 限制 50 subreq/次，每个 URL 最坏 2 subreq(HEAD+GET) + KV 操作开销
+        const PER_URL_TIMEOUT_MS = 1500;
+        const BATCH_SIZE = 40; // Workers 限制 50 subreq/次，每个 URL 1 subreq(GET) + KV 操作开销
         const globalStart = Date.now();
         const results = [];
         let timedOut = false;
