@@ -50,6 +50,141 @@ const VOTES_KEY = "votes.json";
 const RATE_KEY = "rate_limits";
 const SUBMISSIONS_KEY = "submissions.json";
 const DEAD_URLS_KEY = "dead_urls.json";
+const SCHEMA_KEY = "schema.json";
+
+// 默认 Schema 定义（sk-free 项目默认配置）
+const DEFAULT_SCHEMA = {
+  name: "Sk-free API Broadcast",
+  description: "收录可注册、可签到、可生图的站点入口",
+  fields: [
+    { key: "name", label: "站点名称", type: "text", required: true, unique: true },
+    { key: "url", label: "站点链接", type: "url", required: true, healthCheck: true },
+    { key: "tags", label: "标签", type: "tags", options: ["签到", "生图", "DC系", "半DC", "非DC", "限免", "抽奖"] },
+    { key: "summary", label: "站点简介", type: "textarea", max: 200 },
+    { key: "checkin", label: "签到额度", type: "text" },
+    { key: "models", label: "支持模型", type: "text" },
+    { key: "rate", label: "倍率", type: "text" },
+    { key: "register", label: "注册方式", type: "text" },
+    { key: "notes", label: "备注", type: "list" }
+  ],
+  tags: ["签到", "生图", "DC系", "半DC", "非DC", "限免", "抽奖"],
+  display: {
+    layout: "grid",
+    columns: 3,
+    sortBy: "default",
+    priorityTags: ["全部", "签到", "生图", "限免"]
+  },
+  submit: {
+    enabled: true,
+    rateLimit: { max: 5, window: "24h" },
+    fields: ["name", "url", "tags", "summary", "checkin", "models", "register"]
+  },
+  healthCheck: {
+    enabled: true,
+    timeout: 5000,
+    autoBlock: true,
+    blockOnImport: true
+  },
+  theme: {
+    primary: "#087f78",
+    accent: "#b8e35a",
+    style: "minimal"
+  }
+};
+
+/**
+ * 从 KV 获取 Schema，不存在则返回默认值
+ */
+async function getSchema(kv) {
+  const raw = await kv.get(SCHEMA_KEY);
+  if (!raw) return DEFAULT_SCHEMA;
+  try {
+    const schema = JSON.parse(raw);
+    // 合并默认值（新字段自动补全）
+    return {
+      ...DEFAULT_SCHEMA,
+      ...schema,
+      fields: schema.fields || DEFAULT_SCHEMA.fields,
+      tags: schema.tags || DEFAULT_SCHEMA.tags,
+      display: { ...DEFAULT_SCHEMA.display, ...(schema.display || {}) },
+      submit: { ...DEFAULT_SCHEMA.submit, ...(schema.submit || {}) },
+      healthCheck: { ...DEFAULT_SCHEMA.healthCheck, ...(schema.healthCheck || {}) },
+      theme: { ...DEFAULT_SCHEMA.theme, ...(schema.theme || {}) }
+    };
+  } catch {
+    return DEFAULT_SCHEMA;
+  }
+}
+
+/**
+ * 保存 Schema 到 KV
+ */
+async function saveSchema(kv, schema) {
+  await kv.put(SCHEMA_KEY, JSON.stringify(schema));
+}
+
+/**
+ * Schema 驱动的字段校验
+ * 校验提交数据是否符合 Schema 中定义的字段规则
+ * @returns {{ ok: boolean, error?: string }}
+ */
+function validateSiteFields(schema, data, mode = "create") {
+  const fields = schema.fields || [];
+  for (const field of fields) {
+    const value = data[field.key];
+    // 必填校验
+    if (field.required && (value === undefined || value === null || value === "")) {
+      return { ok: false, error: `${field.label} 为必填项` };
+    }
+    // 类型校验
+    if (value !== undefined && value !== null && value !== "") {
+      if (field.type === "url" && typeof value === "string") {
+        const urlCheck = validateUrlProtocol(value);
+        if (!urlCheck.ok) return { ok: false, error: `${field.label}: ${urlCheck.error}` };
+      }
+      if (field.type === "text" && typeof value !== "string") {
+        return { ok: false, error: `${field.label} 必须是文本` };
+      }
+      if (field.type === "number" && typeof value !== "number") {
+        return { ok: false, error: `${field.label} 必须是数字` };
+      }
+      if (field.type === "textarea" && typeof value !== "string") {
+        return { ok: false, error: `${field.label} 必须是文本` };
+      }
+      if (field.type === "tags" && !Array.isArray(value) && typeof value !== "string") {
+        return { ok: false, error: `${field.label} 必须是标签数组或逗号分隔文本` };
+      }
+      // 最大长度校验
+      if (field.max && typeof value === "string" && value.length > field.max) {
+        return { ok: false, error: `${field.label} 不能超过 ${field.max} 个字符` };
+      }
+    }
+  }
+  return { ok: true };
+}
+
+/**
+ * Schema 驱动的字段填充（补充默认值、标准化格式）
+ */
+function normalizeSiteFields(schema, data) {
+  const result = { ...data };
+  for (const field of schema.fields || []) {
+    const key = field.key;
+    if (result[key] === undefined || result[key] === null) {
+      // 设置默认值
+      if (field.type === "tags") result[key] = [];
+      else if (field.type === "list") result[key] = [];
+      else if (field.type === "boolean") result[key] = false;
+      else if (field.type === "number") result[key] = 0;
+      else result[key] = "";
+    }
+    // 标准化 tags
+    if (field.type === "tags" && typeof result[key] === "string") {
+      result[key] = result[key].split(",").map((t) => t.trim()).filter(Boolean);
+    }
+  }
+  return result;
+}
 
 // 用户提交速率限制：每 IP 每天最多提交次数
 const SUBMIT_RATE_LIMIT = 5; // 每 IP 每天 5 次
@@ -899,6 +1034,7 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
     <button class="tab-btn active" onclick="switchTab('sites')">站点管理</button>
     <button class="tab-btn" onclick="switchTab('submissions')">提交审核 <span id="subCount" class="tag" style="display:none;background:var(--red);color:#fff"></span></button>
     <button class="tab-btn" onclick="switchTab('health')">🔗 链接健康</button>
+    <button class="tab-btn" onclick="switchTab('schema')">⚙️ Schema</button>
   </div>
 
   <!-- ═══ 站点管理面板 ═══ -->
@@ -954,6 +1090,36 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
     <div id="healthResults"></div>
     <h4 style="margin:16px 0 8px">死链接名单 <span id="deadCount" style="color:var(--muted);font-size:13px"></span></h4>
     <div id="deadUrlsList"></div>
+  </div>
+
+  <!-- ═══ Schema 管理面板 ═══ -->
+  <div id="panelSchema" class="tab-panel">
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+      <button class="btn btn-primary btn-sm" onclick="loadSchema()">🔄 加载 Schema</button>
+      <button class="btn btn-sm" onclick="exportSchema()">📤 导出</button>
+      <button class="btn btn-sm" onclick="importSchema()">📥 导入</button>
+      <span id="schemaStatus" style="color:var(--muted);font-size:13px"></span>
+    </div>
+    <div class="form-row">
+      <label>Schema JSON（编辑后点击保存）</label>
+      <textarea id="schemaEditor" rows="20" style="font-family:monospace;font-size:12px;tab-size:2" placeholder="正在加载..."></textarea>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button class="btn" onclick="loadSchema()">↩️ 重置</button>
+      <button class="btn btn-primary" onclick="saveSchema()">💾 保存 Schema</button>
+    </div>
+    <div style="margin-top:16px;padding:12px;background:var(--teal-soft);border-radius:var(--radius);font-size:13px">
+      <strong>💡 Schema 使用说明</strong>
+      <ul style="margin:8px 0 0 16px;line-height:1.8">
+        <li><code>fields</code>: 定义站点字段（key/label/type/required/unique/healthCheck/options/max）</li>
+        <li><code>tags</code>: 全局标签选项列表</li>
+        <li><code>display</code>: 前端展示配置（layout/columns/sortBy/priorityTags）</li>
+        <li><code>submit</code>: 用户提交配置（enabled/rateLimit/fields）</li>
+        <li><code>healthCheck</code>: URL 健康检查配置（enabled/timeout/autoBlock/blockOnImport）</li>
+        <li><code>theme</code>: 主题配色（primary/accent/style）</li>
+        <li>字段类型: text, url, textarea, number, tags, list, select, boolean, date, rating</li>
+      </ul>
+    </div>
   </div>
 </div>
 
@@ -1332,13 +1498,15 @@ async function batchDisable() {
 // ── 标签页切换 ──────────────────────────────────────────
 function switchTab(tab) {
   document.querySelectorAll(".tab-btn").forEach((btn, i) => {
-    btn.classList.toggle("active", (tab === "sites" && i === 0) || (tab === "submissions" && i === 1) || (tab === "health" && i === 2));
+    btn.classList.toggle("active", (tab === "sites" && i === 0) || (tab === "submissions" && i === 1) || (tab === "health" && i === 2) || (tab === "schema" && i === 3));
   });
   document.getElementById("panelSites").classList.toggle("active", tab === "sites");
   document.getElementById("panelSubmissions").classList.toggle("active", tab === "submissions");
   document.getElementById("panelHealth").classList.toggle("active", tab === "health");
+  document.getElementById("panelSchema").classList.toggle("active", tab === "schema");
   if (tab === "submissions") loadSubmissions();
   if (tab === "health") loadDeadUrls();
+  if (tab === "schema") loadSchema();
 }
 
 // ── 提交审核 ──────────────────────────────────────────
@@ -1464,6 +1632,64 @@ async function batchCheckUrls() {
   } catch (e) {
     statusEl.textContent = "检查失败: " + e.message;
   }
+}
+
+// ── Schema 管理 ──────────────────────────────────────────
+async function loadSchema() {
+  try {
+    const data = await api("/api/admin/schema");
+    document.getElementById("schemaEditor").value = JSON.stringify(data.schema, null, 2);
+    document.getElementById("schemaStatus").textContent = "已加载";
+  } catch (e) {
+    document.getElementById("schemaStatus").textContent = "加载失败: " + e.message;
+  }
+}
+
+async function saveSchema() {
+  const editor = document.getElementById("schemaEditor");
+  let schema;
+  try {
+    schema = JSON.parse(editor.value);
+  } catch (e) {
+    toast("JSON 格式错误: " + e.message, "error");
+    return;
+  }
+  try {
+    const data = await api("/api/admin/schema", { method: "PUT", body: JSON.stringify(schema) });
+    editor.value = JSON.stringify(data.schema, null, 2);
+    document.getElementById("schemaStatus").textContent = "保存成功";
+    toast("Schema 已保存", "success");
+  } catch (e) {
+    toast("保存失败: " + e.message, "error");
+  }
+}
+
+function exportSchema() {
+  const editor = document.getElementById("schemaEditor");
+  const text = editor.value;
+  if (!text) { toast("没有 Schema 数据", "error"); return; }
+  var blob = new Blob([text], { type: "application/json" });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url; a.download = "schema.json"; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importSchema() {
+  var input = document.createElement("input");
+  input.type = "file"; input.accept = ".json";
+  input.onchange = function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      document.getElementById("schemaEditor").value = ev.target.result;
+      document.getElementById("schemaStatus").textContent = "已导入（未保存）";
+      toast("Schema 已导入，请检查后点击保存", "success");
+    };
+    reader.readAsText(file);
+  };
+  input.click();
 }
 
 // ── 导出 ──────────────────────────────────────────────────
@@ -1760,10 +1986,56 @@ export default {
         }, 200, request);
       }
 
+      // GET /api/admin/schema — 获取完整 Schema（含默认值）
+      if (path === "/api/admin/schema" && request.method === "GET") {
+        const schema = await getSchema(kv);
+        return json({ ok: true, schema }, 200, request);
+      }
+
+      // PUT /api/admin/schema — 更新 Schema（全量替换）
+      if (path === "/api/admin/schema" && request.method === "PUT") {
+        const parsed = await parseJsonBody(request);
+        if (!parsed.ok) return parsed.response;
+        const newSchema = parsed.data;
+        // 基础校验：必须有 fields 数组
+        if (!newSchema.fields || !Array.isArray(newSchema.fields)) {
+          return json({ ok: false, error: "schema 必须包含 fields 数组" }, 400, request);
+        }
+        // 校验每个 field 的 key 和 type
+        for (const f of newSchema.fields) {
+          if (!f.key || !f.label || !f.type) {
+            return json({ ok: false, error: `字段缺少必填属性 (key/label/type): ${JSON.stringify(f)}` }, 400, request);
+          }
+          const validTypes = ["text", "url", "textarea", "number", "tags", "list", "select", "boolean", "date", "rating"];
+          if (!validTypes.includes(f.type)) {
+            return json({ ok: false, error: `字段类型无效: ${f.type}，支持: ${validTypes.join(", ")}` }, 400, request);
+          }
+        }
+        // 合并默认值
+        const merged = {
+          ...DEFAULT_SCHEMA,
+          ...newSchema,
+          fields: newSchema.fields,
+          tags: newSchema.tags || DEFAULT_SCHEMA.tags,
+          display: { ...DEFAULT_SCHEMA.display, ...(newSchema.display || {}) },
+          submit: { ...DEFAULT_SCHEMA.submit, ...(newSchema.submit || {}) },
+          healthCheck: { ...DEFAULT_SCHEMA.healthCheck, ...(newSchema.healthCheck || {}) },
+          theme: { ...DEFAULT_SCHEMA.theme, ...(newSchema.theme || {}) }
+        };
+        await saveSchema(kv, merged);
+        return json({ ok: true, schema: merged }, 200, request);
+      }
+
       return json({ ok: false, error: "Not Found" }, 404, request);
     }
 
     // ── 公开 API ───────────────────────────────────────────
+
+    // GET /api/schema — 获取当前平台的 Schema 配置（前端动态渲染用）
+    if (path === "/api/schema" && request.method === "GET") {
+      const schema = await getSchema(kv);
+      return json({ ok: true, schema }, 200, request);
+    }
 
     // GET /api/sites — 站点列表（前端渲染用，仅返回已启用站点）
     if (path === "/api/sites" && request.method === "GET") {
