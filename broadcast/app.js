@@ -75,6 +75,7 @@ const state = {
   filterKind: [],     // ["api_site","bot"] 多选
   filterThreshold: [], // ["github","telegram","email","none"] 多选
   hideStale: false,   // 隐藏 7 天未验证的站点
+  showDead: false,    // 表格视图中展开死链分组
   // 抽屉状态
   drawerSite: null    // 当前展开的站点对象，null = 关闭
 };
@@ -91,7 +92,6 @@ function initDom() {
   els.noticeBand = document.getElementById("noticeBand");
   els.noticeContent = document.getElementById("noticeContent");
   els.cardsArea = document.getElementById("cardsArea");
-  els.template = document.getElementById("siteCardTemplate");
   els.themeButtons = document.querySelectorAll("[data-theme-choice]");
 }
 
@@ -1599,6 +1599,12 @@ async function init() {
   initTheme();
   initSubmitForm();
   initFeedbackForm();
+
+  // 首屏骨架屏：加载期间显示 6 行占位
+  const skeletonRows = Array.from({ length: 6 }, () =>
+    '<div class="skeleton-row"><div class="skeleton-cell name"></div><div class="skeleton-cell quota"></div><div class="skeleton-cell cap"></div><div class="skeleton-cell fresh"></div><div class="skeleton-cell action"></div></div>'
+  ).join("");
+  els.cardsArea.innerHTML = skeletonRows;
 
   try {
     const data = await loadSites();

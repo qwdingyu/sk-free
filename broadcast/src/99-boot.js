@@ -294,6 +294,12 @@ async function init() {
   initSubmitForm();
   initFeedbackForm();
 
+  // 首屏骨架屏：加载期间显示 6 行占位
+  const skeletonRows = Array.from({ length: 6 }, () =>
+    '<div class="skeleton-row"><div class="skeleton-cell name"></div><div class="skeleton-cell quota"></div><div class="skeleton-cell cap"></div><div class="skeleton-cell fresh"></div><div class="skeleton-cell action"></div></div>'
+  ).join("");
+  els.cardsArea.innerHTML = skeletonRows;
+
   try {
     const data = await loadSites();
     state.metadata = data.metadata || {};

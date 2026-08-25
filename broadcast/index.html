@@ -92,10 +92,6 @@
       </section>
 
       <section class="toolbar" aria-label="筛选站点">
-        <label class="search-field">
-          <span>搜索</span>
-          <input id="searchInput" type="search" autocomplete="off" placeholder="站名、域名、标签、备注" />
-        </label>
         <div class="summary-strip" id="summaryStrip"></div>
       </section>
 
@@ -181,27 +177,6 @@
         </div>
       </form>
     </dialog>
-
-    <template id="siteCardTemplate">
-      <article class="site-card">
-        <div class="card-head">
-          <h2></h2>
-          <ul class="tag-list tag-list-top"></ul>
-        </div>
-        <p class="summary"></p>
-        <dl class="quick-facts"></dl>
-        <div class="notes"></div>
-        <div class="card-foot">
-          <a class="visit-link" target="_blank" rel="noopener noreferrer">
-            访问站点
-            <svg class="visit-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path d="M5 12h14" />
-              <path d="m13 6 6 6-6 6" />
-            </svg>
-          </a>
-        </div>
-      </article>
-    </template>
 
     <script src="./app.js" defer></script>
   </body>

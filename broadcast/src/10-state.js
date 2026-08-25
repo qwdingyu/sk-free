@@ -16,6 +16,7 @@ const state = {
   filterKind: [],     // ["api_site","bot"] 多选
   filterThreshold: [], // ["github","telegram","email","none"] 多选
   hideStale: false,   // 隐藏 7 天未验证的站点
+  showDead: false,    // 表格视图中展开死链分组
   // 抽屉状态
   drawerSite: null    // 当前展开的站点对象，null = 关闭
 };
@@ -32,7 +33,6 @@ function initDom() {
   els.noticeBand = document.getElementById("noticeBand");
   els.noticeContent = document.getElementById("noticeContent");
   els.cardsArea = document.getElementById("cardsArea");
-  els.template = document.getElementById("siteCardTemplate");
   els.themeButtons = document.querySelectorAll("[data-theme-choice]");
 }
 
