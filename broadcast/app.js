@@ -827,7 +827,7 @@ function makeTableRow(site) {
     <button class="btn-reported-dead" data-site="${esc(site.name)}" aria-label="标记已失效">👎</button>
   </div>`;
 
-  row.innerHTML = nameHtml + quotaHtml + capHtml + thHtml + freshHtml + communityHtml + actionHtml;
+  row.innerHTML = `<td>${nameHtml}</td><td>${quotaHtml}</td><td>${capHtml}</td><td>${thHtml}</td><td>${freshHtml}</td><td>${communityHtml}</td><td>${actionHtml}</td>`;
 
   // ── 事件绑定 ────────────────────────────────────────────────────────────────
   row.querySelector(".btn-detail")?.addEventListener("click", () => openDrawer(site));
