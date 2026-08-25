@@ -6,6 +6,8 @@
 
 /**
  * 生成 CORS 响应头
+ * 注意：不使用 Allow-Credentials —— 认证全部走 Authorization Bearer Token，
+ * 无 Cookie 会话；允许任意 Origin 是因为公开 API 需支持跨域嵌入场景
  * @param {Request} request — Fetch Request
  * @returns {object} 响应头对象
  */
@@ -14,7 +16,6 @@ export function corsHeaders(request) {
     "Access-Control-Allow-Origin": request.headers.get("Origin") || "*",
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Access-Control-Allow-Credentials": "true",
   };
 }
 
