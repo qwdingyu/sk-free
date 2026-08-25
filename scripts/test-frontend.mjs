@@ -110,6 +110,14 @@ console.log("\n1. 结构化字段渲染");
   check("中额度站显示积分与预估次数", quotas[1], "100 积分 ≈60次/天");
   check("无数值额度时回落到原文而非编造", quotas[2], "绑定账号即免费");
   check("活链分组里恰好 3 条", quotas.length, 3);
+
+  // <tr> 的直接子元素必须是 <td>：曾经 makeTableRow 直接拼 <div>，
+  // HTML 解析器会把它们移出表格（foster parenting），表格塌成一堆卡片。
+  const firstRow = doc.querySelector("tbody:first-of-type tr[data-site-name]");
+  const kids = Array.from(firstRow.children).map((c) => c.tagName);
+  check("表格行的直接子元素全是 TD", [...new Set(kids)], ["TD"]);
+  check("每行 7 个单元格，与表头列数一致", kids.length, 7);
+  check("表头 7 列", doc.querySelectorAll("thead th").length, 7);
 }
 
 // ══ 2. 死链分组可达（防 matchesFilters 过滤掉死链的死锁复发）════════════════════
