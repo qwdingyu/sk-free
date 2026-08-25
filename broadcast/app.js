@@ -543,6 +543,14 @@
     const cardFoot = node.querySelector(".card-foot");
     cardFoot.appendChild(makeVoteBar(site.name));
 
+    // 插入反馈按钮
+    const feedbackBtn = document.createElement("button");
+    feedbackBtn.type = "button";
+    feedbackBtn.className = "feedback-trigger";
+    feedbackBtn.textContent = "💬 反馈";
+    feedbackBtn.addEventListener("click", () => openFeedbackModal(site.name));
+    cardFoot.appendChild(feedbackBtn);
+
     // 在签到事实行旁追加额度徽章
     const checkinFact = facts.querySelector("div:first-child");
     if (checkinFact) {
@@ -733,6 +741,168 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
+  // 反馈系统
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  const FEEDBACK_STORAGE_KEY = "sk-free-feedbacks";
+
+  /**
+   * 从 localStorage 读取用户已提交的反馈记录
+   * @returns {Object} { "站点名": true }
+   */
+  function loadPersonalFeedbacks() {
+    try {
+      return JSON.parse(localStorage.getItem(FEEDBACK_STORAGE_KEY) || "{}");
+    } catch {
+      return {};
+    }
+  }
+
+  /**
+   * 将用户的反馈记录持久化到 localStorage
+   */
+  function savePersonalFeedbacks(record) {
+    try {
+      localStorage.setItem(FEEDBACK_STORAGE_KEY, JSON.stringify(record));
+    } catch {}
+  }
+
+  /**
+   * 打开反馈模态框
+   * @param {string} siteName - 站点名称
+   */
+  function openFeedbackModal(siteName) {
+    const modal = document.getElementById("feedbackModal");
+    const nameEl = document.getElementById("feedbackSiteName");
+    const contentEl = document.getElementById("feedbackContent");
+    const typeGroup = document.getElementById("feedbackTypeGroup");
+    const confirmBtn = document.getElementById("feedbackConfirmBtn");
+    const charCount = document.getElementById("feedbackCharCount");
+
+    // 检查是否已反馈过
+    const personalFeedbacks = loadPersonalFeedbacks();
+    if (personalFeedbacks[siteName]) {
+      showFeedbackToast("您已反馈过该站点，感谢您的关注！");
+      return;
+    }
+
+    // 重置表单
+    nameEl.textContent = "站点：" + siteName;
+    contentEl.value = "";
+    charCount.textContent = "0";
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = "提交反馈";
+    modal.dataset.siteName = siteName;
+    modal.dataset.feedbackType = "";
+
+    // 重置类型按钮状态
+    typeGroup.querySelectorAll(".feedback-type-btn").forEach((btn) => {
+      btn.classList.remove("is-active");
+    });
+
+    modal.showModal();
+    contentEl.focus();
+  }
+
+  /**
+   * 初始化反馈模态框事件
+   */
+  function initFeedbackForm() {
+    const modal = document.getElementById("feedbackModal");
+    const form = document.getElementById("feedbackForm");
+    const typeGroup = document.getElementById("feedbackTypeGroup");
+    const contentEl = document.getElementById("feedbackContent");
+    const charCount = document.getElementById("feedbackCharCount");
+    const confirmBtn = document.getElementById("feedbackConfirmBtn");
+
+    if (!modal || !form) return;
+
+    // 类型选择
+    typeGroup.addEventListener("click", (e) => {
+      const btn = e.target.closest(".feedback-type-btn");
+      if (!btn) return;
+      typeGroup.querySelectorAll(".feedback-type-btn").forEach((b) => b.classList.remove("is-active"));
+      btn.classList.add("is-active");
+      modal.dataset.feedbackType = btn.dataset.fbType;
+    });
+
+    // 字符计数
+    contentEl.addEventListener("input", () => {
+      charCount.textContent = String(contentEl.value.length);
+    });
+
+    // 提交
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const siteName = modal.dataset.siteName;
+      const type = modal.dataset.feedbackType;
+      const content = contentEl.value.trim();
+
+      if (!type) {
+        alert("请选择反馈类型");
+        return;
+      }
+      if (content.length < 2) {
+        alert("反馈内容至少需要 2 个字符");
+        return;
+      }
+
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = "提交中...";
+
+      try {
+        const res = await fetch("/api/feedback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ siteName, type, content }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          modal.close();
+          // 记录已反馈
+          const personalFeedbacks = loadPersonalFeedbacks();
+          personalFeedbacks[siteName] = true;
+          savePersonalFeedbacks(personalFeedbacks);
+          showFeedbackToast("✅ 感谢您的反馈！");
+        } else {
+          alert(data.error || "提交失败");
+        }
+      } catch {
+        alert("网络错误，请稍后重试");
+      } finally {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = "提交反馈";
+      }
+    });
+  }
+
+  /**
+   * 显示反馈成功提示（带动画）
+   * @param {string} msg - 提示文字
+   */
+  function showFeedbackToast(msg) {
+    const existing = document.querySelector(".feedback-toast");
+    if (existing) existing.remove();
+
+    const toast = document.createElement("div");
+    toast.className = "feedback-toast";
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+
+    // 触发动画
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        toast.classList.add("show");
+      });
+    });
+
+    setTimeout(() => {
+      toast.classList.remove("show");
+      setTimeout(() => toast.remove(), 400);
+    }, 2500);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
   // 事件绑定 & 启动
   // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -743,5 +913,6 @@
 
   initTheme();
   initSubmitForm();
+  initFeedbackForm();
   init();
 })();

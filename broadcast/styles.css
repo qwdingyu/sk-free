@@ -351,6 +351,218 @@ h1 {
   cursor: not-allowed;
 }
 
+/* ═══════ 反馈模态框 ═══════ */
+
+.feedback-modal {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0;
+  max-width: 440px;
+  width: calc(100% - 32px);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+
+.feedback-modal::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+}
+
+.feedback-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 0;
+}
+
+.feedback-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.feedback-close {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.3rem;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background-color 0.15s ease;
+}
+
+.feedback-close:hover {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.feedback-site-name {
+  margin: 6px 20px 0;
+  color: var(--teal);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.feedback-field {
+  margin: 12px 20px 0;
+}
+
+.feedback-field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--strong);
+}
+
+.feedback-type-group {
+  display: flex;
+  gap: 8px;
+}
+
+.feedback-type-btn {
+  flex: 1;
+  padding: 8px 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.feedback-type-btn:hover {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+}
+
+.feedback-type-btn.is-active {
+  border-color: var(--teal);
+  background: var(--teal);
+  color: #fff;
+}
+
+.feedback-field textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 64px;
+  transition: border-color 0.15s ease;
+}
+
+.feedback-field textarea:focus {
+  outline: none;
+  border-color: var(--teal);
+  box-shadow: 0 0 0 2px rgba(8, 127, 120, 0.15);
+}
+
+.feedback-hint {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+.feedback-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 16px 20px 18px;
+}
+
+.feedback-btn-cancel {
+  padding: 9px 16px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.feedback-btn-cancel:hover {
+  background: var(--surface-soft);
+}
+
+.feedback-btn-confirm {
+  padding: 9px 20px;
+  border: none;
+  border-radius: 6px;
+  background: var(--teal);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.feedback-btn-confirm:hover {
+  opacity: 0.9;
+}
+
+.feedback-btn-confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 反馈成功提示 */
+.feedback-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  padding: 12px 24px;
+  border-radius: 8px;
+  background: var(--teal);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 700;
+  box-shadow: 0 8px 24px rgba(8, 127, 120, 0.35);
+  z-index: 200;
+  opacity: 0;
+  transition: all 0.35s ease;
+  pointer-events: none;
+}
+
+.feedback-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* 卡片反馈按钮 */
+.feedback-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-left: auto;
+}
+
+.feedback-trigger:hover {
+  border-color: var(--teal);
+  color: var(--teal);
+  background: var(--teal-soft);
+}
+
 .theme-switcher {
   position: absolute;
   top: 12px;

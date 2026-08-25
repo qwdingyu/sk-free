@@ -1,36 +1,39 @@
 #!/bin/bash
-# InfoHub 平台部署脚本
-# 用法: bash scripts/deploy.sh
+# ═══════════════════════════════════════════════════════════════════════════════
+# deploy.sh — 安全部署脚本（含预检查）
 #
-# 部署 Worker 到 Cloudflare Workers
+# 使用方式：bash scripts/deploy.sh
+# 替代直接运行：npx wrangler deploy
+#
+# 部署前会自动执行模板字面量转义检查，发现问题则阻止部署。
+# ═══════════════════════════════════════════════════════════════════════════════
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-WORKER_DIR="$(dirname "$SCRIPT_DIR")/worker"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-echo "🚀 部署 Worker..."
+echo "🔍 部署前检查..."
+echo ""
 
-if [[ ! -d "$WORKER_DIR" ]]; then
-  echo "❌ Worker 目录不存在: $WORKER_DIR"
+# 检查模板字面量转义安全（两个文件都要检查）
+node "$SCRIPT_DIR/check-template-escapes.js" "$PROJECT_DIR/worker/index.js"
+CHECK_EXIT=$?
+
+node "$SCRIPT_DIR/check-template-escapes.js" "$PROJECT_DIR/worker/broadcast-html.js"
+CHECK_EXIT2=$?
+
+if [ $CHECK_EXIT -ne 0 ] || [ $CHECK_EXIT2 -ne 0 ]; then
+  echo ""
+  echo "🚫 部署被阻止：模板字面量转义检查未通过"
+  echo "   请修复上述问题后重新运行此脚本"
   exit 1
 fi
 
-cd "$WORKER_DIR"
-
-# 检查 wrangler 是否安装
-if ! command -v npx &> /dev/null; then
-  echo "❌ 请先安装 Node.js 和 npm"
-  exit 1
-fi
-
-echo "📦 构建并部署..."
+echo ""
+echo "📦 开始部署..."
+cd "$PROJECT_DIR/worker"
 npx wrangler deploy
 
 echo ""
-echo "✅ 部署完成！"
-echo ""
-echo "下一步:"
-echo "  1. 访问 /admin 进入管理后台"
-echo "  2. 登录后通过 Schema 标签页配置平台"
-echo "  3. 通过站点管理标签页导入数据"
+echo "✅ 部署完成"

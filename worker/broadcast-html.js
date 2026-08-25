@@ -400,6 +400,218 @@ h1 {
   cursor: not-allowed;
 }
 
+/* ═══════ 反馈模态框 ═══════ */
+
+.feedback-modal {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0;
+  max-width: 440px;
+  width: calc(100% - 32px);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+
+.feedback-modal::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+}
+
+.feedback-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 0;
+}
+
+.feedback-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.feedback-close {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.3rem;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background-color 0.15s ease;
+}
+
+.feedback-close:hover {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.feedback-site-name {
+  margin: 6px 20px 0;
+  color: var(--teal);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.feedback-field {
+  margin: 12px 20px 0;
+}
+
+.feedback-field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--strong);
+}
+
+.feedback-type-group {
+  display: flex;
+  gap: 8px;
+}
+
+.feedback-type-btn {
+  flex: 1;
+  padding: 8px 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.feedback-type-btn:hover {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+}
+
+.feedback-type-btn.is-active {
+  border-color: var(--teal);
+  background: var(--teal);
+  color: #fff;
+}
+
+.feedback-field textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 64px;
+  transition: border-color 0.15s ease;
+}
+
+.feedback-field textarea:focus {
+  outline: none;
+  border-color: var(--teal);
+  box-shadow: 0 0 0 2px rgba(8, 127, 120, 0.15);
+}
+
+.feedback-hint {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+.feedback-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 16px 20px 18px;
+}
+
+.feedback-btn-cancel {
+  padding: 9px 16px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.feedback-btn-cancel:hover {
+  background: var(--surface-soft);
+}
+
+.feedback-btn-confirm {
+  padding: 9px 20px;
+  border: none;
+  border-radius: 6px;
+  background: var(--teal);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.feedback-btn-confirm:hover {
+  opacity: 0.9;
+}
+
+.feedback-btn-confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 反馈成功提示 */
+.feedback-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  padding: 12px 24px;
+  border-radius: 8px;
+  background: var(--teal);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 700;
+  box-shadow: 0 8px 24px rgba(8, 127, 120, 0.35);
+  z-index: 200;
+  opacity: 0;
+  transition: all 0.35s ease;
+  pointer-events: none;
+}
+
+.feedback-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* 卡片反馈按钮 */
+.feedback-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-left: auto;
+}
+
+.feedback-trigger:hover {
+  border-color: var(--teal);
+  color: var(--teal);
+  background: var(--teal-soft);
+}
+
 .theme-switcher {
   position: absolute;
   top: 12px;
@@ -1221,6 +1433,34 @@ h1 {
       </form>
     </dialog>
 
+    <!-- ═══════ 反馈模态框 ═══════ -->
+    <dialog id="feedbackModal" class="feedback-modal">
+      <form id="feedbackForm" method="dialog">
+        <div class="feedback-header">
+          <h2>💬 反馈站点信息</h2>
+          <button type="button" class="feedback-close" onclick="document.getElementById('feedbackModal').close()" aria-label="关闭">&times;</button>
+        </div>
+        <p class="feedback-site-name" id="feedbackSiteName"></p>
+        <div class="feedback-field">
+          <label>反馈类型 *</label>
+          <div class="feedback-type-group" id="feedbackTypeGroup">
+            <button type="button" class="feedback-type-btn" data-fb-type="error">🐛 报错</button>
+            <button type="button" class="feedback-type-btn" data-fb-type="correction">✏️ 纠正</button>
+            <button type="button" class="feedback-type-btn" data-fb-type="positive">👍 好评</button>
+          </div>
+        </div>
+        <div class="feedback-field">
+          <label for="feedbackContent">反馈内容 *</label>
+          <textarea id="feedbackContent" rows="3" maxlength="500" placeholder="请描述您发现的问题或建议..." required></textarea>
+          <div class="feedback-hint"><span id="feedbackCharCount">0</span>/500</div>
+        </div>
+        <div class="feedback-actions">
+          <button type="button" class="feedback-btn-cancel" onclick="document.getElementById('feedbackModal').close()">取消</button>
+          <button type="submit" class="feedback-btn-confirm" id="feedbackConfirmBtn">提交反馈</button>
+        </div>
+      </form>
+    </dialog>
+
     <template id="siteCardTemplate">
       <article class="site-card">
         <div class="card-head">
@@ -1788,6 +2028,14 @@ h1 {
     const cardFoot = node.querySelector(".card-foot");
     cardFoot.appendChild(makeVoteBar(site.name));
 
+    // 插入反馈按钮
+    const feedbackBtn = document.createElement("button");
+    feedbackBtn.type = "button";
+    feedbackBtn.className = "feedback-trigger";
+    feedbackBtn.textContent = "💬 反馈";
+    feedbackBtn.addEventListener("click", () => openFeedbackModal(site.name));
+    cardFoot.appendChild(feedbackBtn);
+
     // 在签到事实行旁追加额度徽章
     const checkinFact = facts.querySelector("div:first-child");
     if (checkinFact) {
@@ -1978,6 +2226,142 @@ h1 {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
+  // 反馈系统
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  const FEEDBACK_STORAGE_KEY = "sk-free-feedbacks";
+
+  function loadPersonalFeedbacks() {
+    try {
+      return JSON.parse(localStorage.getItem(FEEDBACK_STORAGE_KEY) || "{}");
+    } catch {
+      return {};
+    }
+  }
+
+  function savePersonalFeedbacks(record) {
+    try {
+      localStorage.setItem(FEEDBACK_STORAGE_KEY, JSON.stringify(record));
+    } catch {}
+  }
+
+  function openFeedbackModal(siteName) {
+    const modal = document.getElementById("feedbackModal");
+    const nameEl = document.getElementById("feedbackSiteName");
+    const contentEl = document.getElementById("feedbackContent");
+    const typeGroup = document.getElementById("feedbackTypeGroup");
+    const confirmBtn = document.getElementById("feedbackConfirmBtn");
+    const charCount = document.getElementById("feedbackCharCount");
+
+    const personalFeedbacks = loadPersonalFeedbacks();
+    if (personalFeedbacks[siteName]) {
+      showFeedbackToast("您已反馈过该站点，感谢您的关注！");
+      return;
+    }
+
+    nameEl.textContent = "站点：" + siteName;
+    contentEl.value = "";
+    charCount.textContent = "0";
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = "提交反馈";
+    modal.dataset.siteName = siteName;
+    modal.dataset.feedbackType = "";
+
+    typeGroup.querySelectorAll(".feedback-type-btn").forEach((btn) => {
+      btn.classList.remove("is-active");
+    });
+
+    modal.showModal();
+    contentEl.focus();
+  }
+
+  function initFeedbackForm() {
+    const modal = document.getElementById("feedbackModal");
+    const form = document.getElementById("feedbackForm");
+    const typeGroup = document.getElementById("feedbackTypeGroup");
+    const contentEl = document.getElementById("feedbackContent");
+    const charCount = document.getElementById("feedbackCharCount");
+    const confirmBtn = document.getElementById("feedbackConfirmBtn");
+
+    if (!modal || !form) return;
+
+    typeGroup.addEventListener("click", (e) => {
+      const btn = e.target.closest(".feedback-type-btn");
+      if (!btn) return;
+      typeGroup.querySelectorAll(".feedback-type-btn").forEach((b) => b.classList.remove("is-active"));
+      btn.classList.add("is-active");
+      modal.dataset.feedbackType = btn.dataset.fbType;
+    });
+
+    contentEl.addEventListener("input", () => {
+      charCount.textContent = String(contentEl.value.length);
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const siteName = modal.dataset.siteName;
+      const type = modal.dataset.feedbackType;
+      const content = contentEl.value.trim();
+
+      if (!type) {
+        alert("请选择反馈类型");
+        return;
+      }
+      if (content.length < 2) {
+        alert("反馈内容至少需要 2 个字符");
+        return;
+      }
+
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = "提交中...";
+
+      try {
+        const res = await fetch("/api/feedback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ siteName, type, content }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          modal.close();
+          const personalFeedbacks = loadPersonalFeedbacks();
+          personalFeedbacks[siteName] = true;
+          savePersonalFeedbacks(personalFeedbacks);
+          showFeedbackToast("✅ 感谢您的反馈！");
+        } else {
+          alert(data.error || "提交失败");
+        }
+      } catch {
+        alert("网络错误，请稍后重试");
+      } finally {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = "提交反馈";
+      }
+    });
+  }
+
+  function showFeedbackToast(msg) {
+    const existing = document.querySelector(".feedback-toast");
+    if (existing) existing.remove();
+
+    const toast = document.createElement("div");
+    toast.className = "feedback-toast";
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        toast.classList.add("show");
+      });
+    });
+
+    setTimeout(() => {
+      toast.classList.remove("show");
+      setTimeout(() => toast.remove(), 400);
+    }, 2500);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
   // 事件绑定 & 启动
   // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1988,6 +2372,7 @@ h1 {
 
   initTheme();
   initSubmitForm();
+  initFeedbackForm();
   init();
 })();
 

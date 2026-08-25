@@ -154,6 +154,34 @@
       </form>
     </dialog>
 
+    <!-- ═══════ 反馈模态框 ═══════ -->
+    <dialog id="feedbackModal" class="feedback-modal">
+      <form id="feedbackForm" method="dialog">
+        <div class="feedback-header">
+          <h2>💬 反馈站点信息</h2>
+          <button type="button" class="feedback-close" onclick="document.getElementById('feedbackModal').close()" aria-label="关闭">&times;</button>
+        </div>
+        <p class="feedback-site-name" id="feedbackSiteName"></p>
+        <div class="feedback-field">
+          <label>反馈类型 *</label>
+          <div class="feedback-type-group" id="feedbackTypeGroup">
+            <button type="button" class="feedback-type-btn" data-fb-type="error">🐛 报错</button>
+            <button type="button" class="feedback-type-btn" data-fb-type="correction">✏️ 纠正</button>
+            <button type="button" class="feedback-type-btn" data-fb-type="positive">👍 好评</button>
+          </div>
+        </div>
+        <div class="feedback-field">
+          <label for="feedbackContent">反馈内容 *</label>
+          <textarea id="feedbackContent" rows="3" maxlength="500" placeholder="请描述您发现的问题或建议..." required></textarea>
+          <div class="feedback-hint"><span id="feedbackCharCount">0</span>/500</div>
+        </div>
+        <div class="feedback-actions">
+          <button type="button" class="feedback-btn-cancel" onclick="document.getElementById('feedbackModal').close()">取消</button>
+          <button type="submit" class="feedback-btn-confirm" id="feedbackConfirmBtn">提交反馈</button>
+        </div>
+      </form>
+    </dialog>
+
     <template id="siteCardTemplate">
       <article class="site-card">
         <div class="card-head">

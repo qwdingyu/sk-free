@@ -19,6 +19,7 @@ import { handleGetVotes, handleVote } from "./src/votes.js";
 import { handleSubmitSite, handleAdminGetSubmissions, handleAdminSubmissionAction } from "./src/submissions.js";
 import { getDeadUrls, addDeadUrl, removeDeadUrl, batchDeadUrls } from "./src/deadurls.js";
 import { checkUrlHealth, checkBatchHealth } from "./src/health.js";
+import { handleSubmitFeedback, handleGetFeedbacks, handleFeedbackAction } from "./src/feedbacks.js";
 import { broadcastHtml } from "./broadcast-html.js";
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -150,6 +151,7 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
     <button class="tab-btn active" onclick="switchTab('sites')">站点管理</button>
     <button class="tab-btn" onclick="switchTab('submissions')">提交审核 <span id="subCount" class="tag" style="display:none;background:var(--red);color:#fff"></span></button>
     <button class="tab-btn" onclick="switchTab('health')">🔗 链接健康</button>
+    <button class="tab-btn" onclick="switchTab('feedback')">💬 用户反馈 <span id="fbCount" class="tag" style="display:none;background:var(--red);color:#fff"></span></button>
     <button class="tab-btn" onclick="switchTab('schema')">⚙️ Schema</button>
   </div>
   <div id="panelSites" class="tab-panel active">
@@ -158,6 +160,8 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
       <select id="tagFilter" onchange="filterTable()" style="padding:8px;border:1px solid var(--line);border-radius:var(--radius);font-size:13px;background:var(--surface);color:var(--ink)">
         <option value="">全部标签</option>
       </select>
+      <button class="btn btn-danger btn-sm" onclick="sitesCleanupDeadLinks()">🧹 一键清理死链</button>
+      <span id="sitesCleanStatus" style="color:var(--muted);font-size:12px"></span>
     </div>
     <div class="batch-bar" id="batchBar">
       <span>已选 <span class="count" id="batchCount">0</span> 项</span>
@@ -204,6 +208,18 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
       <button class="btn btn-sm" onclick="clearDeadSelection()">取消选择</button>
     </div>
     <div id="deadUrlsList"></div>
+  </div>
+  <div id="panelFeedback" class="tab-panel">
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+      <select id="fbFilter" onchange="loadFeedbacks()" style="padding:8px;border:1px solid var(--line);border-radius:var(--radius);font-size:13px;background:var(--surface);color:var(--ink)">
+        <option value="">全部状态</option>
+        <option value="new">🆕 待处理</option>
+        <option value="read">👁️ 已读</option>
+        <option value="resolved">✅ 已解决</option>
+      </select>
+      <span id="fbStatus" style="color:var(--muted);font-size:13px"></span>
+    </div>
+    <div id="feedbacksList"></div>
   </div>
   <div id="panelSchema" class="tab-panel">
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
@@ -417,13 +433,16 @@ async function batchDisable() {
   try { const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "disable", names: [...SELECTED] }) }); toast("已停用 " + data.affected + " 个站点", "success"); SELECTED.clear(); await loadSites(); } catch (e) { toast(e.message, "error"); }
 }
 function switchTab(tab) {
-  document.querySelectorAll(".tab-btn").forEach((btn, i) => { btn.classList.toggle("active", (tab === "sites" && i === 0) || (tab === "submissions" && i === 1) || (tab === "health" && i === 2) || (tab === "schema" && i === 3)); });
+  var tabs = ["sites","submissions","health","feedback","schema"];
+  document.querySelectorAll(".tab-btn").forEach((btn, i) => { btn.classList.toggle("active", tabs[i] === tab); });
   document.getElementById("panelSites").classList.toggle("active", tab === "sites");
   document.getElementById("panelSubmissions").classList.toggle("active", tab === "submissions");
   document.getElementById("panelHealth").classList.toggle("active", tab === "health");
+  document.getElementById("panelFeedback").classList.toggle("active", tab === "feedback");
   document.getElementById("panelSchema").classList.toggle("active", tab === "schema");
   if (tab === "submissions") loadSubmissions();
   if (tab === "health") loadDeadUrls();
+  if (tab === "feedback") loadFeedbacks();
   if (tab === "schema") loadSchema();
 }
 async function loadSubmissions() {
@@ -487,7 +506,7 @@ async function removeDeadUrl(url) {
 // 一键清除全部死链接：批量移除黑名单，联动恢复所有被禁用的站点
 async function clearAllDeadUrls() {
   if (ALL_DEAD_URLS.length === 0) { toast("当前没有死链接", "info"); return; }
-  if (!confirm("确认清除全部 " + ALL_DEAD_URLS.length + " 个死链接？\n相关站点将自动恢复启用状态。")) return;
+  if (!confirm("确认清除全部 " + ALL_DEAD_URLS.length + " 个死链接？\\n相关站点将自动恢复启用状态。")) return;
   try {
     const data = await api("/api/admin/dead-urls/batch", { method: "POST", body: JSON.stringify({ urls: ALL_DEAD_URLS }) });
     toast("已清除 " + data.changed + " 个死链接，相关站点已恢复", "success");
@@ -516,6 +535,79 @@ async function batchCheckUrls() {
     if (aliveList.length > 0) { html += '<div style="margin:12px 0 8px"><strong style="color:var(--teal)">✅ 正常 (' + aliveList.length + ')</strong></div>'; html += aliveList.map(r => '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)"><span style="flex:1;word-break:break-all">' + esc(r.url) + '</span><span style="color:var(--teal);white-space:nowrap">HTTP ' + r.status + '</span></div>').join(""); }
     resultsEl.innerHTML = html; await loadDeadUrls(); await loadSites();
   } catch (e) { statusEl.textContent = "检查失败: " + e.message; }
+}
+// ── 站点管理 tab 一键清理死链 ──────────────────────────────────────────────
+async function sitesCleanupDeadLinks() {
+  var statusEl = document.getElementById("sitesCleanStatus");
+  if (SITES.length === 0) { toast("请先加载站点列表", "error"); return; }
+  if (!confirm("将检查全部 " + SITES.length + " 个站点的 URL 可达性，不可达的将加入死链黑名单并自动停用。确认继续？")) return;
+  statusEl.textContent = "正在检查中...";
+  try {
+    var BATCH_SIZE = 45;
+    var allUrls = SITES.map(function(s) { return s.url; }).filter(Boolean);
+    var allResults = [];
+    var allNewDead = [];
+    var totalBatches = Math.ceil(allUrls.length / BATCH_SIZE);
+    for (var i = 0; i < allUrls.length; i += BATCH_SIZE) {
+      var batchIdx = Math.floor(i / BATCH_SIZE) + 1;
+      statusEl.textContent = "检查中... 批次 " + batchIdx + "/" + totalBatches;
+      var data = await api("/api/admin/check-batch", { method: "POST", body: JSON.stringify({ urls: allUrls.slice(i, i + BATCH_SIZE) }) });
+      allResults.push.apply(allResults, data.results);
+      if (data.newDeadUrls && data.newDeadUrls.length > 0) allNewDead.push.apply(allNewDead, data.newDeadUrls);
+    }
+    if (allNewDead.length > 0) {
+      await api("/api/admin/dead-urls/batch", { method: "POST", body: JSON.stringify({ urls: allNewDead, action: "add" }) });
+    }
+    var alive = allResults.filter(function(r) { return r.ok; }).length;
+    var dead = allResults.filter(function(r) { return !r.ok; }).length;
+    var msg = "检查完成：" + alive + " 正常，" + dead + " 不可达";
+    if (allNewDead.length > 0) msg += "（新增 " + allNewDead.length + " 个死链）";
+    statusEl.textContent = msg;
+    toast(msg, allNewDead.length > 0 ? "info" : "success");
+    await loadSites();
+  } catch (e) { statusEl.textContent = "检查失败: " + e.message; toast("检查失败: " + e.message, "error"); }
+}
+// ── 用户反馈管理 ──────────────────────────────────────────────────────────
+async function loadFeedbacks() {
+  try {
+    var status = document.getElementById("fbFilter").value;
+    var qs = status ? ("?status=" + status) : "";
+    var data = await api("/api/admin/feedbacks" + qs);
+    var list = document.getElementById("feedbacksList");
+    var statusEl = document.getElementById("fbStatus");
+    var countEl = document.getElementById("fbCount");
+    var feedbacks = data.feedbacks || [];
+    statusEl.textContent = "共 " + (data.total || 0) + " 条" + (data.unread ? "（" + data.unread + " 条未读）" : "");
+    if (data.unread > 0) { countEl.textContent = data.unread; countEl.style.display = "inline"; } else { countEl.style.display = "none"; }
+    if (feedbacks.length === 0) { list.innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center">暂无反馈</div>'; return; }
+    var typeColors = { error: "var(--coral)", correction: "var(--amber)", positive: "var(--teal)" };
+    var typeLabels = { error: "报错", correction: "纠正", positive: "好评" };
+    var statusLabels = { new: "🆕 待处理", read: "👁️ 已读", resolved: "✅ 已解决" };
+    list.innerHTML = feedbacks.map(function(f) {
+      var time = f.createdAt ? new Date(f.createdAt).toLocaleString("zh-CN") : "";
+      var statusStyle = f.status === "new" ? "font-weight:700" : "color:var(--muted)";
+      var typeStyle = "background:" + (typeColors[f.type] || "var(--tag-bg)") + ";color:#fff";
+      return '<div class="sub-card" style="border-left:3px solid ' + (typeColors[f.type] || "var(--line)") + '">' +
+        '<div class="sub-header"><span class="sub-name">' + esc(f.siteName) + '</span>' +
+        '<span class="sub-time">' + esc(time) + ' | ' + esc(f.ip) + '</span></div>' +
+        '<div style="margin:4px 0"><span class="tag" style="' + typeStyle + '">' + esc(typeLabels[f.type] || f.type) + '</span> ' +
+        '<span style="' + statusStyle + ';font-size:12px">' + esc(statusLabels[f.status] || f.status) + '</span></div>' +
+        '<div class="sub-summary" style="white-space:normal">' + esc(f.content) + '</div>' +
+        '<div class="sub-actions">' +
+        (f.status !== "read" ? '<button class="btn btn-sm" data-fb-id="' + f.id + '" data-fb-action="read" data-action="fb-action">👁️ 标记已读</button> ' : '') +
+        (f.status !== "resolved" ? '<button class="btn btn-sm btn-primary" data-fb-id="' + f.id + '" data-fb-action="resolved" data-action="fb-action">✅ 已解决</button> ' : '') +
+        '<button class="btn btn-sm btn-danger" data-fb-id="' + f.id + '" data-fb-action="delete" data-action="fb-action">🗑️ 删除</button>' +
+        '</div></div>';
+    }).join("");
+  } catch (e) { toast("加载反馈失败: " + e.message, "error"); }
+}
+async function feedbackAction(id, action) {
+  if (action === "delete" && !confirm("确认删除此反馈？")) return;
+  try {
+    await api("/api/admin/feedbacks/" + id, { method: "POST", body: JSON.stringify({ action: action }) });
+    toast("操作成功", "success");
+    await loadFeedbacks();
+  } catch (e) { toast(e.message, "error"); }
 }
 async function loadSchema() {
   try { const data = await api("/api/admin/schema"); document.getElementById("schemaEditor").value = JSON.stringify(data.schema, null, 2); document.getElementById("schemaStatus").textContent = "已加载"; } catch (e) { document.getElementById("schemaStatus").textContent = "加载失败: " + e.message; }
@@ -566,6 +658,7 @@ document.addEventListener("click", function(e) {
     case "reject-submission":  rejectSubmission(id); break;
     case "remove-dead":       removeDeadUrl(el.getAttribute("data-url")); break;
     case "toggle-dead-select-all": toggleDeadSelectAll(el.checked); break;
+    case "fb-action":         feedbackAction(el.getAttribute("data-fb-id"), el.getAttribute("data-fb-action")); break;
   }
 });
 document.addEventListener("change", function(e) {
@@ -725,8 +818,26 @@ export default {
           if (!Array.isArray(urls) || urls.length === 0) {
             return json({ ok: false, error: "需要 urls 数组" }, 400, request);
           }
-          const result = await checkBatchHealth(db, urls, 1500);
+          // 超时 8 秒：1.5 秒太短导致大量合法站点误判为死链
+          const result = await checkBatchHealth(db, urls, 8000);
           return json(result, 200, request);
+        }
+
+        // ── Feedbacks ─────────────────────────────────────────
+
+        // GET /api/admin/feedbacks — 获取反馈列表（admin 专用）
+        if (path === "/api/admin/feedbacks" && request.method === "GET") {
+          const status = url.searchParams.get("status") || undefined;
+          const result = await handleGetFeedbacks(db, status);
+          return json(result, 200, request);
+        }
+        // POST /api/admin/feedbacks/:id — 处理反馈（标记已读/已解决/删除）
+        const fbMatch = path.match(/^\/api\/admin\/feedbacks\/(\d+)$/);
+        if (fbMatch && request.method === "POST") {
+          const parsed = await parseJsonBody(request);
+          if (!parsed.ok) return parsed.response;
+          const result = await handleFeedbackAction(db, parseInt(fbMatch[1]), parsed.data.action);
+          return json(result, result.ok ? 200 : 400, request);
         }
 
         // ── Schema ────────────────────────────────────────────
@@ -785,6 +896,11 @@ export default {
       // POST /api/submit — 用户提交新站点
       if (path === "/api/submit" && request.method === "POST") {
         return handleSubmitSite(request, db);
+      }
+
+      // POST /api/feedback — 用户提交反馈（报错/纠正/好评）
+      if (path === "/api/feedback" && request.method === "POST") {
+        return handleSubmitFeedback(request, db);
       }
 
       // GET /api/votes
