@@ -11,8 +11,10 @@ const FEEDBACK_RATE_LIMIT = 10;
 const FEEDBACK_RATE_WINDOW_MS = 86400000;
 
 // 反馈类型枚举
-const VALID_TYPES = ["error", "correction", "positive"];
-const TYPE_LABELS = { error: "报错", correction: "纠正", positive: "好评" };
+// 支持5种反馈类型（对应 0004 migration 中的 CHECK 约束）
+// still_works/dead 用于"还能用/已失效"一键反馈，驱动 verified_at 更新
+const VALID_TYPES = ["error", "correction", "positive", "still_works", "dead"];
+const TYPE_LABELS = { error: "报错", correction: "纠正", positive: "好评", still_works: "还能用", dead: "已失效" };
 
 /**
  * 用户提交反馈

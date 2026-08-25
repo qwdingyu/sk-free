@@ -39,10 +39,12 @@ export async function handleSubmitSite(request, db) {
   // 速率限制：每 IP 每天最多 5 次提交
   const ip = request.headers.get("CF-Connecting-IP") || "unknown";
   const now = Date.now();
+  // 用 datetime(?, 'unixepoch') 将秒级时间戳转为 datetime 字符串再比较
+  // 避免 epoch 毫秒字符串与 datetime 字符串比较恒为真的 bug
   const ipSubmissions = await dbAll(
     db,
-    "SELECT id FROM submissions WHERE ip = ? AND created_at > ?",
-    [ip, (now - SUBMIT_RATE_WINDOW_MS).toString()]
+    "SELECT id FROM submissions WHERE ip = ? AND created_at > datetime(?, 'unixepoch')",
+    [ip, Math.floor((now - SUBMIT_RATE_WINDOW_MS) / 1000)]
   );
   if (ipSubmissions.length >= SUBMIT_RATE_LIMIT) {
     return jsonResponse(

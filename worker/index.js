@@ -148,11 +148,11 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
     <button class="btn btn-danger btn-sm" onclick="doLogout()">退出</button>
   </div>
   <div class="tab-bar">
-    <button class="tab-btn active" onclick="switchTab('sites')">站点管理</button>
-    <button class="tab-btn" onclick="switchTab('submissions')">提交审核 <span id="subCount" class="tag" style="display:none;background:var(--red);color:#fff"></span></button>
-    <button class="tab-btn" onclick="switchTab('health')">🔗 链接健康</button>
-    <button class="tab-btn" onclick="switchTab('feedback')">💬 用户反馈 <span id="fbCount" class="tag" style="display:none;background:var(--red);color:#fff"></span></button>
-    <button class="tab-btn" onclick="switchTab('schema')">⚙️ Schema</button>
+    <button class="tab-btn active" data-tab="sites" onclick="switchTab('sites')">站点管理</button>
+    <button class="tab-btn" data-tab="submissions" onclick="switchTab('submissions')">提交审核 <span id="subCount" class="tag" style="display:none;background:var(--red);color:#fff"></span></button>
+    <button class="tab-btn" data-tab="health" onclick="switchTab('health')">🔗 链接健康</button>
+    <button class="tab-btn" data-tab="feedback" onclick="switchTab('feedback')">💬 用户反馈 <span id="fbCount" class="tag" style="display:none;background:var(--red);color:#fff"></span></button>
+    <button class="tab-btn" data-tab="schema" onclick="switchTab('schema')">⚙️ Schema</button>
   </div>
   <div id="panelSites" class="tab-panel active">
     <div class="toolbar">
@@ -433,8 +433,8 @@ async function batchDisable() {
   try { const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "disable", names: [...SELECTED] }) }); toast("已停用 " + data.affected + " 个站点", "success"); SELECTED.clear(); await loadSites(); } catch (e) { toast(e.message, "error"); }
 }
 function switchTab(tab) {
-  var tabs = ["sites","submissions","health","feedback","schema"];
-  document.querySelectorAll(".tab-btn").forEach((btn, i) => { btn.classList.toggle("active", tabs[i] === tab); });
+  // 用 data-tab 属性匹配，不依赖 DOM 顺序
+  document.querySelectorAll(".tab-btn").forEach(btn => { btn.classList.toggle("active", btn.dataset.tab === tab); });
   document.getElementById("panelSites").classList.toggle("active", tab === "sites");
   document.getElementById("panelSubmissions").classList.toggle("active", tab === "submissions");
   document.getElementById("panelHealth").classList.toggle("active", tab === "health");
@@ -514,56 +514,67 @@ async function clearAllDeadUrls() {
     await loadDeadUrls(); await loadSites();
   } catch (e) { toast(e.message, "error"); }
 }
+/**
+ * 共享的健康扫描逻辑（链接健康 tab 和站点管理 tab 共用）
+ * @param {object} opts
+ * @param {function} opts.onProgress — 进度回调 (msg) => void
+ * @param {function} opts.onResult — 扫描完成回调 ({ alive, dead, allNewDead, allResults }) => void
+ */
+async function runHealthScan({ onProgress, onResult }) {
+  const BATCH_SIZE = 45;
+  const allUrls = SITES.map(s => s.url).filter(Boolean);
+  if (allUrls.length === 0) { onProgress("没有可检查的站点"); return; }
+  const allResults = [];
+  const allNewDead = [];
+  const totalBatches = Math.ceil(allUrls.length / BATCH_SIZE);
+  for (let i = 0; i < allUrls.length; i += BATCH_SIZE) {
+    const batchIdx = Math.floor(i / BATCH_SIZE) + 1;
+    onProgress("正在检查... 批次 " + batchIdx + "/" + totalBatches + "（" + Math.min(i + BATCH_SIZE, allUrls.length) + "/" + allUrls.length + "）");
+    const data = await api("/api/admin/check-batch", { method: "POST", body: JSON.stringify({ urls: allUrls.slice(i, i + BATCH_SIZE) }) });
+    allResults.push(...data.results);
+    if (data.newDeadUrls && data.newDeadUrls.length > 0) allNewDead.push(...data.newDeadUrls);
+  }
+  const alive = allResults.filter(r => r.ok).length;
+  const dead = allResults.filter(r => !r.ok).length;
+  onResult({ alive, dead, allNewDead, allResults });
+}
+
 async function batchCheckUrls() {
   const statusEl = document.getElementById("healthStatus"); const resultsEl = document.getElementById("healthResults");
   statusEl.textContent = "正在检查中，请稍候..."; resultsEl.innerHTML = "";
   try {
-    const BATCH_SIZE = 45; const allUrls = SITES.map(s => s.url).filter(Boolean); const allResults = []; let allNewDead = []; const totalBatches = Math.ceil(allUrls.length / BATCH_SIZE);
-    for (let i = 0; i < allUrls.length; i += BATCH_SIZE) {
-      const batchIdx = Math.floor(i / BATCH_SIZE) + 1;
-      statusEl.textContent = "正在检查中... 批次 " + batchIdx + "/" + totalBatches + "（" + Math.min(i + BATCH_SIZE, allUrls.length) + "/" + allUrls.length + "）";
-      const data = await api("/api/admin/check-batch", { method: "POST", body: JSON.stringify({ urls: allUrls.slice(i, i + BATCH_SIZE) }) });
-      allResults.push(...data.results); if (data.newDeadUrls && data.newDeadUrls.length > 0) allNewDead.push(...data.newDeadUrls);
-    }
-    // 不再自动将不可达 URL 加入死链黑名单（概率性探测不应驱动不可逆动作）
-    // 新发现的不可达 URL 仅在结果中展示，由管理员手动确认后操作
-    const alive = allResults.filter(r => r.ok).length; const dead = allResults.filter(r => !r.ok).length;
-    var statusMsg = "检查完成：共 " + allResults.length + " 个，" + alive + " 个正常，" + dead + " 个不可达";
-    if (allNewDead.length > 0) statusMsg += "（发现 " + allNewDead.length + " 个疑似死链，请在下方确认）";
-    statusEl.textContent = statusMsg;
-    const deadList = allResults.filter(r => !r.ok); const aliveList = allResults.filter(r => r.ok); let html = "";
-    if (deadList.length > 0) { html += '<div style="margin-bottom:12px"><strong style="color:var(--coral)">❌ 不可达 (' + deadList.length + ')</strong></div>'; html += deadList.map(r => '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)"><span style="flex:1;word-break:break-all">' + esc(r.url) + '</span><span style="color:var(--coral);white-space:nowrap">' + esc(r.error || ("HTTP " + r.status)) + '</span></div>').join(""); }
-    if (aliveList.length > 0) { html += '<div style="margin:12px 0 8px"><strong style="color:var(--teal)">✅ 正常 (' + aliveList.length + ')</strong></div>'; html += aliveList.map(r => '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)"><span style="flex:1;word-break:break-all">' + esc(r.url) + '</span><span style="color:var(--teal);white-space:nowrap">HTTP ' + r.status + '</span></div>').join(""); }
-    resultsEl.innerHTML = html; await loadDeadUrls(); await loadSites();
+    await runHealthScan({
+      onProgress: (msg) => { statusEl.textContent = msg; },
+      onResult: ({ alive, dead, allNewDead, allResults }) => {
+        var statusMsg = "检查完成：共 " + allResults.length + " 个，" + alive + " 个正常，" + dead + " 个不可达";
+        if (allNewDead.length > 0) statusMsg += "（发现 " + allNewDead.length + " 个疑似死链，请在下方确认）";
+        statusEl.textContent = statusMsg;
+        // 渲染详细结果列表
+        const deadList = allResults.filter(r => !r.ok); const aliveList = allResults.filter(r => r.ok); let html = "";
+        if (deadList.length > 0) { html += '<div style="margin-bottom:12px"><strong style="color:var(--coral)">❌ 不可达 (' + deadList.length + ')</strong></div>'; html += deadList.map(r => '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)"><span style="flex:1;word-break:break-all">' + esc(r.url) + '</span><span style="color:var(--coral);white-space:nowrap">' + esc(r.error || ("HTTP " + r.status)) + '</span></div>').join(""); }
+        if (aliveList.length > 0) { html += '<div style="margin:12px 0 8px"><strong style="color:var(--teal)">✅ 正常 (' + aliveList.length + ')</strong></div>'; html += aliveList.map(r => '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)"><span style="flex:1;word-break:break-all">' + esc(r.url) + '</span><span style="color:var(--teal);white-space:nowrap">HTTP ' + r.status + '</span></div>').join(""); }
+        resultsEl.innerHTML = html; loadDeadUrls(); loadSites();
+      },
+    });
   } catch (e) { statusEl.textContent = "检查失败: " + e.message; }
 }
 // ── 站点管理 tab 一键清理死链 ──────────────────────────────────────────────
 async function sitesCleanupDeadLinks() {
   var statusEl = document.getElementById("sitesCleanStatus");
   if (SITES.length === 0) { toast("请先加载站点列表", "error"); return; }
-  if (!confirm("将检查全部 " + SITES.length + " 个站点的 URL 可达性，不可达的将加入死链黑名单并自动停用。确认继续？")) return;
+  if (!confirm("将检查全部 " + SITES.length + " 个站点的 URL 可达性，不可达的将显示在结果中供确认。确认继续？")) return;
   statusEl.textContent = "正在检查中...";
   try {
-    var BATCH_SIZE = 45;
-    var allUrls = SITES.map(function(s) { return s.url; }).filter(Boolean);
-    var allResults = [];
-    var allNewDead = [];
-    var totalBatches = Math.ceil(allUrls.length / BATCH_SIZE);
-    for (var i = 0; i < allUrls.length; i += BATCH_SIZE) {
-      var batchIdx = Math.floor(i / BATCH_SIZE) + 1;
-      statusEl.textContent = "检查中... 批次 " + batchIdx + "/" + totalBatches;
-      var data = await api("/api/admin/check-batch", { method: "POST", body: JSON.stringify({ urls: allUrls.slice(i, i + BATCH_SIZE) }) });
-      allResults.push.apply(allResults, data.results);
-      if (data.newDeadUrls && data.newDeadUrls.length > 0) allNewDead.push.apply(allNewDead, data.newDeadUrls);
-    }
-    // 不再自动将不可达 URL 加入死链黑名单（概率性探测不应驱动不可逆动作）
-    var alive = allResults.filter(function(r) { return r.ok; }).length;
-    var dead = allResults.filter(function(r) { return !r.ok; }).length;
-    var msg = "检查完成：" + alive + " 正常，" + dead + " 不可达";
-    if (allNewDead.length > 0) msg += "（发现 " + allNewDead.length + " 个疑似死链，请手动确认）";
-    statusEl.textContent = msg;
-    toast(msg, allNewDead.length > 0 ? "info" : "success");
-    await loadSites();
+    await runHealthScan({
+      onProgress: (msg) => { statusEl.textContent = msg; },
+      onResult: ({ alive, dead, allNewDead }) => {
+        var msg = "检查完成：" + alive + " 正常，" + dead + " 不可达";
+        if (allNewDead.length > 0) msg += "（发现 " + allNewDead.length + " 个疑似死链，请手动确认）";
+        statusEl.textContent = msg;
+        toast(msg, allNewDead.length > 0 ? "info" : "success");
+        loadSites();
+      },
+    });
   } catch (e) { statusEl.textContent = "检查失败: " + e.message; toast("检查失败: " + e.message, "error"); }
 }
 // ── 用户反馈管理 ──────────────────────────────────────────────────────────
