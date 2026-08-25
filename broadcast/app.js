@@ -9,11 +9,41 @@
   const THEME_KEY = "broadcast-theme";
   const VOTE_STORAGE_KEY = "sk-free-votes";
   const THEME_CHOICES = ["light", "dark", "system"];
-  const PRIORITY_TAGS = ["全部", "签到", "生图", "DC系", "半DC", "非DC", "抽奖"];
+  // 去掉了 "DC系" 和 "抽奖"：线上 18 条数据里这两个标签命中 0 条，
+  // 是两个永远筛不出东西的按钮。阶段 B 会用 needsProxy 取代 DC 系列标签。
+  const PRIORITY_TAGS = ["全部", "签到", "生图", "半DC", "非DC"];
   const SORT_OPTIONS = [
     { value: "default", label: "默认排序" },
+    { value: "fresh",   label: "最近验证" },
+    { value: "quota",   label: "额度档位" },
     { value: "score",   label: "按评分排序" }
   ];
+
+  // ─── 结构化额度字段的展示映射（0003 引入）───────────────────────────────────
+  // 单位一律由后端 quotaUnit 决定。缺失就不显示单位，绝不默认成 "刀"。
+  const UNIT_LABELS = {
+    usd: "刀",
+    cny: "元",
+    credit: "积分",
+    coin: "硬币",
+    token: "代币",
+    call: "次"
+  };
+  const PERIOD_LABELS = {
+    daily: "每日",
+    weekly: "每周",
+    once: "一次性",
+    none: ""
+  };
+  const TIER_LABELS = { high: "高额度", mid: "中额度", low: "小额度", none: "" };
+  // 跨单位无汇率，排序只依据人工判定的档位
+  const TIER_ORDER = { high: 3, mid: 2, low: 1, none: 0 };
+  const KIND_LABELS = {
+    api_site: "",
+    bot: "TG 机器人",
+    account_pool: "号池",
+    tool: "工具"
+  };
   const TAG_CLASS = {
     "签到": "checkin",
     "生图": "image"
@@ -340,9 +370,30 @@
     if (state.sortBy === "score") {
       // 按评分排序：高分在前
       list.sort((a, b) => netVotes(b.name) - netVotes(a.name));
+    } else if (state.sortBy === "quota") {
+      // 跨单位无汇率，只能按人工判定的档位排；同档位内按最近验证时间
+      list.sort((a, b) => (tierRank(b) - tierRank(a)) || (verifiedTs(b) - verifiedTs(a)));
+    } else if (state.sortBy === "fresh") {
+      // 最近验证在前；同鲜度按额度档位
+      list.sort((a, b) => (verifiedTs(b) - verifiedTs(a)) || (tierRank(b) - tierRank(a)));
     }
 
+    // 已失效的一律沉到末尾（展示但不占据决策位）
+    list.sort((a, b) => (a.dead ? 1 : 0) - (b.dead ? 1 : 0));
+
     return list;
+  }
+
+  /** 额度档位的排序权重；无档位算 0 */
+  function tierRank(site) {
+    return TIER_ORDER[site.quotaTier] || 0;
+  }
+
+  /** 最后验证时间戳；未验证算 0（排到最后） */
+  function verifiedTs(site) {
+    if (!site.verifiedAt) return 0;
+    const ts = Date.parse(site.verifiedAt.replace(" ", "T") + "Z");
+    return Number.isNaN(ts) ? 0 : ts;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -350,12 +401,22 @@
   // ═══════════════════════════════════════════════════════════════════════════════
 
   function renderSummary() {
+    // 统计条一律用全量数据，不用筛选结果。
+    // 旧实现用 filteredSites().length 当"收录"，一筛选就变成"收录 3 个站"，
+    // 而这一栏的语义是"这个站收录了多少"，不是"你筛出了多少"。
+    const all = state.sites;
     const visible = filteredSites();
+    const daily = all.filter((site) => site.quotaPeriod === "daily").length;
+    const deadCount = state.metadata.dead ?? all.filter((site) => site.dead).length;
+
     const stats = [
-      ["收录", visible.length],
-      ["可签到", visible.filter((site) => (site.tags || []).includes("签到")).length],
-      ["可生图", visible.filter((site) => (site.tags || []).includes("生图")).length]
+      ["收录", state.metadata.total ?? all.length],
+      ["每日可签到", daily],
+      ["可生图", all.filter((site) => (site.tags || []).includes("生图")).length]
     ];
+    if (deadCount > 0) stats.push(["已失效", deadCount]);
+    // 只有真的在筛选时才显示"匹配"，避免和"收录"混淆
+    if (visible.length !== all.length) stats.push(["当前匹配", visible.length]);
 
     els.summaryStrip.replaceChildren(
       ...stats.map(([label, value]) => {
@@ -485,39 +546,104 @@
   }
 
   /**
-   * 根据站点的签到额度生成醒目徽章
-   * 解析 checkin 字段中的数字，按阈值分级显示
+   * 根据结构化额度字段生成醒目徽章
+   *
+   * 为什么不再从 checkin 文本里正则抓数字：
+   *   旧实现取文本里最大的数再一律拼 "刀"，于是
+   *   "每日签到100积分（约60次API调用）" 显示成 "100 刀"，
+   *   "签到1-5积分" 显示成 "5 刀"。这是在向用户输出假信息。
+   *   现在单位由后端 quotaUnit 给出，缺失就不显示单位——宁可少说，不能说错。
+   *
+   * 跨单位没有汇率（刀/元/积分/硬币/代币互不可换算），
+   * 所以分级只依据人工判定的 quotaTier，不依据数字大小。
+   *
    * @param {Object} site - 站点数据对象
-   * @returns {HTMLElement|null} 徽章元素，无签到数据时返回 null
+   * @returns {HTMLElement|null} 徽章元素，无可信额度数据时返回 null
    */
-  function makeCheckinBadge(site) {
-    if (!site.checkin) return null;
+  function makeQuotaBadge(site) {
+    const tier = site.quotaTier && site.quotaTier !== "none" ? site.quotaTier : null;
+    const unit = site.quotaUnit ? UNIT_LABELS[site.quotaUnit] || site.quotaUnit : null;
+    const min = site.quotaMin;
+    const max = site.quotaMax;
+    const hasAmount = typeof min === "number" || typeof max === "number";
 
-    // 从 checkin 文本中提取最大数值（如 "5-50刀" → 50）
-    const numbers = site.checkin.match(/\d+(\.\d+)?/g);
-    if (!numbers) return null;
+    // 既没有额度数值也没有档位 → 没有可展示的可信信息
+    if (!hasAmount && !tier) return null;
 
-    const maxVal = Math.max(...numbers.map(Number));
-    if (maxVal <= 0) return null;
-
-    // 按阈值分级：≥20 高额度、≥5 中额度、<5 低额度
-    let level, label;
-    if (maxVal >= 20) {
-      level = "high";
-      label = `${maxVal}+`;
-    } else if (maxVal >= 5) {
-      level = "mid";
-      label = String(maxVal);
+    let text;
+    if (hasAmount) {
+      const lo = typeof min === "number" ? min : max;
+      const hi = typeof max === "number" ? max : min;
+      const amount = lo === hi ? String(lo) : lo + "-" + hi;
+      text = unit ? amount + " " + unit : amount;
     } else {
-      level = "low";
-      label = String(maxVal);
+      text = TIER_LABELS[tier];
     }
 
     const badge = document.createElement("span");
-    badge.className = `checkin-badge checkin-${level}`;
-    badge.textContent = `${label} 刀`;
-    badge.title = `签到额度参考：${site.checkin}`;
+    // 沿用 checkin-* 类名，样式表和卡片分级逻辑无需改动
+    badge.className = "checkin-badge checkin-" + (tier || "low");
+    badge.textContent = text;
+
+    // 悬浮显示完整信息：周期、估算次数、原始文案
+    const title = [];
+    if (site.quotaPeriod && PERIOD_LABELS[site.quotaPeriod]) {
+      title.push(PERIOD_LABELS[site.quotaPeriod]);
+    }
+    if (typeof site.quotaCallsEst === "number") {
+      title.push("约 " + site.quotaCallsEst + " 次调用");
+    }
+    if (site.quotaRaw) title.push("原文：" + site.quotaRaw);
+    else if (site.checkin) title.push("原文：" + site.checkin);
+    badge.title = title.join(" · ");
+
     return badge;
+  }
+
+  /**
+   * 生成鲜度指示器
+   * 鲜度是这个站的核心价值：数据是不是今天还有效。
+   * 没验证过就明说"未验证"，不假装新鲜。
+   * @param {Object} site - 站点数据对象
+   * @returns {HTMLElement} 鲜度元素
+   */
+  function makeFreshness(site) {
+    const el = document.createElement("span");
+    el.className = "freshness";
+
+    if (!site.verifiedAt) {
+      el.classList.add("freshness-unknown");
+      el.textContent = "⚫ 未验证";
+      el.title = "尚无验证记录";
+      return el;
+    }
+
+    // 后端存的是 UTC 的 "YYYY-MM-DD HH:MM:SS"，转成 ISO 才能被正确解析
+    const ts = Date.parse(site.verifiedAt.replace(" ", "T") + "Z");
+    if (Number.isNaN(ts)) {
+      el.classList.add("freshness-unknown");
+      el.textContent = "⚫ 未验证";
+      return el;
+    }
+
+    const hours = (Date.now() - ts) / 36e5;
+    let dot, label;
+    if (hours <= 24) {
+      el.classList.add("freshness-fresh");
+      dot = "🟢";
+      label = hours < 1 ? "刚刚验证" : Math.floor(hours) + " 小时前验证";
+    } else if (hours <= 24 * 7) {
+      el.classList.add("freshness-ok");
+      dot = "🟡";
+      label = Math.floor(hours / 24) + " 天前验证";
+    } else {
+      el.classList.add("freshness-stale");
+      dot = "⚪";
+      label = Math.floor(hours / 24) + " 天前验证";
+    }
+    el.textContent = dot + " " + label;
+    el.title = "最后验证：" + site.verifiedAt + " UTC" + (site.verifiedBy ? "（" + site.verifiedBy + "）" : "");
+    return el;
   }
 
   /**
@@ -531,8 +657,32 @@
     node.querySelector("h2").textContent = site.name;
     node.querySelector(".summary").textContent = site.summary || "";
 
+    // 实体类型徽章：18 条数据里混了 API 站 / TG 机器人 / 号池 / 域名工具四种，
+    // 不标出来的话用户会拿"机器人"当 API 站去接
+    const kindLabel = KIND_LABELS[site.kind];
+    if (kindLabel) {
+      const kindEl = document.createElement("span");
+      kindEl.className = "kind-badge";
+      kindEl.textContent = kindLabel;
+      node.querySelector(".card-head").appendChild(kindEl);
+    }
+
+    // 鲜度：这个站的核心价值就是"今天还能不能用"
+    node.querySelector(".card-head").appendChild(makeFreshness(site));
+
+    // 已失效：显示而不是隐藏。后端现在返回 dead 标记而不是把死链过滤掉，
+    // 前端必须把它标出来——否则死链会和正常站点长得一模一样。
+    if (site.dead) {
+      node.classList.add("card-dead");
+      const deadEl = document.createElement("span");
+      deadEl.className = "dead-badge";
+      deadEl.textContent = "已失效";
+      deadEl.title = "最近一次检测无法访问，可能已关站或临时故障";
+      node.querySelector(".card-head").appendChild(deadEl);
+    }
+
     const facts = node.querySelector(".quick-facts");
-    appendFact(facts, "签到", site.checkin);
+    appendFact(facts, "签到", site.quotaRaw || site.checkin);
     appendFact(facts, "模型", site.models);
     appendFact(facts, "注册", site.register);
     appendFact(facts, "倍率", site.rate);
@@ -551,25 +701,20 @@
     feedbackBtn.addEventListener("click", () => openFeedbackModal(site.name));
     cardFoot.appendChild(feedbackBtn);
 
-    // 在签到事实行旁追加额度徽章
+    // 额度徽章只生成一次（旧代码为了取 level 又调了第二遍）
+    const badge = makeQuotaBadge(site);
     const checkinFact = facts.querySelector("div:first-child");
-    if (checkinFact) {
-      const badge = makeCheckinBadge(site);
-      if (badge) checkinFact.appendChild(badge);
+    if (badge && checkinFact) {
+      checkinFact.appendChild(badge);
     }
 
-    // 卡片视觉分级：根据签到标签和额度添加边框色阶
-    const tags = site.tags || [];
-    if (tags.includes("签到")) {
-      const badge = makeCheckinBadge(site);
-      if (badge) {
-        node.classList.add("card-graded");
-        // 高额度卡片添加顶部色条
-        if (badge.classList.contains("checkin-high")) {
-          node.classList.add("card-tier-high");
-        } else if (badge.classList.contains("checkin-mid")) {
-          node.classList.add("card-tier-mid");
-        }
+    // 卡片视觉分级：直接用人工判定的额度档位，不再靠正则抓出的数字大小
+    if (site.quotaTier && site.quotaTier !== "none") {
+      node.classList.add("card-graded");
+      if (site.quotaTier === "high") {
+        node.classList.add("card-tier-high");
+      } else if (site.quotaTier === "mid") {
+        node.classList.add("card-tier-mid");
       }
     }
 

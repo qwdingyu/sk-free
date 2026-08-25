@@ -809,6 +809,7 @@ h1 {
 .card-head {
   display: flex;
   align-items: start;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -883,6 +884,85 @@ h1 {
 .checkin-low {
   background: var(--surface-soft);
   color: var(--muted);
+}
+
+/* ═══════ 鲜度指示器 ═══════ */
+/* 这个站的核心价值是"今天还能不能用"，所以鲜度必须在卡片正面可见。
+   未验证就明说未验证，不用留白假装新鲜。 */
+
+.freshness {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+
+.freshness-fresh {
+  background: var(--teal-soft);
+  color: var(--teal-ink);
+}
+
+.freshness-ok {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.freshness-stale,
+.freshness-unknown {
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+
+/* ═══════ 实体类型徽章 ═══════ */
+/* 18 条数据里混了 API 中转站 / TG 机器人 / 号池 / 域名工具四种实体，
+   不标出来用户会拿机器人当 API 站去接。api_site 是默认值，不显示。 */
+
+.kind-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+  background: var(--tag-accent-bg);
+  color: var(--tag-accent-text);
+}
+
+/* ═══════ 已失效标记 ═══════ */
+/* 死链显示而不是隐藏：隐藏会让用户觉得"只收录了 15 个站"，
+   显示"3 个已失效"传达的是"这个站在认真维护"。 */
+
+.dead-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+  background: var(--coral-soft);
+  color: var(--coral);
+}
+
+.card-dead {
+  filter: saturate(0.45);
+  opacity: 0.72;
+}
+
+.card-dead:hover,
+.card-dead:focus-within {
+  filter: none;
+  opacity: 1;
 }
 
 /* ═══════ 卡片视觉分级 ═══════ */

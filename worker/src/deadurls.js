@@ -3,7 +3,7 @@
 // 从 KV 全量 JSON 重写迁移到 D1 单行操作
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { dbAll, dbRun } from "./db.js";
+import { dbAll, dbRun, dbBatch } from "./db.js";
 
 /**
  * 获取死链接列表（返回以 URL 为 key 的对象）
@@ -48,10 +48,16 @@ export async function addDeadUrl(db, url, info = {}) {
  * @returns {Promise<number>} 影响行数
  */
 export async function removeDeadUrl(db, url) {
-  const result = await dbRun(db, "DELETE FROM dead_urls WHERE url = ?", [url]);
-  // 联动：恢复 URL 匹配站点的启用状态（死链接移除说明站点已恢复）
-  await dbRun(db, "UPDATE sites SET enabled = 1, updated_at = datetime('now') WHERE url = ? AND enabled = 0", [url]);
-  return result.meta?.changes || 0;
+  // batch：删黑名单 + 恢复站点状态是一组语义。分两次往返既多耗一个 subrequest，
+  // 也可能只成功一半（黑名单删了但站点还停用着）。
+  const results = await dbBatch(db, [
+    db.prepare("DELETE FROM dead_urls WHERE url = ?").bind(url),
+    // 联动：恢复 URL 匹配站点的启用状态（死链接移除说明站点已恢复）
+    db
+      .prepare("UPDATE sites SET enabled = 1, updated_at = datetime('now') WHERE url = ? AND enabled = 0")
+      .bind(url),
+  ]);
+  return results?.[0]?.meta?.changes || 0;
 }
 
 /**
@@ -62,24 +68,27 @@ export async function removeDeadUrl(db, url) {
  * @param {object} db — D1 数据库实例
  * @param {string[]} urls — URL 数组
  * @param {string} action — "add" 或 "remove"
- * @returns {{ changed: number }} 变更数量
+ * @returns {Promise<{ changed: number }>} 变更数量
  */
 export async function batchDeadUrls(db, urls, action = "remove") {
-  let changed = 0;
-  if (action === "add") {
-    for (const url of urls) {
-      const result = await dbRun(
-        db,
-        "INSERT OR IGNORE INTO dead_urls (url, added_at, status, reason) VALUES (?, ?, 0, 'auto-detected')",
-        [url, Date.now()]
-      );
-      if (result.meta?.changes > 0) changed++;
-    }
-  } else {
-    for (const url of urls) {
-      const result = await dbRun(db, "DELETE FROM dead_urls WHERE url = ?", [url]);
-      if (result.meta?.changes > 0) changed++;
-    }
-  }
+  if (!Array.isArray(urls) || urls.length === 0) return { changed: 0 };
+
+  // 原来逐条 await dbRun：N 个 URL = N 次串行 D1 往返，而 **D1 查询计入
+  // Workers 的 50 subrequest 配额**，URL 一多就先报 1101 而不是慢慢跑完。
+  // 改成单次 batch：1 个 subrequest，且原子。
+  const now = Date.now();
+  const statements =
+    action === "add"
+      ? urls.map((url) =>
+          db
+            .prepare(
+              "INSERT OR IGNORE INTO dead_urls (url, added_at, status, reason) VALUES (?, ?, 0, 'auto-detected')"
+            )
+            .bind(url, now)
+        )
+      : urls.map((url) => db.prepare("DELETE FROM dead_urls WHERE url = ?").bind(url));
+
+  const results = await dbBatch(db, statements);
+  const changed = (results || []).reduce((sum, r) => sum + (r?.meta?.changes || 0), 0);
   return { changed };
 }

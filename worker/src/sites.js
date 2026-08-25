@@ -10,6 +10,81 @@ import { json as jsonResponse, parseJsonBody, validateUrlProtocol, parseSiteUrl 
 // 导入限制
 const IMPORT_MAX_BATCH = 500;
 
+// ─── 0003 结构化字段的合法取值 ─────────────────────────────────────────────────
+// 这些枚举是排序和筛选的基础：写进一个非法值不会报错，但会让该条数据
+// 在"额度档位"筛选里永远匹配不到，属于静默失效。所以在写入口一律校验。
+export const SITE_KINDS = ["api_site", "bot", "account_pool", "tool"];
+export const QUOTA_UNITS = ["usd", "cny", "credit", "coin", "token", "call"];
+export const QUOTA_PERIODS = ["daily", "weekly", "once", "none"];
+export const QUOTA_TIERS = ["high", "mid", "low", "none"];
+// 跨单位没有汇率（刀/元/积分/硬币互不可换算），排序只依据人工判定的 tier
+export const TIER_ORDER = { high: 3, mid: 2, low: 1, none: 0 };
+
+/** 空串和 undefined 一律归一成 null —— NULL 表示"未知"，空串会污染筛选 */
+function strOrNull(v) {
+  if (v === undefined || v === null) return null;
+  const s = String(v).trim();
+  return s === "" ? null : s;
+}
+
+/** 数值字段：非法输入归 null 而不是 NaN（NaN 进 D1 会变成怪值） */
+function numOrNull(v) {
+  if (v === undefined || v === null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function intOrNull(v) {
+  const n = numOrNull(v);
+  return n === null ? null : Math.trunc(n);
+}
+
+/** needs_proxy 是三态：1 需要 / 0 不需要 / NULL 未知。不确定时必须是 NULL */
+function boolIntOrNull(v) {
+  if (v === undefined || v === null || v === "") return null;
+  if (v === true || v === 1 || v === "1" || v === "true") return 1;
+  if (v === false || v === 0 || v === "0" || v === "false") return 0;
+  return null;
+}
+
+/**
+ * 校验结构化字段的枚举取值与数值区间
+ * @param {object} s — 含 kind、quota 系列、needsProxy 的对象（camelCase）
+ * @returns {{ ok: boolean, error?: string }}
+ */
+function validateStructuredFields(s) {
+  const enums = [
+    ["kind", s.kind, SITE_KINDS],
+    ["quotaUnit", s.quotaUnit, QUOTA_UNITS],
+    ["quotaPeriod", s.quotaPeriod, QUOTA_PERIODS],
+    ["quotaTier", s.quotaTier, QUOTA_TIERS],
+  ];
+  for (const [name, raw, allowed] of enums) {
+    const v = strOrNull(raw);
+    if (v !== null && !allowed.includes(v)) {
+      return { ok: false, error: `${name} 只能是 ${allowed.join(" / ")}，收到 "${v}"` };
+    }
+  }
+
+  const min = numOrNull(s.quotaMin);
+  const max = numOrNull(s.quotaMax);
+  if (min !== null && min < 0) return { ok: false, error: "quotaMin 不能为负" };
+  if (max !== null && max < 0) return { ok: false, error: "quotaMax 不能为负" };
+  if (min !== null && max !== null && min > max) {
+    return { ok: false, error: `quotaMin(${min}) 不能大于 quotaMax(${max})` };
+  }
+
+  const calls = numOrNull(s.quotaCallsEst);
+  if (calls !== null && calls < 0) return { ok: false, error: "quotaCallsEst 不能为负" };
+
+  const slug = strOrNull(s.slug);
+  if (slug !== null && !/^[a-z0-9][a-z0-9-]{0,39}$/.test(slug)) {
+    return { ok: false, error: "slug 只能是小写字母、数字和连字符，1~40 字符，且不以连字符开头" };
+  }
+
+  return { ok: true };
+}
+
 /**
  * 格式化单个站点行为前端期望的格式
  * @param {object} row — D1 查询结果行
@@ -177,10 +252,30 @@ export async function handleAdminCreateSite(db, request, kv) {
     if (deadRow) enabled = 0;
   }
 
+  // 结构化字段校验（与更新路径同一套规则）
+  const structCheck = validateStructuredFields(body);
+  if (!structCheck.ok) {
+    return jsonResponse({ ok: false, error: structCheck.error }, 400, request);
+  }
+
+  // slug 唯一性：不给就留 NULL（UNIQUE 索引允许多个 NULL），不自动编造
+  const slug = strOrNull(body.slug);
+  if (slug) {
+    const dupSlug = await dbGet(db, "SELECT name FROM sites WHERE slug = ?", [slug]);
+    if (dupSlug) {
+      return jsonResponse({ ok: false, error: `slug "${slug}" 已被 "${dupSlug.name}" 占用` }, 409, request);
+    }
+  }
+
+  // quota_raw 缺省用 checkin 原文兜底 —— 原始信息永不丢失
+  const quotaRaw = strOrNull(body.quotaRaw) ?? strOrNull(body.checkin);
+
   await dbRun(
     db,
-    `INSERT INTO sites (name, url, original_url, ref, tags, summary, enabled, checkin, models, rate, register, notes, sort_order, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+    `INSERT INTO sites (name, url, original_url, ref, tags, summary, enabled, checkin, models, rate, register, notes, sort_order,
+                        slug, kind, quota_min, quota_max, quota_unit, quota_period, quota_calls_est, quota_tier, quota_raw,
+                        needs_proxy, verified_at, verified_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
     [
       body.name,
       cleanUrl || "",
@@ -195,6 +290,18 @@ export async function handleAdminCreateSite(db, request, kv) {
       body.register || "",
       JSON.stringify(notes),
       body.sortOrder || 0,
+      slug,
+      strOrNull(body.kind) ?? "api_site",
+      numOrNull(body.quotaMin),
+      numOrNull(body.quotaMax),
+      strOrNull(body.quotaUnit),
+      strOrNull(body.quotaPeriod) ?? "none",
+      intOrNull(body.quotaCallsEst),
+      strOrNull(body.quotaTier) ?? "none",
+      quotaRaw,
+      boolIntOrNull(body.needsProxy),
+      strOrNull(body.verifiedAt),
+      strOrNull(body.verifiedBy),
     ]
   );
 
@@ -235,7 +342,13 @@ export async function handleAdminUpdateSite(db, request, siteName) {
     }
   }
 
-  // 合并更新（保留未提供的字段）
+  // 合并语义说明：
+  //  - 传统文本字段用 ?? —— 不传就保留原值
+  //  - 结构化字段用 pick() —— body 里"出现过这个键"才覆盖，
+  //    这样才能把字段显式改回 null（未知）。用 ?? 会导致"未知"永远设不回去。
+  const has = (k) => Object.prototype.hasOwnProperty.call(body, k);
+  const pick = (k, dbVal) => (has(k) ? body[k] : dbVal);
+
   const updated = {
     name: body.name ?? existing.name,
     url: body.url ?? existing.url,
@@ -249,49 +362,81 @@ export async function handleAdminUpdateSite(db, request, siteName) {
     ref: body.ref ?? existing.ref,
     originalUrl: body.originalUrl ?? existing.original_url,
     enabled: body.enabled !== undefined ? body.enabled : existing.enabled === 1,
+    sortOrder: body.sortOrder ?? existing.sort_order,
+    // ── 0003 结构化字段 ──
+    slug: pick("slug", existing.slug),
+    kind: pick("kind", existing.kind),
+    quotaMin: pick("quotaMin", existing.quota_min),
+    quotaMax: pick("quotaMax", existing.quota_max),
+    quotaUnit: pick("quotaUnit", existing.quota_unit),
+    quotaPeriod: pick("quotaPeriod", existing.quota_period),
+    quotaCallsEst: pick("quotaCallsEst", existing.quota_calls_est),
+    quotaTier: pick("quotaTier", existing.quota_tier),
+    quotaRaw: pick("quotaRaw", existing.quota_raw),
+    needsProxy: pick("needsProxy", existing.needs_proxy),
+    verifiedAt: pick("verifiedAt", existing.verified_at),
+    verifiedBy: pick("verifiedBy", existing.verified_by),
   };
 
-  // 清除 undefined 字段
-  Object.keys(updated).forEach((k) => updated[k] === undefined && delete updated[k]);
+  // 结构化字段校验：枚举值写错会静默破坏排序和筛选，必须在入口拦住
+  const structCheck = validateStructuredFields(updated);
+  if (!structCheck.ok) {
+    return jsonResponse({ ok: false, error: structCheck.error }, 400, request);
+  }
+
+  // slug 唯一性（UNIQUE 索引允许多个 NULL，所以只在显式给值时检查）
+  if (updated.slug && updated.slug !== existing.slug) {
+    const dupSlug = await dbGet(db, "SELECT name FROM sites WHERE slug = ?", [updated.slug]);
+    if (dupSlug) {
+      return jsonResponse({ ok: false, error: `slug "${updated.slug}" 已被 "${dupSlug.name}" 占用` }, 409, request);
+    }
+  }
 
   const isRename = siteName !== updated.name;
   const jsonTags = JSON.stringify(updated.tags);
   const jsonNotes = updated.notes ? JSON.stringify(updated.notes) : "[]";
   const enabledInt = updated.enabled ? 1 : 0;
 
+  // 改名用 UPDATE，不用 DELETE+INSERT。
+  // 原因：name 只是 UNIQUE 约束，id 才是主键，UPDATE 完全可行。
+  // 旧的 DELETE+INSERT 每次改名都换掉 id，且必须在 INSERT 里逐列重写——
+  // 0003 加了 13 个新列之后，漏写就会静默清空 slug/quota_*/verified_*，
+  // 实测：改名后 quota_tier=NULL、slug=NULL、sort_order=0。UPDATE 天然没有这个问题。
+  const updateSites = db
+    .prepare(
+      `UPDATE sites SET
+        name = ?, url = ?, original_url = ?, ref = ?, tags = ?, summary = ?,
+        enabled = ?, checkin = ?, models = ?, rate = ?, register = ?, notes = ?,
+        sort_order = ?,
+        slug = ?, kind = ?, quota_min = ?, quota_max = ?, quota_unit = ?,
+        quota_period = ?, quota_calls_est = ?, quota_tier = ?, quota_raw = ?,
+        needs_proxy = ?, verified_at = ?, verified_by = ?,
+        updated_at = datetime('now')
+       WHERE name = ?`
+    )
+    .bind(
+      updated.name, updated.url, updated.originalUrl || "", updated.ref || "",
+      jsonTags, updated.summary || "", enabledInt,
+      updated.checkin || "", updated.models || "", updated.rate || "",
+      updated.register || "", jsonNotes, updated.sortOrder || 0,
+      updated.slug ?? null, updated.kind ?? null,
+      numOrNull(updated.quotaMin), numOrNull(updated.quotaMax),
+      strOrNull(updated.quotaUnit), strOrNull(updated.quotaPeriod),
+      intOrNull(updated.quotaCallsEst), strOrNull(updated.quotaTier),
+      strOrNull(updated.quotaRaw), boolIntOrNull(updated.needsProxy),
+      strOrNull(updated.verifiedAt), strOrNull(updated.verifiedBy),
+      siteName
+    );
+
   if (isRename) {
-    // 改名：DELETE 旧记录 + INSERT 新记录 + 同步 votes 和 feedbacks，用 batch 保证原子性
-    const statements = [
-      db.prepare("DELETE FROM sites WHERE name = ?").bind(siteName),
-      db.prepare(
-        `INSERT INTO sites (name, url, original_url, ref, tags, summary, enabled, checkin, models, rate, register, notes, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
-      ).bind(
-        updated.name, updated.url, updated.originalUrl || "", updated.ref || "",
-        jsonTags, updated.summary || "", enabledInt,
-        updated.checkin || "", updated.models || "", updated.rate || "",
-        updated.register || "", jsonNotes, existing.created_at
-      ),
+    // 改名时关联表一起搬，用 batch 保证原子性
+    await dbBatch(db, [
+      updateSites,
       db.prepare("UPDATE votes SET site_name = ? WHERE site_name = ?").bind(updated.name, siteName),
       db.prepare("UPDATE feedbacks SET site_name = ? WHERE site_name = ?").bind(updated.name, siteName),
-    ];
-    await dbBatch(db, statements);
+    ]);
   } else {
-    // 不改名：单条 UPDATE
-    await dbRun(
-      db,
-      `UPDATE sites SET
-        url = ?, original_url = ?, ref = ?, tags = ?, summary = ?,
-        enabled = ?, checkin = ?, models = ?, rate = ?, register = ?, notes = ?,
-        updated_at = datetime('now')
-       WHERE name = ?`,
-      [
-        updated.url, updated.originalUrl || "", updated.ref || "",
-        jsonTags, updated.summary || "", enabledInt,
-        updated.checkin || "", updated.models || "", updated.rate || "",
-        updated.register || "", jsonNotes, siteName,
-      ]
-    );
+    await dbBatch(db, [updateSites]);
   }
 
   // 联动：站点从禁用恢复为启用时，从死链接表移除对应 URL
@@ -311,18 +456,25 @@ export async function handleAdminUpdateSite(db, request, siteName) {
  * @returns {Promise<Response>}
  */
 export async function handleAdminDeleteSite(db, request, siteName) {
-  const existing = await dbGet(db, "SELECT name FROM sites WHERE name = ?", [siteName]);
+  // 必须把 url 一起取出来：下面的死链清理依赖 existing.url，
+  // 原来只 SELECT name，existing.url 恒为 undefined，那段清理从来没执行过。
+  const existing = await dbGet(db, "SELECT name, url FROM sites WHERE name = ?", [siteName]);
   if (!existing) {
     return jsonResponse({ ok: false, error: `站点 "${siteName}" 不存在` }, 404, request);
   }
 
-  await dbRun(db, "DELETE FROM sites WHERE name = ?", [siteName]);
-  await dbRun(db, "DELETE FROM votes WHERE site_name = ?", [siteName]);
-  await dbRun(db, "DELETE FROM feedbacks WHERE site_name = ?", [siteName]);
+  // 用 batch 保证原子性：站点删了但 votes/feedbacks 没删会留下孤儿数据，
+  // 而这些表都以 site_name 关联，孤儿记录无法从任何界面定位到。
+  const statements = [
+    db.prepare("DELETE FROM sites WHERE name = ?").bind(siteName),
+    db.prepare("DELETE FROM votes WHERE site_name = ?").bind(siteName),
+    db.prepare("DELETE FROM feedbacks WHERE site_name = ?").bind(siteName),
+  ];
   // 同步清理死链表中的孤立记录（站点已删除，其 URL 不应再留在黑名单）
   if (existing.url) {
-    await dbRun(db, "DELETE FROM dead_urls WHERE url = ?", [existing.url]);
+    statements.push(db.prepare("DELETE FROM dead_urls WHERE url = ?").bind(existing.url));
   }
+  await dbBatch(db, statements);
 
   return jsonResponse({ ok: true, deleted: siteName }, 200, request);
 }
@@ -349,14 +501,20 @@ export async function handleAdminBatch(db, request) {
     const placeholders = names.map(() => "?").join(",");
     // 先取被删站点的 URL，用于清理死链表中的孤立记录
     const doomed = await dbAll(db, `SELECT url FROM sites WHERE name IN (${placeholders}) AND url != ''`, names);
-    const result = await dbRun(db, `DELETE FROM sites WHERE name IN (${placeholders})`, names);
-    affected = result.meta?.changes || 0;
-    await dbRun(db, `DELETE FROM votes WHERE site_name IN (${placeholders})`, names);
-    await dbRun(db, `DELETE FROM feedbacks WHERE site_name IN (${placeholders})`, names);
+    // batch 保证原子性：4 条 DELETE 要么都成功要么都不生效，不留孤儿
+    const statements = [
+      db.prepare(`DELETE FROM sites WHERE name IN (${placeholders})`).bind(...names),
+      db.prepare(`DELETE FROM votes WHERE site_name IN (${placeholders})`).bind(...names),
+      db.prepare(`DELETE FROM feedbacks WHERE site_name IN (${placeholders})`).bind(...names),
+    ];
     if (doomed.length > 0) {
       const urlPlaceholders = doomed.map(() => "?").join(",");
-      await dbRun(db, `DELETE FROM dead_urls WHERE url IN (${urlPlaceholders})`, doomed.map((r) => r.url));
+      statements.push(
+        db.prepare(`DELETE FROM dead_urls WHERE url IN (${urlPlaceholders})`).bind(...doomed.map((r) => r.url))
+      );
     }
+    const results = await dbBatch(db, statements);
+    affected = results?.[0]?.meta?.changes || 0;
   } else if (action === "enable" || action === "disable") {
     const enableVal = action === "enable" ? 1 : 0;
     const placeholders = names.map(() => "?").join(",");
@@ -383,10 +541,14 @@ export async function handleAdminBatch(db, request) {
         request
       );
     }
-    // 标签操作需逐条处理（JSON 数组操作在 SQLite 中较复杂）
-    for (const name of names) {
-      const row = await dbGet(db, "SELECT tags FROM sites WHERE name = ?", [name]);
-      if (!row) continue;
+    // 标签是 JSON 数组，SQLite 里直接改比较麻烦，所以在 JS 里算。
+    // 但不再逐条往返：原来是 N 次 SELECT + N 次 UPDATE（18 条站点 = 36 次 D1 往返，
+    // 而 D1 查询计入 Workers 的 50 subrequest 配额），改成 1 次 SELECT + 1 次 batch。
+    const placeholders = names.map(() => "?").join(",");
+    const rows = await dbAll(db, `SELECT name, tags FROM sites WHERE name IN (${placeholders})`, names);
+
+    const statements = [];
+    for (const row of rows) {
       const tags = row.tags ? JSON.parse(row.tags) : [];
       let changed = false;
       if (action === "add_tag" && !tags.includes(tag)) {
@@ -400,14 +562,17 @@ export async function handleAdminBatch(db, request) {
         }
       }
       if (changed) {
-        await dbRun(
-          db,
-          "UPDATE sites SET tags = ?, updated_at = datetime('now') WHERE name = ?",
-          [JSON.stringify(tags), name]
+        statements.push(
+          db
+            .prepare("UPDATE sites SET tags = ?, updated_at = datetime('now') WHERE name = ?")
+            .bind(JSON.stringify(tags), row.name)
         );
-        affected++;
       }
     }
+    if (statements.length > 0) {
+      await dbBatch(db, statements);
+    }
+    affected = statements.length;
   } else {
     return jsonResponse({ ok: false, error: `未知操作: ${action}` }, 400, request);
   }

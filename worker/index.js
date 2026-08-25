@@ -521,18 +521,30 @@ async function clearAllDeadUrls() {
  * @param {function} opts.onResult — 扫描完成回调 ({ alive, dead, allNewDead, allResults }) => void
  */
 async function runHealthScan({ onProgress, onResult }) {
-  const BATCH_SIZE = 45;
+  // 必须与 worker/src/health.js 的 HEALTH_BATCH_SIZE 一致。
+  // 服务端会硬截断并在响应里回传 maxBatch，下面做漂移检测——
+  // 万一两边不一致，宁可报出来也不要静默丢掉后半批 URL。
+  let BATCH_SIZE = 20;
   const allUrls = SITES.map(s => s.url).filter(Boolean);
   if (allUrls.length === 0) { onProgress("没有可检查的站点"); return; }
   const allResults = [];
   const allNewDead = [];
-  const totalBatches = Math.ceil(allUrls.length / BATCH_SIZE);
-  for (let i = 0; i < allUrls.length; i += BATCH_SIZE) {
-    const batchIdx = Math.floor(i / BATCH_SIZE) + 1;
+  let i = 0;
+  let batchIdx = 0;
+  while (i < allUrls.length) {
+    batchIdx++;
+    const totalBatches = Math.ceil(allUrls.length / BATCH_SIZE);
     onProgress("正在检查... 批次 " + batchIdx + "/" + totalBatches + "（" + Math.min(i + BATCH_SIZE, allUrls.length) + "/" + allUrls.length + "）");
     const data = await api("/api/admin/check-batch", { method: "POST", body: JSON.stringify({ urls: allUrls.slice(i, i + BATCH_SIZE) }) });
     allResults.push(...data.results);
     if (data.newDeadUrls && data.newDeadUrls.length > 0) allNewDead.push(...data.newDeadUrls);
+    // 服务端截断了 = 前后端常量漂移，按服务端的上限收紧并继续
+    if (data.maxBatch && data.maxBatch < BATCH_SIZE) {
+      BATCH_SIZE = data.maxBatch;
+      i += data.results.length;
+    } else {
+      i += BATCH_SIZE;
+    }
   }
   const alive = allResults.filter(r => r.ok).length;
   const dead = allResults.filter(r => !r.ok).length;
