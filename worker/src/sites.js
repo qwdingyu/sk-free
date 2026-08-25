@@ -45,17 +45,21 @@ function formatSiteRow(row) {
 export async function handleGetSites(db) {
   const sites = await dbAll(db, "SELECT * FROM sites ORDER BY sort_order ASC, name ASC");
   const votes = await dbAll(db, "SELECT site_name, up_count, down_count FROM votes");
+  // 死链 URL 集合：给管理端站点列表打"死链"标记，便于管理员识别
+  const deadUrlRows = await dbAll(db, "SELECT url FROM dead_urls");
 
   const voteMap = {};
   for (const v of votes) {
     voteMap[v.site_name] = { up: v.up_count, down: v.down_count };
   }
+  const deadUrlSet = new Set(deadUrlRows.map((r) => r.url));
 
   return {
     ok: true,
     sites: sites.map((s) => ({
       ...formatSiteRow(s),
       votes: voteMap[s.name] || { up: 0, down: 0 },
+      dead: deadUrlSet.has(s.url),
     })),
     metadata: {
       total: sites.length,
@@ -291,6 +295,10 @@ export async function handleAdminDeleteSite(db, request, siteName) {
 
   await dbRun(db, "DELETE FROM sites WHERE name = ?", [siteName]);
   await dbRun(db, "DELETE FROM votes WHERE site_name = ?", [siteName]);
+  // 同步清理死链表中的孤立记录（站点已删除，其 URL 不应再留在黑名单）
+  if (existing.url) {
+    await dbRun(db, "DELETE FROM dead_urls WHERE url = ?", [existing.url]);
+  }
 
   return jsonResponse({ ok: true, deleted: siteName }, 200, request);
 }
@@ -315,9 +323,15 @@ export async function handleAdminBatch(db, request) {
 
   if (action === "delete") {
     const placeholders = names.map(() => "?").join(",");
+    // 先取被删站点的 URL，用于清理死链表中的孤立记录
+    const doomed = await dbAll(db, `SELECT url FROM sites WHERE name IN (${placeholders}) AND url != ''`, names);
     const result = await dbRun(db, `DELETE FROM sites WHERE name IN (${placeholders})`, names);
     affected = result.meta?.changes || 0;
     await dbRun(db, `DELETE FROM votes WHERE site_name IN (${placeholders})`, names);
+    if (doomed.length > 0) {
+      const urlPlaceholders = doomed.map(() => "?").join(",");
+      await dbRun(db, `DELETE FROM dead_urls WHERE url IN (${urlPlaceholders})`, doomed.map((r) => r.url));
+    }
   } else if (action === "enable" || action === "disable") {
     const enableVal = action === "enable" ? 1 : 0;
     const placeholders = names.map(() => "?").join(",");

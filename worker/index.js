@@ -119,6 +119,7 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
 .toast.show{transform:translateY(0);opacity:1}
 .toast.success{background:var(--green)}
 .toast.error{background:var(--red)}
+.toast.info{background:var(--teal)}
 @media(max-width:768px){.toolbar{flex-direction:column}.toolbar input[type="search"]{min-width:0;width:100%}th,td{padding:6px 8px}}
 </style>
 </head>
@@ -199,6 +200,7 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
     <div class="batch-bar" id="deadBatchBar">
       <span>已选 <span class="count" id="deadBatchCount">0</span> 项</span>
       <button class="btn btn-sm btn-danger" onclick="batchRemoveDead()">🗑️ 批量移除</button>
+      <button class="btn btn-sm btn-danger" onclick="clearAllDeadUrls()">🧹 一键清除全部</button>
       <button class="btn btn-sm" onclick="clearDeadSelection()">取消选择</button>
     </div>
     <div id="deadUrlsList"></div>
@@ -324,11 +326,12 @@ function renderTable() {
     const tags = (s.tags || []).map((t) => '<span class="tag">' + esc(t) + '</span>').join("");
     const checked = SELECTED.has(s.name) ? "checked" : "";
     const toggleChecked = s.enabled !== false ? "checked" : "";
+    const deadBadge = s.dead ? '<span class="tag" style="background:var(--coral);color:#fff" title="该站点 URL 在死链接黑名单中">死链</span>' : '';
     const origUrlHtml = s.originalUrl && s.originalUrl !== s.url ? '<span class="orig-url" title="' + esc(s.originalUrl) + '">原: ' + esc(s.originalUrl.slice(0, 40)) + (s.originalUrl.length > 40 ? '...' : '') + '</span>' : '';
     return '<tr>' +
       '<td><input type="checkbox" ' + checked + ' data-name="' + esc(s.name) + '" data-action="toggle-select"></td>' +
       '<td><label class="toggle"><input type="checkbox" ' + toggleChecked + ' data-name="' + esc(s.name) + '" data-action="toggle-enable"><span class="slider"></span></label></td>' +
-      '<td class="name"><a href="' + esc(s.url) + '" target="_blank" title="' + esc(s.url) + '">' + esc(s.name) + '</a>' + origUrlHtml + '</td>' +
+      '<td class="name"><a href="' + esc(s.url) + '" target="_blank" title="' + esc(s.url) + '">' + esc(s.name) + '</a>' + deadBadge + origUrlHtml + '</td>' +
       '<td class="tags">' + tags + '</td>' +
       '<td>' + esc(s.checkin || "") + '</td>' +
       '<td title="' + esc(s.ref || "") + '">' + esc(s.ref || "") + '</td>' +
@@ -344,10 +347,11 @@ function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").re
 function toggleSelect(name, checked) { if (checked) SELECTED.add(name); else SELECTED.delete(name); updateBatchBar(); }
 function toggleSelectAll() {
   const checked = document.getElementById("selectAll").checked;
-  document.querySelectorAll("#sitesBody input[type=checkbox]").forEach((cb) => { cb.checked = checked; const name = cb.closest("tr").querySelector(".name a").textContent; if (checked) SELECTED.add(name); else SELECTED.delete(name); });
+  // 只操作选择框（data-action="toggle-select"），绝不触碰启用开关（toggle-enable）
+  document.querySelectorAll('#sitesBody input[data-action="toggle-select"]').forEach((cb) => { cb.checked = checked; const name = cb.closest("tr").querySelector(".name a").textContent; if (checked) SELECTED.add(name); else SELECTED.delete(name); });
   updateBatchBar();
 }
-function clearSelection() { SELECTED.clear(); document.getElementById("selectAll").checked = false; document.querySelectorAll("#sitesBody input[type=checkbox]").forEach((cb) => cb.checked = false); updateBatchBar(); }
+function clearSelection() { SELECTED.clear(); document.getElementById("selectAll").checked = false; document.querySelectorAll('#sitesBody input[data-action="toggle-select"]').forEach((cb) => cb.checked = false); updateBatchBar(); }
 function updateBatchBar() { const bar = document.getElementById("batchBar"); const count = SELECTED.size; document.getElementById("batchCount").textContent = count; bar.classList.toggle("active", count > 0); }
 function showCreate() {
   document.getElementById("editTitle").textContent = "新增站点";
@@ -451,12 +455,14 @@ async function rejectSubmission(id) {
   try { await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "reject_submission", id }) }); toast("已驳回", "success"); await loadSubmissions(); } catch (e) { toast(e.message, "error"); }
 }
 let DEAD_SELECTED = new Set();
+let ALL_DEAD_URLS = []; // 全部死链 URL 缓存（供"一键清除全部"使用）
 async function loadDeadUrls() {
   try {
     const data = await api("/api/admin/dead-urls");
     const list = document.getElementById("deadUrlsList");
     const countEl = document.getElementById("deadCount");
     const urls = Object.keys(data.deadUrls || {});
+    ALL_DEAD_URLS = urls;
     DEAD_SELECTED.clear(); updateDeadBatchBar();
     countEl.textContent = urls.length > 0 ? ("(" + urls.length + " 个)") : "(空)";
     if (urls.length === 0) { list.innerHTML = '<div style="color:var(--muted);padding:12px">暂无死链接</div>'; return; }
@@ -473,10 +479,21 @@ function updateDeadBatchBar() { const bar = document.getElementById("deadBatchBa
 async function batchRemoveDead() {
   if (DEAD_SELECTED.size === 0) return;
   if (!confirm("确认移除选中的 " + DEAD_SELECTED.size + " 个死链接？")) return;
-  try { const data = await api("/api/admin/dead-urls/batch", { method: "POST", body: JSON.stringify({ urls: [...DEAD_SELECTED] }) }); toast("已移除 " + data.changed + " 个死链接", "success"); DEAD_SELECTED.clear(); await loadDeadUrls(); } catch (e) { toast(e.message, "error"); }
+  try { const data = await api("/api/admin/dead-urls/batch", { method: "POST", body: JSON.stringify({ urls: [...DEAD_SELECTED] }) }); toast("已移除 " + data.changed + " 个死链接", "success"); DEAD_SELECTED.clear(); await loadDeadUrls(); await loadSites(); } catch (e) { toast(e.message, "error"); }
 }
 async function removeDeadUrl(url) {
-  try { await api("/api/admin/dead-urls", { method: "POST", body: JSON.stringify({ url, action: "remove" }) }); toast("已移除"); await loadDeadUrls(); } catch (e) { toast(e.message, "error"); }
+  try { await api("/api/admin/dead-urls", { method: "POST", body: JSON.stringify({ url, action: "remove" }) }); toast("已移除"); await loadDeadUrls(); await loadSites(); } catch (e) { toast(e.message, "error"); }
+}
+// 一键清除全部死链接：批量移除黑名单，联动恢复所有被禁用的站点
+async function clearAllDeadUrls() {
+  if (ALL_DEAD_URLS.length === 0) { toast("当前没有死链接", "info"); return; }
+  if (!confirm("确认清除全部 " + ALL_DEAD_URLS.length + " 个死链接？\n相关站点将自动恢复启用状态。")) return;
+  try {
+    const data = await api("/api/admin/dead-urls/batch", { method: "POST", body: JSON.stringify({ urls: ALL_DEAD_URLS }) });
+    toast("已清除 " + data.changed + " 个死链接，相关站点已恢复", "success");
+    DEAD_SELECTED.clear(); ALL_DEAD_URLS = [];
+    await loadDeadUrls(); await loadSites();
+  } catch (e) { toast(e.message, "error"); }
 }
 async function batchCheckUrls() {
   const statusEl = document.getElementById("healthStatus"); const resultsEl = document.getElementById("healthResults");
@@ -497,7 +514,7 @@ async function batchCheckUrls() {
     const deadList = allResults.filter(r => !r.ok); const aliveList = allResults.filter(r => r.ok); let html = "";
     if (deadList.length > 0) { html += '<div style="margin-bottom:12px"><strong style="color:var(--coral)">❌ 不可达 (' + deadList.length + ')</strong></div>'; html += deadList.map(r => '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)"><span style="flex:1;word-break:break-all">' + esc(r.url) + '</span><span style="color:var(--coral);white-space:nowrap">' + esc(r.error || ("HTTP " + r.status)) + '</span></div>').join(""); }
     if (aliveList.length > 0) { html += '<div style="margin:12px 0 8px"><strong style="color:var(--teal)">✅ 正常 (' + aliveList.length + ')</strong></div>'; html += aliveList.map(r => '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)"><span style="flex:1;word-break:break-all">' + esc(r.url) + '</span><span style="color:var(--teal);white-space:nowrap">HTTP ' + r.status + '</span></div>').join(""); }
-    resultsEl.innerHTML = html; await loadDeadUrls();
+    resultsEl.innerHTML = html; await loadDeadUrls(); await loadSites();
   } catch (e) { statusEl.textContent = "检查失败: " + e.message; }
 }
 async function loadSchema() {
