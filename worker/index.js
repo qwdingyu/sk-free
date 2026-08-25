@@ -525,10 +525,11 @@ async function batchCheckUrls() {
       const data = await api("/api/admin/check-batch", { method: "POST", body: JSON.stringify({ urls: allUrls.slice(i, i + BATCH_SIZE) }) });
       allResults.push(...data.results); if (data.newDeadUrls && data.newDeadUrls.length > 0) allNewDead.push(...data.newDeadUrls);
     }
-    if (allNewDead.length > 0) { await api("/api/admin/dead-urls/batch", { method: "POST", body: JSON.stringify({ urls: allNewDead, action: "add" }) }); }
+    // 不再自动将不可达 URL 加入死链黑名单（概率性探测不应驱动不可逆动作）
+    // 新发现的不可达 URL 仅在结果中展示，由管理员手动确认后操作
     const alive = allResults.filter(r => r.ok).length; const dead = allResults.filter(r => !r.ok).length;
     var statusMsg = "检查完成：共 " + allResults.length + " 个，" + alive + " 个正常，" + dead + " 个不可达";
-    if (allNewDead.length > 0) statusMsg += "（新增 " + allNewDead.length + " 个死链接）";
+    if (allNewDead.length > 0) statusMsg += "（发现 " + allNewDead.length + " 个疑似死链，请在下方确认）";
     statusEl.textContent = statusMsg;
     const deadList = allResults.filter(r => !r.ok); const aliveList = allResults.filter(r => r.ok); let html = "";
     if (deadList.length > 0) { html += '<div style="margin-bottom:12px"><strong style="color:var(--coral)">❌ 不可达 (' + deadList.length + ')</strong></div>'; html += deadList.map(r => '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)"><span style="flex:1;word-break:break-all">' + esc(r.url) + '</span><span style="color:var(--coral);white-space:nowrap">' + esc(r.error || ("HTTP " + r.status)) + '</span></div>').join(""); }
@@ -555,13 +556,11 @@ async function sitesCleanupDeadLinks() {
       allResults.push.apply(allResults, data.results);
       if (data.newDeadUrls && data.newDeadUrls.length > 0) allNewDead.push.apply(allNewDead, data.newDeadUrls);
     }
-    if (allNewDead.length > 0) {
-      await api("/api/admin/dead-urls/batch", { method: "POST", body: JSON.stringify({ urls: allNewDead, action: "add" }) });
-    }
+    // 不再自动将不可达 URL 加入死链黑名单（概率性探测不应驱动不可逆动作）
     var alive = allResults.filter(function(r) { return r.ok; }).length;
     var dead = allResults.filter(function(r) { return !r.ok; }).length;
     var msg = "检查完成：" + alive + " 正常，" + dead + " 不可达";
-    if (allNewDead.length > 0) msg += "（新增 " + allNewDead.length + " 个死链）";
+    if (allNewDead.length > 0) msg += "（发现 " + allNewDead.length + " 个疑似死链，请手动确认）";
     statusEl.textContent = msg;
     toast(msg, allNewDead.length > 0 ? "info" : "success");
     await loadSites();

@@ -25,7 +25,10 @@ export async function getDeadUrls(db) {
 }
 
 /**
- * 添加死链接（自动禁用匹配站点，形成闭环）
+ * 添加死链接记录
+ * 注意：不再自动禁用站点（概率性探测不应驱动不可逆动作）
+ * 站点启用状态由管理员手动管理，或由连续多次检测失败后确认
+ *
  * @param {object} db — D1 数据库实例
  * @param {string} url — 死链接 URL
  * @param {object} info — 附加信息 { reason?, error? }
@@ -36,8 +39,6 @@ export async function addDeadUrl(db, url, info = {}) {
     "INSERT OR REPLACE INTO dead_urls (url, added_at, status, reason, error) VALUES (?, ?, 0, ?, ?)",
     [url, Date.now(), info.reason || "unreachable", info.error || ""]
   );
-  // 联动：禁用 URL 匹配的站点，管理端一目了然、用户端自动隐藏
-  await dbRun(db, "UPDATE sites SET enabled = 0, updated_at = datetime('now') WHERE url = ? AND enabled = 1", [url]);
 }
 
 /**
@@ -54,7 +55,10 @@ export async function removeDeadUrl(db, url) {
 }
 
 /**
- * 批量操作死链接（添加或移除，自动联动站点 enabled 状态）
+ * 批量操作死链接（添加或移除）
+ * 注意：不再自动联动站点 enabled 状态（概率性探测不应驱动不可逆动作）
+ * 站点启用状态由管理员手动管理
+ *
  * @param {object} db — D1 数据库实例
  * @param {string[]} urls — URL 数组
  * @param {string} action — "add" 或 "remove"
@@ -70,15 +74,11 @@ export async function batchDeadUrls(db, urls, action = "remove") {
         [url, Date.now()]
       );
       if (result.meta?.changes > 0) changed++;
-      // 联动禁用匹配站点
-      await dbRun(db, "UPDATE sites SET enabled = 0, updated_at = datetime('now') WHERE url = ? AND enabled = 1", [url]);
     }
   } else {
     for (const url of urls) {
       const result = await dbRun(db, "DELETE FROM dead_urls WHERE url = ?", [url]);
       if (result.meta?.changes > 0) changed++;
-      // 联动恢复匹配站点
-      await dbRun(db, "UPDATE sites SET enabled = 1, updated_at = datetime('now') WHERE url = ? AND enabled = 0", [url]);
     }
   }
   return { changed };

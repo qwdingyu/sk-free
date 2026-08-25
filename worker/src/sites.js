@@ -238,7 +238,7 @@ export async function handleAdminUpdateSite(db, request, siteName) {
   const enabledInt = updated.enabled ? 1 : 0;
 
   if (isRename) {
-    // 改名：DELETE 旧记录 + INSERT 新记录 + 同步 votes，用 batch 保证原子性
+    // 改名：DELETE 旧记录 + INSERT 新记录 + 同步 votes 和 feedbacks，用 batch 保证原子性
     const statements = [
       db.prepare("DELETE FROM sites WHERE name = ?").bind(siteName),
       db.prepare(
@@ -251,6 +251,7 @@ export async function handleAdminUpdateSite(db, request, siteName) {
         updated.register || "", jsonNotes, existing.created_at
       ),
       db.prepare("UPDATE votes SET site_name = ? WHERE site_name = ?").bind(updated.name, siteName),
+      db.prepare("UPDATE feedbacks SET site_name = ? WHERE site_name = ?").bind(updated.name, siteName),
     ];
     await dbBatch(db, statements);
   } else {
@@ -295,6 +296,7 @@ export async function handleAdminDeleteSite(db, request, siteName) {
 
   await dbRun(db, "DELETE FROM sites WHERE name = ?", [siteName]);
   await dbRun(db, "DELETE FROM votes WHERE site_name = ?", [siteName]);
+  await dbRun(db, "DELETE FROM feedbacks WHERE site_name = ?", [siteName]);
   // 同步清理死链表中的孤立记录（站点已删除，其 URL 不应再留在黑名单）
   if (existing.url) {
     await dbRun(db, "DELETE FROM dead_urls WHERE url = ?", [existing.url]);
@@ -328,6 +330,7 @@ export async function handleAdminBatch(db, request) {
     const result = await dbRun(db, `DELETE FROM sites WHERE name IN (${placeholders})`, names);
     affected = result.meta?.changes || 0;
     await dbRun(db, `DELETE FROM votes WHERE site_name IN (${placeholders})`, names);
+    await dbRun(db, `DELETE FROM feedbacks WHERE site_name IN (${placeholders})`, names);
     if (doomed.length > 0) {
       const urlPlaceholders = doomed.map(() => "?").join(",");
       await dbRun(db, `DELETE FROM dead_urls WHERE url IN (${urlPlaceholders})`, doomed.map((r) => r.url));
