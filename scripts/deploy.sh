@@ -16,7 +16,12 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 echo "🔍 部署前检查..."
 echo ""
 
-# 检查模板字面量转义安全（两个文件都要检查）
+# 1. 从 broadcast/ 源文件构建 broadcast-html.js（消灭手工双副本）
+echo "🔨 构建 broadcast-html.js..."
+node "$SCRIPT_DIR/build-html.js"
+echo ""
+
+# 2. 检查模板字面量转义安全（两个文件都要检查）
 node "$SCRIPT_DIR/check-template-escapes.js" "$PROJECT_DIR/worker/index.js"
 CHECK_EXIT=$?
 
