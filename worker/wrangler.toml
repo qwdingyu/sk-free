@@ -17,6 +17,11 @@ binding = "SKFREE_DB"
 database_name = "sk-free-db"
 database_id = "fbd3bd0b-19cb-4344-a2ad-43d519379399"
 
+# 定时健康检查（每6小时执行一次，写入 verified_at）
+# 先修好自动下线问题再加 Cron（已完成 P0-2 修复）
+[triggers]
+crons = ["0 */6 * * *"]
+
 # 管理员认证 Token（通过 secret 设置，不要硬编码）
 # 首次部署时执行：npx wrangler secret put ADMIN_TOKEN
 # 输入一个强密码作为管理密码

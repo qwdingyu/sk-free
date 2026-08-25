@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ── 模块导入 ──────────────────────────────────────────────────────────────────
-import { getDb } from "./src/db.js";
+import { getDb, dbAll, dbBatch } from "./src/db.js";
 import { DEFAULT_SCHEMA, getSchema, saveSchema } from "./src/schema.js";
 import {
   corsHeaders, json, html, requireAuth,
@@ -934,6 +934,46 @@ export default {
 
     } catch (e) {
       return json({ ok: false, error: "Internal error: " + e.message }, 500, request);
+    }
+  },
+
+  // ── Cron Trigger：定时健康检查 ────────────────────────────────────────────
+  // 每6小时自动检查所有启用站点的 URL 可达性
+  // 写入 verified_at/verified_by 字段，为前端鲜度可视化提供数据
+  // 设计：只写正面结果（成功 → 更新验证时间），失败不自动下线（P0-2 修复原则）
+  async scheduled(event, env, ctx) {
+    const db = getDb(env);
+    try {
+      const sites = await dbAll(db, "SELECT id, name, url FROM sites WHERE enabled = 1 AND url != ''");
+      if (sites.length === 0) return;
+
+      let checked = 0, alive = 0;
+      // 每批45个URL并发检查（Workers Free限制50 subreq/次）
+      const BATCH = 45;
+      for (let i = 0; i < sites.length; i += BATCH) {
+        const batch = sites.slice(i, i + BATCH);
+        const results = await Promise.all(
+          batch.map(async (site) => {
+            const r = await checkUrlHealth(site.url);
+            return { ...site, ...r };
+          })
+        );
+        // 对成功的检查写入验证时间
+        const stmts = results
+          .filter((r) => r.ok)
+          .map((r) =>
+            db.prepare("UPDATE sites SET verified_at = datetime('now'), verified_by = 'healthcheck' WHERE id = ?").bind(r.id)
+          );
+        if (stmts.length > 0) {
+          await dbBatch(db, stmts);
+        }
+        checked += results.length;
+        alive += results.filter((r) => r.ok).length;
+      }
+      // Cron 执行日志（Cloudflare Dashboard 可查看）
+      console.log(`[cron] health check: ${checked} checked, ${alive} alive, ${checked - alive} dead`);
+    } catch (e) {
+      console.error("[cron] health check failed:", e.message);
     }
   }
 };
