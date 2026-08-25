@@ -2,12 +2,8 @@
   // ═══════════════════════════════════════════════════════════════════════════════
   // 常量配置
   // ═══════════════════════════════════════════════════════════════════════════════
-  const DATA_URL = "./data/sites.json";
-  const NOTICE_URL = "./data/notice.md";
-  // 投票 Worker API 地址（留空则隐藏投票区域）
-  const VOTE_API_URL = "https://sk-free-vote.mailforwdy.workers.dev";
-  // Worker API 地址（用于获取已过滤的站点列表和提交新站点，留空则使用本地 sites.json）
-  const WORKER_API_URL = "https://sk-free-vote.mailforwdy.workers.dev";
+  // 所有 API 使用同源相对路径（Worker 即数据源，无降级逻辑）
+  const API_BASE = "";
   const VOTE_CACHE_TTL = 5 * 60 * 1000;  // 投票数据缓存 5 分钟
   const CACHE_BUSTER = () => `v=${Date.now()}`;
   const THEME_KEY = "broadcast-theme";
@@ -68,8 +64,6 @@
    * API 不可用时静默降级，不影响站点列表渲染
    */
   async function loadVotes() {
-    if (!VOTE_API_URL) return;
-
     // 优先使用内存缓存（避免页面内重复请求）
     if (state._voteCache && Date.now() - state._voteCache.ts < VOTE_CACHE_TTL) {
       state.votes = state._voteCache.data;
@@ -77,10 +71,10 @@
     }
 
     try {
-      const res = await fetch(`${VOTE_API_URL}/api/votes?${CACHE_BUSTER()}`, {
+      const res = await fetch("/api/votes?" + CACHE_BUSTER(), {
         cache: "no-store"
       });
-      if (!res.ok) throw new Error(`votes ${res.status}`);
+      if (!res.ok) throw new Error("votes " + res.status);
       const data = await res.json();
       if (data.ok) {
         state.votes = data.votes || {};
@@ -133,8 +127,6 @@
    * @param {HTMLElement} voteBar - 投票按钮组的容器元素
    */
   async function handleVote(siteName, vote, voteBar) {
-    if (!VOTE_API_URL) return;
-
     // 从 localStorage 读取当前用户的所有投票记录
     const personalVotes = loadPersonalVotes();
 
@@ -150,17 +142,17 @@
     buttons.forEach((b) => (b.disabled = true));
 
     try {
-      const res = await fetch(`${VOTE_API_URL}/api/vote`, {
+      const res = await fetch("/api/vote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ site: siteName, vote })
+        body: JSON.stringify({ siteName: siteName, type: vote })
       });
 
       const data = await res.json();
 
       if (data.ok) {
-        // 乐观更新：直接使用服务端返回的最新计数
-        state.votes[siteName] = data.votes;
+        // 乐观更新：服务端返回 { ok, siteName, up, down }，组装成 votes 结构
+        state.votes[siteName] = { up: data.up || 0, down: data.down || 0 };
         // 清除缓存，确保下次获取最新数据
         state._voteCache = null;
         // 记录用户投票（防止重复投票）
@@ -601,12 +593,6 @@
     grid.replaceChildren(...visible.map(makeCard));
     els.cardsArea.replaceChildren(grid);
 
-    // 如果投票 API 不可用，隐藏所有投票区域
-    if (!VOTE_API_URL) {
-      els.cardsArea.querySelectorAll(".vote-bar").forEach((bar) => {
-        bar.hidden = true;
-      });
-    }
   }
 
   function renderNotice(markdown) {
@@ -643,31 +629,20 @@
   // ═══════════════════════════════════════════════════════════════════════════════
 
   async function loadJson() {
-    // 优先从 Worker API 获取（自动过滤 disabled 站点）
-    if (WORKER_API_URL) {
-      try {
-        const res = await fetch(`${WORKER_API_URL}/api/sites?${CACHE_BUSTER()}`, { cache: "no-store" });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.ok && data.sites) return data;
-        }
-      } catch {
-        // Worker 不可用时降级到本地 JSON
-      }
-    }
-    // 降级：使用本地 sites.json（此时前端也需过滤 disabled）
-    const res = await fetch(`${DATA_URL}?${CACHE_BUSTER()}`, { cache: "no-store" });
-    if (!res.ok) throw new Error(`sites.json ${res.status}`);
+    const res = await fetch("/api/sites?" + CACHE_BUSTER(), { cache: "no-store" });
+    if (!res.ok) throw new Error("sites " + res.status);
     const data = await res.json();
-    // 本地 JSON 也需过滤 disabled 站点
-    if (data.sites) data.sites = data.sites.filter((s) => s.enabled !== false);
+    if (!data.ok || !data.sites) throw new Error("sites API 返回异常");
     return data;
   }
 
   async function loadNotice() {
     try {
-      const res = await fetch(`${NOTICE_URL}?${CACHE_BUSTER()}`, { cache: "no-store" });
-      if (res.ok) renderNotice(await res.text());
+      const res = await fetch("/api/notice?" + CACHE_BUSTER(), { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ok && data.notice) renderNotice(data.notice);
+      }
     } catch {
       els.noticeBand.hidden = true;
     }
@@ -711,10 +686,6 @@
     if (!btn || !modal || !form) return;
 
     btn.addEventListener("click", () => {
-      if (!WORKER_API_URL) {
-        alert("站点提交功能需要 Worker API 支持，请联系管理员。");
-        return;
-      }
       form.reset();
       modal.showModal();
     });
@@ -735,7 +706,7 @@
       };
 
       try {
-        const res = await fetch(`${WORKER_API_URL}/api/submit`, {
+        const res = await fetch("/api/submit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body)

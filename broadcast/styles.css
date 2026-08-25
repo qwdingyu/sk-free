@@ -38,7 +38,6 @@
   --hero-ink: #17201c;
   --hero-muted: rgba(42, 60, 52, 0.72);
   --hero-eyebrow: #087f78;
-  --hero-image: url("./assets/api-console-header-light-from-original-bottom-trimmed.png");
   --hero-image-mask: linear-gradient(
     90deg,
     var(--hero-bg) 0%,
@@ -102,7 +101,6 @@
   --hero-ink: #f8fff9;
   --hero-muted: rgba(237, 250, 242, 0.76);
   --hero-eyebrow: #bdebd9;
-  --hero-image: url("./assets/api-console-header-dark-from-original-bottom-trimmed.png");
   --hero-image-mask: linear-gradient(
     90deg,
     var(--hero-bg) 0%,
@@ -377,29 +375,6 @@ h1 {
 .submit-btn-confirm:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.hero-image {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: min(58%, 700px);
-  min-height: 0;
-  overflow: hidden;
-  background-image: var(--hero-image);
-  background-size: cover;
-  background-position: right center;
-  pointer-events: none;
-}
-
-.hero-image::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 36%;
-  background: var(--hero-image-mask);
-  pointer-events: none;
 }
 
 .theme-switcher {
@@ -996,19 +971,10 @@ h1 {
   .hero-band {
     grid-template-columns: 1fr;
     min-height: 190px;
-    background-image:
-      var(--hero-mobile-overlay),
-      var(--hero-image);
-    background-size: cover;
-    background-position: right center;
   }
 
   h1 {
     font-size: 3.1rem;
-  }
-
-  .hero-image {
-    display: none;
   }
 
   .toolbar {

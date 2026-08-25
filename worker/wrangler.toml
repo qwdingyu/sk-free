@@ -6,10 +6,16 @@ name = "sk-free-vote"
 main = "index.js"
 compatibility_date = "2026-08-24"
 
-# KV 命名空间绑定（已创建）
+# KV 命名空间绑定（schema.json 保留在 KV）
 [[kv_namespaces]]
 binding = "SKFREE_KV"
 id = "547b7b9b5dcd4abeb505d1dfe5f82ac4"
+
+# D1 数据库绑定（sites/votes/rate_limits/submissions/dead_urls）
+[[d1_databases]]
+binding = "SKFREE_DB"
+database_name = "sk-free-db"
+database_id = "fbd3bd0b-19cb-4344-a2ad-43d519379399"
 
 # 管理员认证 Token（通过 secret 设置，不要硬编码）
 # 首次部署时执行：npx wrangler secret put ADMIN_TOKEN

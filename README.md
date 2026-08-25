@@ -1,6 +1,6 @@
 # Sk-free API Broadcast
 
-公益 API 站点速查 — 静态 GitHub Pages 导航站。
+TOKEN 站点速查 — 静态 GitHub Pages 导航站。
 
 - 线上地址：https://free.eforge.xyz/broadcast/
 - 数据文件：`broadcast/data/sites.json`

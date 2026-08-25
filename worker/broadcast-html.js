@@ -1,0 +1,2023 @@
+// broadcast-html.js — 启动时由 Worker 导入，避免 fs 依赖
+export const broadcastHtml = `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Sk-free API 公益站导航，整理可注册、可签到、可生图的站点入口。"
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Sk-free API Broadcast" />
+    <meta
+      property="og:description"
+      content="Sk-free API 公益站导航，整理可注册、可签到、可生图的站点入口。"
+    />
+    <meta property="og:url" content="https://free.eforge.xyz/" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Sk-free API Broadcast" />
+    <meta
+      name="twitter:description"
+      content="Sk-free API 公益站导航，整理可注册、可签到、可生图的站点入口。"
+    />
+    <title>Sk-free API Broadcast</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231b2428'/%3E%3Cpath d='M18 32h28M24 22l-8 10 8 10M40 22l8 10-8 10' fill='none' stroke='%236ee7d8' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23b8e35a'/%3E%3C/svg%3E" />
+    <script>
+      (() => {
+        const key = "broadcast-theme";
+        const choices = ["light", "dark", "system"];
+        let choice = "system";
+
+        try {
+          choice = localStorage.getItem(key) || "system";
+        } catch {
+          choice = "system";
+        }
+
+        if (!choices.includes(choice)) choice = "system";
+
+        const prefersDark =
+          window.matchMedia &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches;
+        var resolved = choice === "system" ? (prefersDark ? "dark" : "light") : choice;
+        document.documentElement.dataset.theme = resolved;
+        document.documentElement.dataset.themeChoice = choice;
+      })();
+    </script>
+
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f7f8f4;
+  --surface: #ffffff;
+  --surface-soft: #f0f4ee;
+  --ink: #17201c;
+  --muted: #5e6a64;
+  --strong: #33413b;
+  --fact-label: #748079;
+  --line: #dbe3dc;
+  --teal: #087f78;
+  --teal-soft: #dff5f1;
+  --teal-ink: #07564f;
+  --lime: #779b28;
+  --lime-soft: #edf7d7;
+  --coral: #c85445;
+  --coral-soft: #ffe8e3;
+  --amber: #a66d16;
+  --amber-soft: #fff1d5;
+  --graphite: #1b2428;
+  --body-wash: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(247, 248, 244, 0.94));
+  --shadow: 0 18px 45px rgba(23, 32, 28, 0.1);
+  --card-shadow: 0 10px 26px rgba(23, 32, 28, 0.06);
+  --card-shadow-hover: 0 18px 34px rgba(23, 32, 28, 0.13);
+  --tag-bg: var(--surface-soft);
+  --tag-text: #405049;
+  --tag-accent-bg: var(--teal-soft);
+  --tag-accent-text: var(--teal-ink);
+  --notice-border: #f0d1c9;
+  --notice-title: #803126;
+  --notice-text: #5f342f;
+  --visit-bg: var(--graphite);
+  --visit-text: #f7fff8;
+  --visit-hover: #087f78;
+  --visit-hover-shadow: 0 12px 24px rgba(8, 127, 120, 0.25);
+  --hero-bg: #eef7f3;
+  --hero-border: rgba(23, 32, 28, 0.14);
+  --hero-ink: #17201c;
+  --hero-muted: rgba(42, 60, 52, 0.72);
+  --hero-eyebrow: #087f78;
+  --hero-image-mask: linear-gradient(
+    90deg,
+    var(--hero-bg) 0%,
+    rgba(238, 247, 243, 0.86) 22%,
+    rgba(238, 247, 243, 0.3) 58%,
+    rgba(238, 247, 243, 0) 100%
+  );
+  --hero-overlay:
+    radial-gradient(circle at 18% 18%, rgba(8, 127, 120, 0.12), transparent 28%),
+    radial-gradient(circle at 74% 74%, rgba(200, 84, 69, 0.1), transparent 30%);
+  --hero-mobile-overlay: linear-gradient(
+    90deg,
+    rgba(238, 247, 243, 0.96) 0%,
+    rgba(238, 247, 243, 0.78) 58%,
+    rgba(238, 247, 243, 0.42) 100%
+  );
+  --theme-panel-bg: rgba(255, 255, 255, 0.72);
+  --theme-panel-border: rgba(23, 32, 28, 0.14);
+  --theme-active-bg: rgba(8, 127, 120, 0.14);
+  --theme-button-text: rgba(42, 60, 52, 0.72);
+  --theme-shadow: 0 8px 24px rgba(23, 32, 28, 0.12);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #101514;
+  --surface: #17211f;
+  --surface-soft: #22302d;
+  --ink: #edf7f2;
+  --muted: #9caea7;
+  --strong: #dcebe5;
+  --fact-label: #8fa19a;
+  --line: #2d3c37;
+  --teal: #6ee7d8;
+  --teal-soft: #123f3b;
+  --teal-ink: #9bf1e7;
+  --lime: #b8df5a;
+  --lime-soft: #243716;
+  --coral: #ff8d7d;
+  --coral-soft: #3a2422;
+  --amber: #f0bb67;
+  --amber-soft: #3a2d18;
+  --graphite: #0e1718;
+  --body-wash: linear-gradient(180deg, rgba(12, 18, 18, 0.98), rgba(16, 21, 20, 0.96));
+  --shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
+  --card-shadow: 0 10px 26px rgba(0, 0, 0, 0.18);
+  --card-shadow-hover: 0 18px 34px rgba(0, 0, 0, 0.3);
+  --tag-bg: #22302d;
+  --tag-text: #cbd9d3;
+  --tag-accent-bg: #123f3b;
+  --tag-accent-text: #9bf1e7;
+  --notice-border: #60413c;
+  --notice-title: #ffc0b7;
+  --notice-text: #f0c9c3;
+  --visit-bg: #203531;
+  --visit-text: #f5fff9;
+  --visit-hover: #087f78;
+  --visit-hover-shadow: 0 12px 24px rgba(8, 127, 120, 0.34);
+  --hero-bg: #101819;
+  --hero-border: rgba(190, 224, 212, 0.14);
+  --hero-ink: #f8fff9;
+  --hero-muted: rgba(237, 250, 242, 0.76);
+  --hero-eyebrow: #bdebd9;
+  --hero-image-mask: linear-gradient(
+    90deg,
+    var(--hero-bg) 0%,
+    rgba(16, 24, 25, 0.88) 22%,
+    rgba(16, 24, 25, 0.34) 58%,
+    rgba(16, 24, 25, 0) 100%
+  );
+  --hero-overlay:
+    radial-gradient(circle at 24% 20%, rgba(120, 155, 40, 0.18), transparent 26%),
+    radial-gradient(circle at 62% 84%, rgba(200, 84, 69, 0.14), transparent 28%);
+  --hero-mobile-overlay: linear-gradient(
+    90deg,
+    rgba(16, 24, 25, 0.96) 0%,
+    rgba(16, 24, 25, 0.78) 58%,
+    rgba(16, 24, 25, 0.38) 100%
+  );
+  --theme-panel-bg: rgba(12, 18, 18, 0.72);
+  --theme-panel-border: rgba(190, 224, 212, 0.18);
+  --theme-active-bg: rgba(110, 231, 216, 0.16);
+  --theme-button-text: rgba(237, 250, 242, 0.74);
+  --theme-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--body-wash), var(--bg);
+  color: var(--ink);
+  font-family:
+    Inter, "SF Pro Display", "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", sans-serif;
+  letter-spacing: 0;
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input {
+  font: inherit;
+  letter-spacing: 0;
+}
+
+.page-shell {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 24px 0 48px;
+}
+
+.hero-band {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+  min-height: 180px;
+  overflow: hidden;
+  border: 1px solid var(--hero-border);
+  border-radius: 8px;
+  background: var(--hero-bg);
+  box-shadow: var(--shadow);
+}
+
+.hero-band::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--hero-overlay);
+  pointer-events: none;
+}
+
+.hero-copy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 28px 32px;
+  color: var(--hero-ink);
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  color: var(--hero-eyebrow);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+h1 {
+  margin: 0;
+  max-width: none;
+  font-size: 3.25rem;
+  line-height: 1.02;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.keep-together {
+  white-space: inherit;
+}
+
+.intro {
+  max-width: 560px;
+  margin: 12px 0 0;
+  color: var(--hero-muted);
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.hero-actions {
+  margin-top: 16px;
+}
+
+.cta-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border: 1px solid var(--teal);
+  border-radius: 6px;
+  background: var(--teal-soft);
+  color: var(--teal-ink);
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.cta-button:hover {
+  background: var(--teal);
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(8, 127, 120, 0.3);
+}
+
+/* ═══════ 提交站点模态框 ═══════ */
+
+.submit-modal {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0;
+  max-width: 480px;
+  width: calc(100% - 32px);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+
+.submit-modal::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+}
+
+.submit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 0;
+}
+
+.submit-header h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.submit-close {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.3rem;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background-color 0.15s ease;
+}
+
+.submit-close:hover {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.submit-hint {
+  margin: 8px 20px 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.submit-field {
+  margin: 12px 20px 0;
+}
+
+.submit-field label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--strong);
+}
+
+.submit-field input,
+.submit-field textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-family: inherit;
+  transition: border-color 0.15s ease;
+}
+
+.submit-field input:focus,
+.submit-field textarea:focus {
+  outline: none;
+  border-color: var(--teal);
+  box-shadow: 0 0 0 2px rgba(8, 127, 120, 0.15);
+}
+
+.submit-field textarea {
+  resize: vertical;
+  min-height: 56px;
+}
+
+.submit-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 16px 20px 18px;
+}
+
+.submit-btn-cancel {
+  padding: 9px 16px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.submit-btn-cancel:hover {
+  background: var(--surface-soft);
+}
+
+.submit-btn-confirm {
+  padding: 9px 20px;
+  border: none;
+  border-radius: 6px;
+  background: var(--teal);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.submit-btn-confirm:hover {
+  opacity: 0.9;
+}
+
+.submit-btn-confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.theme-switcher {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 3;
+  display: inline-grid;
+  grid-auto-flow: column;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--theme-panel-border);
+  border-radius: 8px;
+  background: var(--theme-panel-bg);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--theme-shadow);
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    opacity 0.18s ease;
+}
+
+.theme-button {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--theme-button-text);
+  cursor: pointer;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.theme-button:hover,
+.theme-button:focus-visible {
+  color: var(--hero-ink);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.theme-button.is-active {
+  background: var(--theme-active-bg);
+  color: var(--hero-ink);
+}
+
+@media (hover: hover) {
+  .theme-switcher {
+    opacity: 0.24;
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .theme-switcher .theme-button {
+    opacity: 0.78;
+  }
+
+  .theme-switcher .theme-button.is-active {
+    background: transparent;
+    color: var(--theme-button-text);
+  }
+
+  .theme-switcher:hover,
+  .theme-switcher:focus-within {
+    opacity: 1;
+    border-color: var(--theme-panel-border);
+    background: var(--theme-panel-bg);
+    box-shadow: var(--theme-shadow);
+  }
+
+  .theme-switcher:hover .theme-button,
+  .theme-switcher:focus-within .theme-button {
+    opacity: 1;
+  }
+
+  .theme-switcher:hover .theme-button.is-active,
+  .theme-switcher:focus-within .theme-button.is-active {
+    background: var(--theme-active-bg);
+    color: var(--hero-ink);
+  }
+}
+
+.theme-button svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.toolbar {
+  display: grid;
+  grid-template-columns: minmax(280px, 420px) 1fr;
+  gap: 16px;
+  align-items: stretch;
+  margin-top: 18px;
+}
+
+.search-field {
+  display: grid;
+  gap: 7px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.search-field span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.search-field input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: var(--ink);
+  background: transparent;
+  font-size: 1rem;
+}
+
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.summary-item {
+  display: grid;
+  align-content: center;
+  min-height: 62px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.summary-item strong {
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.summary-item span {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 18px;
+}
+
+.filter-button {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 11px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.filter-button:hover {
+  border-color: rgba(8, 127, 120, 0.42);
+  color: var(--teal);
+}
+
+.filter-button.is-active {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+  color: var(--teal-ink);
+  font-weight: 700;
+}
+
+.notice-band {
+  margin-bottom: 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--notice-border);
+  border-radius: 8px;
+  background: var(--coral-soft);
+}
+
+.notice-title {
+  margin: 0 0 8px;
+  color: var(--notice-title);
+  font-weight: 800;
+}
+
+.notice-content {
+  color: var(--notice-text);
+  line-height: 1.7;
+}
+
+.notice-content p {
+  margin: 0 0 8px;
+}
+
+.cards-area {
+  display: grid;
+  gap: 18px;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.site-card {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  min-height: 180px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+  will-change: transform;
+}
+
+.site-card:hover,
+.site-card:focus-within {
+  transform: translateY(-3px);
+  border-color: rgba(8, 127, 120, 0.34);
+  box-shadow: var(--card-shadow-hover);
+}
+
+.card-head {
+  display: flex;
+  align-items: start;
+  gap: 8px;
+}
+
+.card-head h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 1.1rem;
+  line-height: 1.25;
+}
+
+.summary {
+  margin: 0;
+}
+
+.summary {
+  color: var(--strong);
+  line-height: 1.55;
+}
+
+.quick-facts {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  margin: 0;
+}
+
+.quick-facts div {
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.3;
+}
+
+.quick-facts dt {
+  margin: 0;
+  color: var(--fact-label);
+  font-weight: 700;
+}
+
+.quick-facts dd {
+  margin: 0;
+  color: var(--strong);
+}
+
+/* ═══════ 签到额度徽章 ═══════ */
+
+.checkin-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.3;
+  vertical-align: middle;
+}
+
+.checkin-high {
+  background: var(--teal-soft);
+  color: var(--teal-ink);
+}
+
+.checkin-mid {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.checkin-low {
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+
+/* ═══════ 卡片视觉分级 ═══════ */
+
+.card-graded {
+  position: relative;
+}
+
+.card-graded::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 8px 8px 0 0;
+  background: var(--line);
+}
+
+.card-tier-high::before {
+  background: linear-gradient(90deg, var(--teal), var(--teal-ink));
+}
+
+.card-tier-mid::before {
+  background: linear-gradient(90deg, var(--amber), var(--amber-soft));
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 30px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tag-list-top {
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  border-radius: 6px;
+  padding: 4px 7px;
+  background: var(--tag-bg);
+  color: var(--tag-text);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.tag.checkin,
+.tag.image {
+  background: var(--tag-accent-bg);
+  color: var(--tag-accent-text);
+}
+
+.notes {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.notes p {
+  margin: 0;
+}
+
+/* ═══════ 投票按钮组 ═══════ */
+
+.card-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.vote-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.vote-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 26px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.vote-btn:hover:not(:disabled) {
+  border-color: rgba(8, 127, 120, 0.42);
+  transform: scale(1.15);
+}
+
+.vote-btn.vote-up.is-active {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+}
+
+.vote-btn.vote-down.is-active {
+  border-color: var(--coral);
+  background: var(--coral-soft);
+}
+
+.vote-btn:disabled {
+  cursor: default;
+}
+
+.vote-score {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--muted);
+  line-height: 1;
+  min-width: 20px;
+  text-align: center;
+}
+
+.vote-score.positive {
+  color: var(--teal);
+}
+
+.vote-score.negative {
+  color: var(--coral);
+}
+
+@keyframes vote-flash {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+
+.vote-flash {
+  animation: vote-flash 0.3s ease-in-out 2;
+}
+
+/* ═══════ 排序选择器 ═══════ */
+
+.sort-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.sort-label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sort-select {
+  padding: 6px 24px 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.84rem;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%235e6a64' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  background-size: 14px;
+}
+
+.sort-select:focus {
+  outline: 2px solid var(--teal);
+  outline-offset: 1px;
+}
+
+.visit-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  min-height: 30px;
+  border-radius: 5px;
+  padding: 6px 10px;
+  background: var(--visit-bg);
+  color: var(--visit-text);
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-decoration: none;
+  box-shadow: 0 4px 10px rgba(23, 32, 28, 0.1);
+  transition:
+    background-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.visit-link:hover,
+.visit-link:focus-visible {
+  background: var(--visit-hover);
+  box-shadow: var(--visit-hover-shadow);
+  transform: translateY(-2px);
+  outline: none;
+}
+
+.visit-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.18s ease;
+}
+
+.visit-link:hover .visit-icon,
+.visit-link:focus-visible .visit-icon {
+  transform: translateX(4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-card,
+  .visit-link,
+  .visit-icon,
+  .theme-button,
+  .vote-btn {
+    transition: none;
+  }
+
+  .vote-flash {
+    animation: none;
+  }
+
+  .site-card:hover,
+  .site-card:focus-within,
+  .visit-link:hover,
+  .visit-link:focus-visible,
+  .theme-button:hover,
+  .theme-button:focus-visible,
+  .visit-link:hover .visit-icon,
+  .visit-link:focus-visible .visit-icon {
+    transform: none;
+  }
+}
+
+.empty-state,
+.error-state {
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+@media (max-width: 980px) {
+  .hero-band {
+    grid-template-columns: 1fr;
+    min-height: 190px;
+  }
+
+  h1 {
+    font-size: 3.1rem;
+  }
+
+  .toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .page-shell {
+    width: min(100% - 20px, 1180px);
+    padding-top: 10px;
+  }
+
+  .hero-band {
+    min-height: 165px;
+  }
+
+  .hero-copy {
+    padding: 22px 18px;
+  }
+
+  .theme-switcher {
+    top: 9px;
+    right: 9px;
+    gap: 3px;
+    padding: 3px;
+  }
+
+  .theme-button {
+    width: 26px;
+    height: 26px;
+  }
+
+  .theme-button svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  h1 {
+    font-size: 2rem;
+  }
+
+  .intro {
+    margin-top: 10px;
+    font-size: 0.9rem;
+  }
+
+  .summary-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .summary-item {
+    min-height: 56px;
+    padding: 9px 10px;
+  }
+
+  .summary-item strong {
+    font-size: 1.25rem;
+  }
+
+  .filter-row {
+    gap: 6px;
+    margin: 12px 0 14px;
+  }
+
+  .filter-button {
+    min-height: 32px;
+    padding: 6px 9px;
+  }
+
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .site-card {
+    min-height: 160px;
+  }
+
+}
+
+@media (max-width: 380px) {
+  h1 {
+    font-size: 1.95rem;
+  }
+}
+
+/* ═══════ 提交成功提示 ═══════ */
+
+.submit-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  border-radius: 8px;
+  background: var(--teal);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(8, 127, 120, 0.35);
+  z-index: 1000;
+  animation: toast-in 0.3s ease;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+</style>
+</head>
+  <body>
+    <main class="page-shell">
+      <section class="hero-band" aria-labelledby="pageTitle">
+        <div class="theme-switcher" role="group" aria-label="主题模式">
+          <button class="theme-button" type="button" data-theme-choice="light" aria-label="亮色主题" aria-pressed="false" title="亮色主题">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <circle cx="12" cy="12" r="4" />
+              <path d="M12 2v2" />
+              <path d="M12 20v2" />
+              <path d="m4.93 4.93 1.41 1.41" />
+              <path d="m17.66 17.66 1.41 1.41" />
+              <path d="M2 12h2" />
+              <path d="M20 12h2" />
+              <path d="m6.34 17.66-1.41 1.41" />
+              <path d="m19.07 4.93-1.41 1.41" />
+            </svg>
+          </button>
+          <button class="theme-button" type="button" data-theme-choice="dark" aria-label="暗色主题" aria-pressed="false" title="暗色主题">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M21 12.6A8.5 8.5 0 1 1 11.4 3 6.5 6.5 0 0 0 21 12.6z" />
+            </svg>
+          </button>
+          <button class="theme-button" type="button" data-theme-choice="system" aria-label="跟随系统" aria-pressed="false" title="跟随系统">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <rect x="3" y="4" width="18" height="12" rx="2" />
+              <path d="M8 20h8" />
+              <path d="M12 16v4" />
+            </svg>
+          </button>
+        </div>
+        <div class="hero-copy">
+          <p class="eyebrow">FREE.EFORGE.XYZ</p>
+          <h1 id="pageTitle">TOKEN <span class="keep-together">站点速查</span></h1>
+          <p class="intro">
+            收录可注册、可签到、可生图和长期备用的 API 站点。
+          </p>
+          <div class="hero-actions">
+            <button class="cta-button" id="submitSiteBtn" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+              提交站点
+            </button>
+          </div>
+        </div>
+</section>
+
+      <section class="toolbar" aria-label="筛选站点">
+        <label class="search-field">
+          <span>搜索</span>
+          <input id="searchInput" type="search" autocomplete="off" placeholder="站名、域名、标签、备注" />
+        </label>
+        <div class="summary-strip" id="summaryStrip"></div>
+      </section>
+
+      <nav class="filter-row" id="filterRow" aria-label="标签筛选"></nav>
+
+      <section class="notice-band" id="noticeBand" hidden>
+        <div>
+          <p class="notice-title">公告</p>
+          <div class="notice-content" id="noticeContent"></div>
+        </div>
+      </section>
+
+      <section class="cards-area" id="cardsArea" aria-label="站点列表"></section>
+    </main>
+
+    <!-- ═══════ 提交站点模态框 ═══════ -->
+    <dialog id="submitModal" class="submit-modal">
+      <form id="submitForm" method="dialog">
+        <div class="submit-header">
+          <h2>📝 提交新站点</h2>
+          <button type="button" class="submit-close" onclick="document.getElementById('submitModal').close()" aria-label="关闭">&times;</button>
+        </div>
+        <p class="submit-hint">提交后由管理员审核，审核通过后自动上线。每天最多提交 5 个站点。</p>
+        <div class="submit-field">
+          <label for="submitName">站点名称 *</label>
+          <input id="submitName" required placeholder="如：JustDoWork" maxlength="60">
+        </div>
+        <div class="submit-field">
+          <label for="submitUrl">站点 URL *</label>
+          <input id="submitUrl" required type="url" placeholder="https://example.com">
+        </div>
+        <div class="submit-field">
+          <label for="submitTags">标签（逗号分隔）</label>
+          <input id="submitTags" placeholder="签到, 生图, 限免">
+        </div>
+        <div class="submit-field">
+          <label for="submitSummary">站点简介</label>
+          <textarea id="submitSummary" rows="2" maxlength="200" placeholder="一句话描述站点特色"></textarea>
+        </div>
+        <div class="submit-field">
+          <label for="submitCheckin">签到额度</label>
+          <input id="submitCheckin" placeholder="如：每日签到 5-50 刀">
+        </div>
+        <div class="submit-field">
+          <label for="submitModels">支持模型</label>
+          <input id="submitModels" placeholder="如：Claude Opus 5、GPT-5.6">
+        </div>
+        <div class="submit-field">
+          <label for="submitRegister">注册方式</label>
+          <input id="submitRegister" placeholder="如：GitHub、邮箱">
+        </div>
+        <div class="submit-actions">
+          <button type="button" class="submit-btn-cancel" onclick="document.getElementById('submitModal').close()">取消</button>
+          <button type="submit" class="submit-btn-confirm" id="submitConfirmBtn">提交审核</button>
+        </div>
+      </form>
+    </dialog>
+
+    <template id="siteCardTemplate">
+      <article class="site-card">
+        <div class="card-head">
+          <h2></h2>
+          <ul class="tag-list tag-list-top"></ul>
+        </div>
+        <p class="summary"></p>
+        <dl class="quick-facts"></dl>
+        <div class="notes"></div>
+        <div class="card-foot">
+          <a class="visit-link" target="_blank" rel="noopener noreferrer">
+            访问站点
+            <svg class="visit-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M5 12h14" />
+              <path d="m13 6 6 6-6 6" />
+            </svg>
+          </a>
+        </div>
+      </article>
+    </template>
+
+<script>
+(function () {
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 常量配置
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 所有 API 使用同源相对路径（Worker 即数据源，无降级逻辑）
+  const API_BASE = "";
+  const VOTE_CACHE_TTL = 5 * 60 * 1000;  // 投票数据缓存 5 分钟
+  const CACHE_BUSTER = () => \`v=\${Date.now()}\`;
+  const THEME_KEY = "broadcast-theme";
+  const VOTE_STORAGE_KEY = "sk-free-votes";
+  const THEME_CHOICES = ["light", "dark", "system"];
+  const PRIORITY_TAGS = ["全部", "签到", "生图", "DC系", "半DC", "非DC", "抽奖"];
+  const SORT_OPTIONS = [
+    { value: "default", label: "默认排序" },
+    { value: "score",   label: "按评分排序" }
+  ];
+  const TAG_CLASS = {
+    "签到": "checkin",
+    "生图": "image"
+  };
+  const DATE_PATTERN = /(20\\d{2})\\s*[-/.年]\\s*(\\d{1,2})\\s*[-/.月]\\s*(\\d{1,2})\\s*(?:日)?/g;
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 全局状态
+  // ═══════════════════════════════════════════════════════════════════════════════
+  const state = {
+    sites: [],
+    metadata: {},
+    activeTag: "全部",
+    query: "",
+    sortBy: "default",
+    votes: {}
+  };
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // DOM 引用
+  // ═══════════════════════════════════════════════════════════════════════════════
+  const els = {
+    searchInput: document.getElementById("searchInput"),
+    summaryStrip: document.getElementById("summaryStrip"),
+    filterRow: document.getElementById("filterRow"),
+    noticeBand: document.getElementById("noticeBand"),
+    noticeContent: document.getElementById("noticeContent"),
+    cardsArea: document.getElementById("cardsArea"),
+    template: document.getElementById("siteCardTemplate"),
+    themeButtons: document.querySelectorAll("[data-theme-choice]")
+  };
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 工具函数
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  function unique(values) {
+    return Array.from(new Set(values.filter(Boolean)));
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 投票系统
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  /**
+   * 从 Cloudflare Worker API 获取所有站点的投票数据
+   * 支持 5 分钟本地缓存，减少 API 调用
+   * API 不可用时静默降级，不影响站点列表渲染
+   */
+  async function loadVotes() {
+    // 优先使用内存缓存（避免页面内重复请求）
+    if (state._voteCache && Date.now() - state._voteCache.ts < VOTE_CACHE_TTL) {
+      state.votes = state._voteCache.data;
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/votes?" + CACHE_BUSTER(), {
+        cache: "no-store"
+      });
+      if (!res.ok) throw new Error("votes " + res.status);
+      const data = await res.json();
+      if (data.ok) {
+        state.votes = data.votes || {};
+        state._voteCache = { data: state.votes, ts: Date.now() };
+      }
+    } catch {
+      // API 不可用时静默降级，投票区域将被隐藏
+    }
+  }
+
+  /**
+   * 从 localStorage 读取当前用户的投票记录
+   * 结构：{ "站点名": "up" | "down" }
+   */
+  function loadPersonalVotes() {
+    try {
+      return JSON.parse(localStorage.getItem(VOTE_STORAGE_KEY) || "{}");
+    } catch {
+      return {};
+    }
+  }
+
+  /**
+   * 将用户的投票记录持久化到 localStorage
+   */
+  function savePersonalVotes(votes) {
+    try {
+      localStorage.setItem(VOTE_STORAGE_KEY, JSON.stringify(votes));
+    } catch {
+      // localStorage 不可用时忽略（隐私模式等）
+    }
+  }
+
+  /**
+   * 计算站点的净得分（👍数 - 👎数）
+   * @param {string} siteName - 站点名称
+   * @returns {number} 净得分
+   */
+  function netVotes(siteName) {
+    const v = state.votes[siteName];
+    if (!v) return 0;
+    return (v.up || 0) - (v.down || 0);
+  }
+
+  /**
+   * 处理用户点击投票按钮
+   * 流程：前端校验 → API 请求 → 乐观更新 → 持久化
+   * @param {string} siteName - 站点名称
+   * @param {string} vote - "up" 或 "down"
+   * @param {HTMLElement} voteBar - 投票按钮组的容器元素
+   */
+  async function handleVote(siteName, vote, voteBar) {
+    // 从 localStorage 读取当前用户的所有投票记录
+    const personalVotes = loadPersonalVotes();
+
+    // 检查是否已对该站点投过票
+    if (personalVotes[siteName]) {
+      voteBar.classList.add("vote-flash");
+      setTimeout(() => voteBar.classList.remove("vote-flash"), 600);
+      return;
+    }
+
+    // 禁用按钮防止重复点击
+    const buttons = voteBar.querySelectorAll(".vote-btn");
+    buttons.forEach((b) => (b.disabled = true));
+
+    try {
+      const res = await fetch("/api/vote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteName: siteName, type: vote })
+      });
+
+      const data = await res.json();
+
+      if (data.ok) {
+        // 乐观更新：服务端返回 { ok, siteName, up, down }，组装成 votes 结构
+        state.votes[siteName] = { up: data.up || 0, down: data.down || 0 };
+        // 清除缓存，确保下次获取最新数据
+        state._voteCache = null;
+        // 记录用户投票（防止重复投票）
+        personalVotes[siteName] = vote;
+        savePersonalVotes(personalVotes);
+        // 更新 UI
+        refreshVoteBar(voteBar, siteName);
+      } else if (res.status === 429) {
+        // 被速率限制：提示用户
+        voteBar.classList.add("vote-flash");
+        setTimeout(() => voteBar.classList.remove("vote-flash"), 600);
+        alert(data.error || "投票过于频繁，请稍后再试");
+      } else {
+        alert(data.error || "投票失败");
+      }
+    } catch {
+      alert("网络错误，请稍后重试");
+    } finally {
+      buttons.forEach((b) => (b.disabled = false));
+    }
+  }
+
+  /**
+   * 刷新投票按钮组的视觉状态
+   * 更新计数显示、激活状态、禁用状态
+   * @param {HTMLElement} voteBar - 投票按钮组容器
+   * @param {string} siteName - 站点名称
+   */
+  function refreshVoteBar(voteBar, siteName) {
+    const personalVotes = loadPersonalVotes();
+    const userVote = personalVotes[siteName] || null;
+    const score = netVotes(siteName);
+
+    // 更新得分数字及颜色
+    const scoreEl = voteBar.querySelector(".vote-score");
+    if (scoreEl) {
+      scoreEl.textContent = score > 0 ? \`+\${score}\` : String(score);
+      scoreEl.className = "vote-score" + (score > 0 ? " positive" : score < 0 ? " negative" : "");
+    }
+
+    // 更新按钮激活状态
+    const upBtn = voteBar.querySelector("[data-vote='up']");
+    const downBtn = voteBar.querySelector("[data-vote='down']");
+
+    if (upBtn) {
+      upBtn.classList.toggle("is-active", userVote === "up");
+      upBtn.disabled = !!userVote;
+    }
+    if (downBtn) {
+      downBtn.classList.toggle("is-active", userVote === "down");
+      downBtn.disabled = !!userVote;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 主题系统
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  const colorSchemeQuery =
+    window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)");
+
+  function getStoredTheme() {
+    try {
+      const value = localStorage.getItem(THEME_KEY) || "system";
+      return THEME_CHOICES.includes(value) ? value : "system";
+    } catch {
+      return document.documentElement.dataset.themeChoice || "system";
+    }
+  }
+
+  function resolveTheme(choice) {
+    if (choice === "system") {
+      return colorSchemeQuery && colorSchemeQuery.matches ? "dark" : "light";
+    }
+    return choice;
+  }
+
+  function applyTheme(choice, persist = false) {
+    const safeChoice = THEME_CHOICES.includes(choice) ? choice : "system";
+    document.documentElement.dataset.theme = resolveTheme(safeChoice);
+    document.documentElement.dataset.themeChoice = safeChoice;
+
+    els.themeButtons.forEach((button) => {
+      const active = button.dataset.themeChoice === safeChoice;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+
+    if (persist) {
+      try {
+        localStorage.setItem(THEME_KEY, safeChoice);
+      } catch {
+        // Storage can be unavailable in strict browser modes.
+      }
+    }
+  }
+
+  function initTheme() {
+    els.themeButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        applyTheme(button.dataset.themeChoice, true);
+      });
+    });
+
+    if (colorSchemeQuery) {
+      const handleChange = () => {
+        if (getStoredTheme() === "system") applyTheme("system");
+      };
+
+      if (colorSchemeQuery.addEventListener) {
+        colorSchemeQuery.addEventListener("change", handleChange);
+      } else if (colorSchemeQuery.addListener) {
+        colorSchemeQuery.addListener(handleChange);
+      }
+    }
+
+    applyTheme(getStoredTheme());
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 日期工具
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  function todayInShanghai() {
+    const parts = new Intl.DateTimeFormat("en", {
+      timeZone: "Asia/Shanghai",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).formatToParts(new Date());
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return \`\${values.year}-\${values.month}-\${values.day}\`;
+  }
+
+  function extractDescriptionDates(site) {
+    const text = [
+      site.checkin,
+      site.summary,
+      site.register,
+      site.models,
+      site.rate,
+      ...(site.notes || [])
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    return Array.from(text.matchAll(DATE_PATTERN), (match) => {
+      const [, year, month, day] = match;
+      return \`\${year}-\${month.padStart(2, "0")}-\${day.padStart(2, "0")}\`;
+    });
+  }
+
+  function isCurrentDatedSite(site) {
+    const dates = extractDescriptionDates(site);
+    return !dates.length || dates.every((date) => date === todayInShanghai());
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 过滤与排序
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  function matches(site) {
+    const haystack = [
+      site.name,
+      site.url,
+      site.checkin,
+      site.summary,
+      ...(site.tags || []),
+      ...(site.notes || [])
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    const queryMatch = !state.query || haystack.includes(state.query.toLowerCase());
+    const tagMatch = state.activeTag === "全部" || (site.tags || []).includes(state.activeTag);
+    return queryMatch && tagMatch;
+  }
+
+  /**
+   * 获取过滤后的站点列表，并根据当前排序方式排序
+   */
+  function filteredSites() {
+    const list = state.sites.filter(matches);
+
+    if (state.sortBy === "score") {
+      // 按评分排序：高分在前
+      list.sort((a, b) => netVotes(b.name) - netVotes(a.name));
+    }
+
+    return list;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 渲染
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  function renderSummary() {
+    const visible = filteredSites();
+    const stats = [
+      ["收录", visible.length],
+      ["可签到", visible.filter((site) => (site.tags || []).includes("签到")).length],
+      ["可生图", visible.filter((site) => (site.tags || []).includes("生图")).length]
+    ];
+
+    els.summaryStrip.replaceChildren(
+      ...stats.map(([label, value]) => {
+        const item = document.createElement("div");
+        item.className = "summary-item";
+        const strong = document.createElement("strong");
+        strong.textContent = String(value);
+        const span = document.createElement("span");
+        span.textContent = label;
+        item.append(strong, span);
+        return item;
+      })
+    );
+  }
+
+  function renderFilters() {
+    const allTags = unique(state.sites.flatMap((site) => site.tags || []));
+    const ordered = [
+      ...PRIORITY_TAGS.filter((tag) => tag === "全部" || allTags.includes(tag)),
+      ...allTags.filter((tag) => !PRIORITY_TAGS.includes(tag)).sort((a, b) => a.localeCompare(b, "zh-CN"))
+    ];
+
+    els.filterRow.replaceChildren(
+      ...ordered.map((tag) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = \`filter-button\${tag === state.activeTag ? " is-active" : ""}\`;
+        button.textContent = tag;
+        button.addEventListener("click", () => {
+          state.activeTag = tag;
+          render();
+        });
+        return button;
+      })
+    );
+
+    // 追加排序选择器到筛选行末尾
+    const sortGroup = document.createElement("div");
+    sortGroup.className = "sort-group";
+
+    const sortLabel = document.createElement("span");
+    sortLabel.className = "sort-label";
+    sortLabel.textContent = "排序";
+
+    const sortSelect = document.createElement("select");
+    sortSelect.className = "sort-select";
+    sortSelect.setAttribute("aria-label", "排序方式");
+
+    SORT_OPTIONS.forEach((opt) => {
+      const option = document.createElement("option");
+      option.value = opt.value;
+      option.textContent = opt.label;
+      option.selected = opt.value === state.sortBy;
+      sortSelect.appendChild(option);
+    });
+
+    sortSelect.addEventListener("change", (e) => {
+      state.sortBy = e.target.value;
+      renderCards();
+    });
+
+    sortGroup.append(sortLabel, sortSelect);
+    els.filterRow.appendChild(sortGroup);
+  }
+
+  function appendFact(list, label, value) {
+    if (!value) return;
+    const row = document.createElement("div");
+    const dt = document.createElement("dt");
+    const dd = document.createElement("dd");
+    dt.textContent = label;
+    dd.textContent = value;
+    row.append(dt, dd);
+    list.append(row);
+  }
+
+  function makeTags(tags) {
+    return (tags || []).map((tag) => {
+      const item = document.createElement("li");
+      const span = document.createElement("span");
+      span.className = \`tag \${TAG_CLASS[tag] || ""}\`.trim();
+      span.textContent = tag;
+      item.append(span);
+      return item;
+    });
+  }
+
+  /**
+   * 构建投票按钮组 DOM 元素
+   * 包含 👍 按钮、得分显示、👎 按钮
+   * @param {string} siteName - 站点名称（用于 API 请求和状态查找）
+   * @returns {HTMLElement} 投票按钮组容器
+   */
+  function makeVoteBar(siteName) {
+    const bar = document.createElement("div");
+    bar.className = "vote-bar";
+
+    const personalVotes = loadPersonalVotes();
+    const userVote = personalVotes[siteName] || null;
+    const score = netVotes(siteName);
+
+    // 👍 按钮
+    const upBtn = document.createElement("button");
+    upBtn.type = "button";
+    upBtn.className = "vote-btn vote-up" + (userVote === "up" ? " is-active" : "");
+    upBtn.setAttribute("aria-label", "支持");
+    upBtn.textContent = "👍";
+    upBtn.disabled = !!userVote;
+    upBtn.addEventListener("click", () => handleVote(siteName, "up", bar));
+
+    // 得分显示
+    const scoreEl = document.createElement("span");
+    scoreEl.className = "vote-score" + (score > 0 ? " positive" : score < 0 ? " negative" : "");
+    scoreEl.textContent = score > 0 ? \`+\${score}\` : String(score);
+
+    // 👎 按钮
+    const downBtn = document.createElement("button");
+    downBtn.type = "button";
+    downBtn.className = "vote-btn vote-down" + (userVote === "down" ? " is-active" : "");
+    downBtn.setAttribute("aria-label", "不推荐");
+    downBtn.textContent = "👎";
+    downBtn.disabled = !!userVote;
+    downBtn.addEventListener("click", () => handleVote(siteName, "down", bar));
+
+    bar.append(upBtn, scoreEl, downBtn);
+    return bar;
+  }
+
+  /**
+   * 根据站点的签到额度生成醒目徽章
+   * 解析 checkin 字段中的数字，按阈值分级显示
+   * @param {Object} site - 站点数据对象
+   * @returns {HTMLElement|null} 徽章元素，无签到数据时返回 null
+   */
+  function makeCheckinBadge(site) {
+    if (!site.checkin) return null;
+
+    // 从 checkin 文本中提取最大数值（如 "5-50刀" → 50）
+    const numbers = site.checkin.match(/\\d+(\\.\\d+)?/g);
+    if (!numbers) return null;
+
+    const maxVal = Math.max(...numbers.map(Number));
+    if (maxVal <= 0) return null;
+
+    // 按阈值分级：≥20 高额度、≥5 中额度、<5 低额度
+    let level, label;
+    if (maxVal >= 20) {
+      level = "high";
+      label = \`\${maxVal}+\`;
+    } else if (maxVal >= 5) {
+      level = "mid";
+      label = String(maxVal);
+    } else {
+      level = "low";
+      label = String(maxVal);
+    }
+
+    const badge = document.createElement("span");
+    badge.className = \`checkin-badge checkin-\${level}\`;
+    badge.textContent = \`\${label} 刀\`;
+    badge.title = \`签到额度参考：\${site.checkin}\`;
+    return badge;
+  }
+
+  /**
+   * 构建单个站点卡片 DOM
+   * @param {Object} site - 站点数据对象
+   * @returns {HTMLElement} 卡片元素
+   */
+  function makeCard(site) {
+    const node = els.template.content.firstElementChild.cloneNode(true);
+
+    node.querySelector("h2").textContent = site.name;
+    node.querySelector(".summary").textContent = site.summary || "";
+
+    const facts = node.querySelector(".quick-facts");
+    appendFact(facts, "签到", site.checkin);
+    appendFact(facts, "模型", site.models);
+    appendFact(facts, "注册", site.register);
+    appendFact(facts, "倍率", site.rate);
+
+    node.querySelector(".tag-list-top").replaceChildren(...makeTags(site.tags));
+
+    // 插入投票按钮组到底部栏（访问按钮右侧）
+    const cardFoot = node.querySelector(".card-foot");
+    cardFoot.appendChild(makeVoteBar(site.name));
+
+    // 在签到事实行旁追加额度徽章
+    const checkinFact = facts.querySelector("div:first-child");
+    if (checkinFact) {
+      const badge = makeCheckinBadge(site);
+      if (badge) checkinFact.appendChild(badge);
+    }
+
+    // 卡片视觉分级：根据签到标签和额度添加边框色阶
+    const tags = site.tags || [];
+    if (tags.includes("签到")) {
+      const badge = makeCheckinBadge(site);
+      if (badge) {
+        node.classList.add("card-graded");
+        // 高额度卡片添加顶部色条
+        if (badge.classList.contains("checkin-high")) {
+          node.classList.add("card-tier-high");
+        } else if (badge.classList.contains("checkin-mid")) {
+          node.classList.add("card-tier-mid");
+        }
+      }
+    }
+
+    const notes = node.querySelector(".notes");
+    (site.notes || []).forEach((text) => {
+      const p = document.createElement("p");
+      p.textContent = text;
+      notes.append(p);
+    });
+
+    const link = node.querySelector(".visit-link");
+    link.href = site.url;
+    link.setAttribute("aria-label", \`访问 \${site.name}\`);
+    return node;
+  }
+
+  function renderCards() {
+    const visible = filteredSites();
+    if (!visible.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty-state";
+      empty.textContent = "没有匹配的站点。";
+      els.cardsArea.replaceChildren(empty);
+      return;
+    }
+
+    const grid = document.createElement("div");
+    grid.className = "card-grid";
+    grid.replaceChildren(...visible.map(makeCard));
+    els.cardsArea.replaceChildren(grid);
+
+  }
+
+  function renderNotice(markdown) {
+    const text = markdown.trim();
+    if (!text) return;
+
+    const paragraphs = text
+      .split(/\\n{2,}/)
+      .map((block) => block.trim())
+      .filter(Boolean)
+      .slice(0, 3);
+
+    els.noticeContent.replaceChildren(
+      ...paragraphs.map((block) => {
+        const p = document.createElement("p");
+        p.textContent = block.replace(/\\n/g, " ");
+        return p;
+      })
+    );
+    els.noticeBand.hidden = false;
+  }
+
+  /**
+   * 主渲染函数：依次渲染摘要、筛选器（含排序）、卡片
+   */
+  function render() {
+    renderSummary();
+    renderFilters();
+    renderCards();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 数据加载
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  async function loadJson() {
+    const res = await fetch("/api/sites?" + CACHE_BUSTER(), { cache: "no-store" });
+    if (!res.ok) throw new Error("sites " + res.status);
+    const data = await res.json();
+    if (!data.ok || !data.sites) throw new Error("sites API 返回异常");
+    return data;
+  }
+
+  async function loadNotice() {
+    try {
+      const res = await fetch("/api/notice?" + CACHE_BUSTER(), { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ok && data.notice) renderNotice(data.notice);
+      }
+    } catch {
+      els.noticeBand.hidden = true;
+    }
+  }
+
+  /**
+   * 应用初始化
+   * 加载站点数据 → 并行加载投票数据 → 合并 → 渲染
+   */
+  async function init() {
+    try {
+      const data = await loadJson();
+      state.metadata = data.metadata || {};
+      state.sites = (data.sites || []).filter((s) => s.enabled !== false);
+
+      // 并行加载投票数据（不阻塞站点列表渲染）
+      await loadVotes();
+
+      render();
+      loadNotice();
+    } catch (error) {
+      const box = document.createElement("div");
+      box.className = "error-state";
+      box.textContent = \`数据加载失败：\${error.message}\`;
+      els.cardsArea.replaceChildren(box);
+      els.summaryStrip.replaceChildren();
+      els.filterRow.replaceChildren();
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 提交站点
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  function initSubmitForm() {
+    const btn = document.getElementById("submitSiteBtn");
+    const modal = document.getElementById("submitModal");
+    const form = document.getElementById("submitForm");
+    const confirmBtn = document.getElementById("submitConfirmBtn");
+
+    if (!btn || !modal || !form) return;
+
+    btn.addEventListener("click", () => {
+      form.reset();
+      modal.showModal();
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = "提交中...";
+
+      const body = {
+        name: document.getElementById("submitName").value.trim(),
+        url: document.getElementById("submitUrl").value.trim(),
+        tags: document.getElementById("submitTags").value.split(",").map((t) => t.trim()).filter(Boolean),
+        summary: document.getElementById("submitSummary").value.trim(),
+        checkin: document.getElementById("submitCheckin").value.trim() || undefined,
+        models: document.getElementById("submitModels").value.trim() || undefined,
+        register: document.getElementById("submitRegister").value.trim() || undefined
+      };
+
+      try {
+        const res = await fetch("/api/submit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (data.ok) {
+          modal.close();
+          // 显示成功提示
+          const toast = document.createElement("div");
+          toast.className = "submit-toast";
+          toast.textContent = "✅ " + (data.message || "提交成功，等待管理员审核");
+          document.body.appendChild(toast);
+          setTimeout(() => toast.remove(), 4000);
+        } else {
+          alert(data.error || "提交失败");
+        }
+      } catch {
+        alert("网络错误，请稍后重试");
+      } finally {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = "提交审核";
+      }
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 事件绑定 & 启动
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  els.searchInput.addEventListener("input", (event) => {
+    state.query = event.target.value.trim();
+    render();
+  });
+
+  initTheme();
+  initSubmitForm();
+  init();
+})();
+
+</script>
+</body>
+</html>
+`;
