@@ -10,7 +10,7 @@
 CREATE TABLE feedbacks_new (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   site_name TEXT NOT NULL,
-  type TEXT NOT NULL CHECK(type IN ('error', 'correction', 'positive', 'still_works', 'dead')),
+  type TEXT NOT NULL CHECK(type IN ('error', 'correction', 'positive', 'still_works', 'reported_dead')),
   content TEXT NOT NULL DEFAULT '',
   ip TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'new' CHECK(status IN ('new', 'read', 'resolved')),

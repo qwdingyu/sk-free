@@ -32,6 +32,20 @@ function formatSiteRow(row) {
     sortOrder: row.sort_order || 0,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    // 0003 新增结构化字段（nullable，NULL 表示未知）
+    slug: row.slug || null,
+    kind: row.kind || "api_site",
+    quotaMin: row.quota_min ?? null,
+    quotaMax: row.quota_max ?? null,
+    quotaUnit: row.quota_unit || null,
+    quotaPeriod: row.quota_period || null,
+    quotaCallsEst: row.quota_calls_est ?? null,
+    quotaTier: row.quota_tier || null,
+    quotaRaw: row.quota_raw || null,
+    needsProxy: row.needs_proxy ?? null,
+    verifiedAt: row.verified_at || null,
+    verifiedBy: row.verified_by || null,
+    healthFailCount: row.health_fail_count ?? 0,
   };
 }
 
@@ -76,8 +90,8 @@ export async function handleGetSites(db) {
  * @returns {Promise<object>} { ok, sites }
  */
 export async function handleGetEnabledSites(db) {
-  // 查询启用站点 + 死链接黑名单，排除已被健康检查标记为不可达的站点
-  // 闭环：管理员在后台检测出的死链接必须从首页消失
+  // 查询启用站点 + 死链接黑名单 + 投票数据（3 次并行查询）
+  // 死链标记为 dead:true，由前端决定展示策略（折叠/降饱和），不直接过滤
   const [sites, votes, deadUrlRows] = await Promise.all([
     dbAll(db, "SELECT * FROM sites WHERE enabled = 1 ORDER BY sort_order ASC, name ASC"),
     dbAll(db, "SELECT site_name, up_count, down_count FROM votes"),
@@ -90,14 +104,22 @@ export async function handleGetEnabledSites(db) {
   }
   const deadUrlSet = new Set(deadUrlRows.map((r) => r.url));
 
+  const enabledCount = sites.length;
+  const deadCount = sites.filter((s) => deadUrlSet.has(s.url)).length;
+
   return {
     ok: true,
-    sites: sites
-      .filter((s) => !deadUrlSet.has(s.url))
-      .map((s) => ({
-        ...formatSiteRow(s),
-        votes: voteMap[s.name] || { up: 0, down: 0 },
-      })),
+    sites: sites.map((s) => ({
+      ...formatSiteRow(s),
+      votes: voteMap[s.name] || { up: 0, down: 0 },
+      dead: deadUrlSet.has(s.url),
+    })),
+    metadata: {
+      total: enabledCount,
+      enabled: enabledCount - deadCount,
+      dead: deadCount,
+      updatedAt: new Date().toISOString(),
+    },
   };
 }
 
