@@ -1059,6 +1059,8 @@ h1 {
   justify-content: center;
   width: 30px;
   height: 26px;
+  min-width: 44px;
+  min-height: 44px;
   border: 1px solid var(--line);
   border-radius: 5px;
   background: var(--surface);
@@ -2047,6 +2049,31 @@ h1 {
 }
 
 /* ── 骨架屏 ─────────────────────────────────────────────────────────────────── */
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  z-index: 9999;
+  padding: 8px 16px;
+  background: var(--teal);
+  color: #fff;
+  font-weight: 700;
+  border-radius: 0 0 6px 0;
+  text-decoration: none;
+}
+
+.skip-link:focus {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: auto;
+  height: auto;
+  overflow: visible;
+}
 
 .skeleton-row {
   display: flex;

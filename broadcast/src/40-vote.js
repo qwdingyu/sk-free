@@ -88,10 +88,12 @@ function refreshVoteBar(voteBar, siteName) {
   const downBtn = voteBar.querySelector("[data-vote='down']");
   if (upBtn) {
     upBtn.classList.toggle("is-active", userVote === "up");
+    upBtn.setAttribute("aria-pressed", String(userVote === "up"));
     upBtn.disabled = !!userVote;
   }
   if (downBtn) {
     downBtn.classList.toggle("is-active", userVote === "down");
+    downBtn.setAttribute("aria-pressed", String(userVote === "down"));
     downBtn.disabled = !!userVote;
   }
 }
@@ -111,6 +113,7 @@ function makeVoteBar(siteName) {
   upBtn.type = "button";
   upBtn.className = "vote-btn vote-up" + (userVote === "up" ? " is-active" : "");
   upBtn.setAttribute("aria-label", "支持");
+  upBtn.setAttribute("aria-pressed", String(userVote === "up"));
   upBtn.textContent = "👍";
   upBtn.disabled = !!userVote;
   upBtn.addEventListener("click", () => handleVote(siteName, "up", bar));
@@ -123,6 +126,7 @@ function makeVoteBar(siteName) {
   downBtn.type = "button";
   downBtn.className = "vote-btn vote-down" + (userVote === "down" ? " is-active" : "");
   downBtn.setAttribute("aria-label", "不推荐");
+  downBtn.setAttribute("aria-pressed", String(userVote === "down"));
   downBtn.textContent = "👎";
   downBtn.disabled = !!userVote;
   downBtn.addEventListener("click", () => handleVote(siteName, "down", bar));

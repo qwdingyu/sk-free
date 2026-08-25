@@ -118,29 +118,36 @@ function makeCard(site) {
 
 function openDrawer(site) {
   state.drawerSite = site;
+  // 记录触发元素，关闭时恢复焦点（a11y）
+  const triggerEl = document.activeElement;
   const existing = document.querySelector(".drawer-overlay");
   if (existing) existing.remove();
 
   const overlay = document.createElement("div");
   overlay.className = "drawer-overlay";
   overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) closeDrawer();
+    if (e.target === overlay) closeDrawer(triggerEl);
   });
 
   const drawer = document.createElement("div");
   drawer.className = "drawer";
+  drawer.setAttribute("role", "dialog");
+  drawer.setAttribute("aria-modal", "true");
 
   // 关闭按钮
   const closeBtn = document.createElement("button");
   closeBtn.className = "drawer-close";
   closeBtn.textContent = "✕";
   closeBtn.setAttribute("aria-label", "关闭详情");
-  closeBtn.addEventListener("click", closeDrawer);
+  closeBtn.addEventListener("click", () => closeDrawer(triggerEl));
 
-  // 标题
+  // 标题（带 id 供 aria-labelledby 引用）
   const title = document.createElement("h2");
+  const titleId = "drawer-title-" + Date.now();
+  title.id = titleId;
   title.className = "drawer-title";
   title.textContent = site.name;
+  drawer.setAttribute("aria-labelledby", titleId);
 
   // 详情内容
   const body = document.createElement("div");
@@ -207,21 +214,55 @@ function openDrawer(site) {
   overlay.appendChild(drawer);
   document.body.appendChild(overlay);
 
-  // 动画
-  requestAnimationFrame(() => overlay.classList.add("open"));
+  // 动画 + 聚焦关闭按钮（a11y）
+  requestAnimationFrame(() => {
+    overlay.classList.add("open");
+    closeBtn.focus();
+  });
 
-  // ESC 关闭
+  // Focus trap + ESC 关闭（a11y）
   const onKey = (e) => {
-    if (e.key === "Escape") { closeDrawer(); document.removeEventListener("keydown", onKey); }
+    if (e.key === "Escape") {
+      closeDrawer(triggerEl);
+      document.removeEventListener("keydown", onKey);
+      overlay.removeEventListener("focusin", onFocusIn);
+      return;
+    }
+    if (e.key === "Tab") {
+      const focusable = drawer.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  };
+  const onFocusIn = (e) => {
+    if (!drawer.contains(e.target)) {
+      e.stopPropagation();
+      closeBtn.focus();
+    }
   };
   document.addEventListener("keydown", onKey);
+  overlay.addEventListener("focusin", onFocusIn);
 }
 
-function closeDrawer() {
+function closeDrawer(triggerEl) {
   const overlay = document.querySelector(".drawer-overlay");
   if (overlay) {
     overlay.classList.remove("open");
     setTimeout(() => overlay.remove(), 300);
   }
   state.drawerSite = null;
+  // 恢复焦点到触发元素（a11y）
+  if (triggerEl && typeof triggerEl.focus === "function") {
+    triggerEl.focus();
+  }
 }

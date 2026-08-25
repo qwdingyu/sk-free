@@ -410,10 +410,12 @@ function refreshVoteBar(voteBar, siteName) {
   const downBtn = voteBar.querySelector("[data-vote='down']");
   if (upBtn) {
     upBtn.classList.toggle("is-active", userVote === "up");
+    upBtn.setAttribute("aria-pressed", String(userVote === "up"));
     upBtn.disabled = !!userVote;
   }
   if (downBtn) {
     downBtn.classList.toggle("is-active", userVote === "down");
+    downBtn.setAttribute("aria-pressed", String(userVote === "down"));
     downBtn.disabled = !!userVote;
   }
 }
@@ -433,6 +435,7 @@ function makeVoteBar(siteName) {
   upBtn.type = "button";
   upBtn.className = "vote-btn vote-up" + (userVote === "up" ? " is-active" : "");
   upBtn.setAttribute("aria-label", "支持");
+  upBtn.setAttribute("aria-pressed", String(userVote === "up"));
   upBtn.textContent = "👍";
   upBtn.disabled = !!userVote;
   upBtn.addEventListener("click", () => handleVote(siteName, "up", bar));
@@ -445,6 +448,7 @@ function makeVoteBar(siteName) {
   downBtn.type = "button";
   downBtn.className = "vote-btn vote-down" + (userVote === "down" ? " is-active" : "");
   downBtn.setAttribute("aria-label", "不推荐");
+  downBtn.setAttribute("aria-pressed", String(userVote === "down"));
   downBtn.textContent = "👎";
   downBtn.disabled = !!userVote;
   downBtn.addEventListener("click", () => handleVote(siteName, "down", bar));
@@ -703,16 +707,19 @@ function renderTable() {
   table.setAttribute("role", "grid");
   table.setAttribute("aria-label", "站点对比表");
 
-  // ── 表头 ────────────────────────────────────────────────────────────────────
+  // ── 表头（aria-sort 标记当前排序列）─────────────────────────────────────────
+  const sortColMap = { fresh: "col-fresh", quota: "col-quota", community: "col-community", name: "col-name" };
+  const activeSortCol = sortColMap[state.sortBy] || "col-fresh";
+  const th = (cls, label) => `<th scope="col" class="${cls}" aria-sort="${cls === activeSortCol ? "descending" : "none"}">${label}</th>`;
   const thead = document.createElement("thead");
   thead.innerHTML = `<tr>
-    <th scope="col" class="col-name">站点</th>
-    <th scope="col" class="col-quota">每日额度</th>
-    <th scope="col" class="col-cap">能力</th>
-    <th scope="col" class="col-threshold">门槛</th>
-    <th scope="col" class="col-fresh">鲜度</th>
-    <th scope="col" class="col-community">社区</th>
-    <th scope="col" class="col-action">操作</th>
+    ${th("col-name", "站点")}
+    ${th("col-quota", "每日额度")}
+    ${th("col-cap", "能力")}
+    ${th("col-threshold", "门槛")}
+    ${th("col-fresh", "鲜度")}
+    ${th("col-community", "社区")}
+    <th scope="col" class="col-action" aria-sort="none">操作</th>
   </tr>`;
   table.appendChild(thead);
 
@@ -964,29 +971,36 @@ function makeCard(site) {
 
 function openDrawer(site) {
   state.drawerSite = site;
+  // 记录触发元素，关闭时恢复焦点（a11y）
+  const triggerEl = document.activeElement;
   const existing = document.querySelector(".drawer-overlay");
   if (existing) existing.remove();
 
   const overlay = document.createElement("div");
   overlay.className = "drawer-overlay";
   overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) closeDrawer();
+    if (e.target === overlay) closeDrawer(triggerEl);
   });
 
   const drawer = document.createElement("div");
   drawer.className = "drawer";
+  drawer.setAttribute("role", "dialog");
+  drawer.setAttribute("aria-modal", "true");
 
   // 关闭按钮
   const closeBtn = document.createElement("button");
   closeBtn.className = "drawer-close";
   closeBtn.textContent = "✕";
   closeBtn.setAttribute("aria-label", "关闭详情");
-  closeBtn.addEventListener("click", closeDrawer);
+  closeBtn.addEventListener("click", () => closeDrawer(triggerEl));
 
-  // 标题
+  // 标题（带 id 供 aria-labelledby 引用）
   const title = document.createElement("h2");
+  const titleId = "drawer-title-" + Date.now();
+  title.id = titleId;
   title.className = "drawer-title";
   title.textContent = site.name;
+  drawer.setAttribute("aria-labelledby", titleId);
 
   // 详情内容
   const body = document.createElement("div");
@@ -1053,23 +1067,57 @@ function openDrawer(site) {
   overlay.appendChild(drawer);
   document.body.appendChild(overlay);
 
-  // 动画
-  requestAnimationFrame(() => overlay.classList.add("open"));
+  // 动画 + 聚焦关闭按钮（a11y）
+  requestAnimationFrame(() => {
+    overlay.classList.add("open");
+    closeBtn.focus();
+  });
 
-  // ESC 关闭
+  // Focus trap + ESC 关闭（a11y）
   const onKey = (e) => {
-    if (e.key === "Escape") { closeDrawer(); document.removeEventListener("keydown", onKey); }
+    if (e.key === "Escape") {
+      closeDrawer(triggerEl);
+      document.removeEventListener("keydown", onKey);
+      overlay.removeEventListener("focusin", onFocusIn);
+      return;
+    }
+    if (e.key === "Tab") {
+      const focusable = drawer.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  };
+  const onFocusIn = (e) => {
+    if (!drawer.contains(e.target)) {
+      e.stopPropagation();
+      closeBtn.focus();
+    }
   };
   document.addEventListener("keydown", onKey);
+  overlay.addEventListener("focusin", onFocusIn);
 }
 
-function closeDrawer() {
+function closeDrawer(triggerEl) {
   const overlay = document.querySelector(".drawer-overlay");
   if (overlay) {
     overlay.classList.remove("open");
     setTimeout(() => overlay.remove(), 300);
   }
   state.drawerSite = null;
+  // 恢复焦点到触发元素（a11y）
+  if (triggerEl && typeof triggerEl.focus === "function") {
+    triggerEl.focus();
+  }
 }
 
 
@@ -1366,11 +1414,15 @@ function renderFilters() {
   // ── 第一层：快捷视图 chips ──────────────────────────────────────────────────
   const presetBar = document.createElement("div");
   presetBar.className = "preset-bar";
+  presetBar.setAttribute("role", "group");
+  presetBar.setAttribute("aria-label", "快捷视图");
   PRESETS.forEach((p) => {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "preset-btn" + (state.activePreset === p.key ? " is-active" : "");
+    const isActive = state.activePreset === p.key;
+    btn.className = "preset-btn" + (isActive ? " is-active" : "");
     btn.textContent = `${p.icon} ${p.label}`;
+    btn.setAttribute("aria-pressed", String(isActive));
     btn.addEventListener("click", () => {
       state.activePreset = state.activePreset === p.key ? "" : p.key;
       syncToUrl(true);
@@ -1531,6 +1583,8 @@ function renderFilters() {
 function makeFilterGroup(label, options, selected, onChange) {
   const group = document.createElement("div");
   group.className = "filter-group";
+  group.setAttribute("role", "group");
+  group.setAttribute("aria-label", label);
   const lbl = document.createElement("span");
   lbl.className = "filter-group-label";
   lbl.textContent = label;
@@ -1539,8 +1593,10 @@ function makeFilterGroup(label, options, selected, onChange) {
   options.forEach((opt) => {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "filter-chip" + (selected.includes(opt.key) ? " is-active" : "");
+    const isActive = selected.includes(opt.key);
+    btn.className = "filter-chip" + (isActive ? " is-active" : "");
     btn.textContent = opt.label;
+    btn.setAttribute("aria-pressed", String(isActive));
     btn.addEventListener("click", () => {
       const idx = selected.indexOf(opt.key);
       if (idx >= 0) selected.splice(idx, 1);

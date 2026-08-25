@@ -24,16 +24,19 @@ function renderTable() {
   table.setAttribute("role", "grid");
   table.setAttribute("aria-label", "站点对比表");
 
-  // ── 表头 ────────────────────────────────────────────────────────────────────
+  // ── 表头（aria-sort 标记当前排序列）─────────────────────────────────────────
+  const sortColMap = { fresh: "col-fresh", quota: "col-quota", community: "col-community", name: "col-name" };
+  const activeSortCol = sortColMap[state.sortBy] || "col-fresh";
+  const th = (cls, label) => `<th scope="col" class="${cls}" aria-sort="${cls === activeSortCol ? "descending" : "none"}">${label}</th>`;
   const thead = document.createElement("thead");
   thead.innerHTML = `<tr>
-    <th scope="col" class="col-name">站点</th>
-    <th scope="col" class="col-quota">每日额度</th>
-    <th scope="col" class="col-cap">能力</th>
-    <th scope="col" class="col-threshold">门槛</th>
-    <th scope="col" class="col-fresh">鲜度</th>
-    <th scope="col" class="col-community">社区</th>
-    <th scope="col" class="col-action">操作</th>
+    ${th("col-name", "站点")}
+    ${th("col-quota", "每日额度")}
+    ${th("col-cap", "能力")}
+    ${th("col-threshold", "门槛")}
+    ${th("col-fresh", "鲜度")}
+    ${th("col-community", "社区")}
+    <th scope="col" class="col-action" aria-sort="none">操作</th>
   </tr>`;
   table.appendChild(thead);
 

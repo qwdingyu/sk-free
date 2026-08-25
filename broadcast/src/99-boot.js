@@ -60,11 +60,15 @@ function renderFilters() {
   // ── 第一层：快捷视图 chips ──────────────────────────────────────────────────
   const presetBar = document.createElement("div");
   presetBar.className = "preset-bar";
+  presetBar.setAttribute("role", "group");
+  presetBar.setAttribute("aria-label", "快捷视图");
   PRESETS.forEach((p) => {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "preset-btn" + (state.activePreset === p.key ? " is-active" : "");
+    const isActive = state.activePreset === p.key;
+    btn.className = "preset-btn" + (isActive ? " is-active" : "");
     btn.textContent = `${p.icon} ${p.label}`;
+    btn.setAttribute("aria-pressed", String(isActive));
     btn.addEventListener("click", () => {
       state.activePreset = state.activePreset === p.key ? "" : p.key;
       syncToUrl(true);
@@ -225,6 +229,8 @@ function renderFilters() {
 function makeFilterGroup(label, options, selected, onChange) {
   const group = document.createElement("div");
   group.className = "filter-group";
+  group.setAttribute("role", "group");
+  group.setAttribute("aria-label", label);
   const lbl = document.createElement("span");
   lbl.className = "filter-group-label";
   lbl.textContent = label;
@@ -233,8 +239,10 @@ function makeFilterGroup(label, options, selected, onChange) {
   options.forEach((opt) => {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "filter-chip" + (selected.includes(opt.key) ? " is-active" : "");
+    const isActive = selected.includes(opt.key);
+    btn.className = "filter-chip" + (isActive ? " is-active" : "");
     btn.textContent = opt.label;
+    btn.setAttribute("aria-pressed", String(isActive));
     btn.addEventListener("click", () => {
       const idx = selected.indexOf(opt.key);
       if (idx >= 0) selected.splice(idx, 1);
