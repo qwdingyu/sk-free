@@ -24,13 +24,42 @@ function debounce(fn, ms) {
 }
 
 /**
+ * 解析 D1 的时间字符串为毫秒时间戳
+ *
+ * D1 里所有时间都是 SQLite 的 datetime('now') 产物，格式为
+ * "YYYY-MM-DD HH:MM:SS"，**内容是 UTC 但字符串里没有时区标记**。
+ * 直接 new Date("2026-08-25 15:24:54") 会被当成本地时间：
+ * 在 UTC+8 下实测偏差 8 小时 —— 刚验证过的站点显示"8小时前"，
+ * 本该保持 24 小时的绿色鲜度只剩 16 小时。
+ * 而且这个格式不是 ISO 8601，某些浏览器直接返回 Invalid Date → NaN。
+ *
+ * 所以必须补上 T 和 Z 再交给 Date 解析。
+ *
+ * @param {string} s - D1 时间字符串，或已带时区的 ISO 字符串
+ * @returns {number} 毫秒时间戳；无法解析时返回 NaN
+ */
+function parseUtc(s) {
+  if (!s) return NaN;
+  if (typeof s === "number") return s;
+  const str = String(s).trim();
+  // 已经带时区信息（Z 或 ±HH:MM）就直接解析
+  if (/[Zz]$/.test(str) || /[+-]\d{2}:?\d{2}$/.test(str)) return Date.parse(str);
+  // "YYYY-MM-DD HH:MM:SS" → "YYYY-MM-DDTHH:MM:SSZ"
+  const m = str.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2})?)/);
+  if (m) return Date.parse(`${m[1]}T${m[2]}Z`);
+  return Date.parse(str);
+}
+
+/**
  * 相对时间格式化（如 "2小时前"、"3天前"）
- * @param {string} isoStr - ISO 8601 时间字符串
+ * @param {string} isoStr - D1 时间字符串或 ISO 8601 字符串
  * @returns {string} 相对时间文本
  */
 function relativeTime(isoStr) {
   if (!isoStr) return "";
-  const diff = Date.now() - new Date(isoStr).getTime();
+  const ts = parseUtc(isoStr);
+  if (Number.isNaN(ts)) return "";
+  const diff = Date.now() - ts;
   if (diff < 0) return "刚刚";
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "刚刚";
@@ -45,12 +74,15 @@ function relativeTime(isoStr) {
 
 /**
  * 计算鲜度等级（绿/黄/灰/未验证）
- * @param {string} verifiedAt - ISO 时间字符串
+ * @param {string} verifiedAt - D1 时间字符串
  * @returns {{ color: string, label: string, cls: string }}
  */
 function freshnessLevel(verifiedAt) {
   if (!verifiedAt) return { color: "gray", label: "未验证", cls: "fresh-unknown" };
-  const diff = Date.now() - new Date(verifiedAt).getTime();
+  const ts = parseUtc(verifiedAt);
+  // 时间字段存在但解析不出来 → 说成"未验证"，不假装有鲜度
+  if (Number.isNaN(ts)) return { color: "gray", label: "未验证", cls: "fresh-unknown" };
+  const diff = Date.now() - ts;
   if (diff <= FRESH_24H)  return { color: "green", label: relativeTime(verifiedAt), cls: "fresh-green" };
   if (diff <= FRESH_7D)   return { color: "yellow", label: relativeTime(verifiedAt), cls: "fresh-yellow" };
   return { color: "stale", label: relativeTime(verifiedAt), cls: "fresh-stale" };
@@ -62,18 +94,18 @@ function freshnessLevel(verifiedAt) {
  * @returns {string} 如 "25 刀/天"、"100 积分 ≈60次"、"额度未知"
  */
 function quotaText(site) {
-  if (site.quota_tier === "none" || (!site.quota_min && !site.quota_max)) {
-    return site.quota_raw || "额度未知";
+  if (site.quotaTier === "none" || (!site.quotaMin && !site.quotaMax)) {
+    return site.quotaRaw || "额度未知";
   }
-  const unit = QUOTA_UNIT_LABEL[site.quota_unit] || site.quota_unit || "";
-  const period = site.quota_period === "daily" ? "/天" : site.quota_period === "once" ? "（一次性）" : "";
+  const unit = QUOTA_UNIT_LABEL[site.quotaUnit] || site.quotaUnit || "";
+  const period = site.quotaPeriod === "daily" ? "/天" : site.quotaPeriod === "once" ? "（一次性）" : "";
   let text = "";
-  if (site.quota_min === site.quota_max || !site.quota_max) {
-    text = `${site.quota_min} ${unit}`;
+  if (site.quotaMin === site.quotaMax || !site.quotaMax) {
+    text = `${site.quotaMin} ${unit}`;
   } else {
-    text = `${site.quota_min}-${site.quota_max} ${unit}`;
+    text = `${site.quotaMin}-${site.quotaMax} ${unit}`;
   }
-  if (site.quota_calls_est) text += ` ≈${site.quota_calls_est}次`;
+  if (site.quotaCallsEst) text += ` ≈${site.quotaCallsEst}次`;
   return text + period;
 }
 

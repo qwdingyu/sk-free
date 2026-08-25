@@ -5,11 +5,11 @@
 // ── 快捷视图定义 ──────────────────────────────────────────────────────────────
 const PRESETS = [
   { key: "",       label: "全部",         icon: "📋" },
-  { key: "daily",  label: "今天能签到",   icon: "📅", match: (s) => s.quota_period === "daily" && s.quota_min > 0 },
-  { key: "high",   label: "高额度",       icon: "⭐", match: (s) => s.quota_tier === "high" },
+  { key: "daily",  label: "今天能签到",   icon: "📅", match: (s) => s.quotaPeriod === "daily" && s.quotaMin > 0 },
+  { key: "high",   label: "高额度",       icon: "⭐", match: (s) => s.quotaTier === "high" },
   { key: "image",  label: "免费生图",     icon: "🎨", match: (s) => (s.tags || []).includes("生图") },
-  { key: "proxy",  label: "无需魔法",     icon: "🔓", match: (s) => s.needs_proxy === 0 },
-  { key: "once",   label: "一次性限免",   icon: "🎁", match: (s) => s.quota_period === "once" },
+  { key: "proxy",  label: "无需魔法",     icon: "🔓", match: (s) => s.needsProxy === 0 },
+  { key: "once",   label: "一次性限免",   icon: "🎁", match: (s) => s.quotaPeriod === "once" },
   { key: "noauth", label: "无门槛",       icon: "🚪", match: (s) => !s.register || s.register.trim() === "" }
 ];
 
@@ -36,14 +36,14 @@ function matchesFilters(site) {
     const q = state.query.toLowerCase();
     const haystack = [
       site.name, site.url, site.checkin, site.summary, site.models,
-      site.register, site.rate, site.quota_raw, ...(site.tags || []), ...(site.notes || [])
+      site.register, site.rate, site.quotaRaw, ...(site.tags || []), ...(site.notes || [])
     ].join(" ").toLowerCase();
     if (!haystack.includes(q)) return false;
   }
 
   // 4. 额度档位（组内 OR）
   if (state.filterTier.length) {
-    if (!state.filterTier.includes(site.quota_tier || "none")) return false;
+    if (!state.filterTier.includes(site.quotaTier || "none")) return false;
   }
 
   // 5. 能力标签（组内 OR）
@@ -66,15 +66,31 @@ function matchesFilters(site) {
   // 8. 隐藏 7 天未验证
   if (state.hideStale) {
     if (!site.verifiedAt) return false;
-    if (Date.now() - new Date(site.verifiedAt).getTime() > FRESH_7D) return false;
+    const ts = parseUtc(site.verifiedAt);
+    // 解析不出来 = 没有可信的验证时间，按"陈旧"处理而不是放过
+    if (Number.isNaN(ts) || Date.now() - ts > FRESH_7D) return false;
   }
 
   return true;
 }
 
 /**
+ * 站点的验证时间戳；缺失或无法解析一律算 0（排到最后）
+ * 单独抽出来是为了不让 NaN 流进比较器 —— NaN 参与比较会让
+ * sort 的结果依赖于原始顺序，表现为"刷新一次顺序就变了"。
+ * @param {Object} site
+ * @returns {number}
+ */
+function verifiedTs(site) {
+  if (!site.verifiedAt) return 0;
+  const ts = parseUtc(site.verifiedAt);
+  return Number.isNaN(ts) ? 0 : ts;
+}
+
+/**
  * 获取筛选+排序后的站点列表
- * 默认排序：鲜度 desc → quota_tier asc → name asc
+ * 默认排序：鲜度 desc → 额度档位 asc → 名称 asc
+ * 已失效的一律沉到末尾（展示但不占决策位）
  */
 function filteredSites() {
   let list = state.sites.filter(matchesFilters);
@@ -83,19 +99,22 @@ function filteredSites() {
     case "fresh":
       list.sort((a, b) => {
         // 有验证时间的排前面
-        const aT = a.verifiedAt ? new Date(a.verifiedAt).getTime() : 0;
-        const bT = b.verifiedAt ? new Date(b.verifiedAt).getTime() : 0;
+        const aT = verifiedTs(a);
+        const bT = verifiedTs(b);
         if (aT !== bT) return bT - aT; // 新的在前
-        // 同鲜度按额度
-        return (TIER_ORDER[a.quota_tier] ?? 3) - (TIER_ORDER[b.quota_tier] ?? 3);
+        // 同鲜度按额度档位
+        return (TIER_ORDER[a.quotaTier] ?? 3) - (TIER_ORDER[b.quotaTier] ?? 3);
       });
       break;
     case "quota":
       list.sort((a, b) => {
-        const aT = TIER_ORDER[a.quota_tier] ?? 3;
-        const bT = TIER_ORDER[b.quota_tier] ?? 3;
+        const aT = TIER_ORDER[a.quotaTier] ?? 3;
+        const bT = TIER_ORDER[b.quotaTier] ?? 3;
         if (aT !== bT) return aT - bT; // 高额度在前
-        return (b.quota_min || 0) - (a.quota_min || 0);
+        // 同档位内不比 quotaMin：跨单位没有汇率，
+        // 100 积分 和 25 刀 的数字大小没有可比性，比了就是误导。
+        // 改用与单位无关的鲜度做次级排序。
+        return verifiedTs(b) - verifiedTs(a);
       });
       break;
     case "community":
@@ -106,12 +125,12 @@ function filteredSites() {
       break;
     default:
       // 默认鲜度
-      list.sort((a, b) => {
-        const aT = a.verifiedAt ? new Date(a.verifiedAt).getTime() : 0;
-        const bT = b.verifiedAt ? new Date(b.verifiedAt).getTime() : 0;
-        return bT - aT;
-      });
+      list.sort((a, b) => verifiedTs(b) - verifiedTs(a));
   }
+
+  // 已失效的沉底。放在最后单独做一次：Array.prototype.sort 是稳定排序，
+  // 所以上面那一轮的相对顺序在各组内不会被打乱。
+  list.sort((a, b) => (a.dead ? 1 : 0) - (b.dead ? 1 : 0));
 
   return list;
 }
@@ -126,9 +145,9 @@ function computeStats() {
     total: all.length,
     enabled: enabled.length,
     dead: all.filter((s) => s.dead).length,
-    daily: enabled.filter((s) => s.quota_period === "daily" && s.quota_min > 0).length,
-    highTier: enabled.filter((s) => s.quota_tier === "high").length,
+    daily: enabled.filter((s) => s.quotaPeriod === "daily" && s.quotaMin > 0).length,
+    highTier: enabled.filter((s) => s.quotaTier === "high").length,
     imageGen: enabled.filter((s) => (s.tags || []).includes("生图")).length,
-    noProxy: enabled.filter((s) => s.needs_proxy === 0).length
+    noProxy: enabled.filter((s) => s.needsProxy === 0).length
   };
 }

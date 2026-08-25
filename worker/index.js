@@ -18,7 +18,7 @@ import {
 import { handleGetVotes, handleVote } from "./src/votes.js";
 import { handleSubmitSite, handleAdminGetSubmissions, handleAdminSubmissionAction } from "./src/submissions.js";
 import { getDeadUrls, addDeadUrl, removeDeadUrl, batchDeadUrls } from "./src/deadurls.js";
-import { checkUrlHealth, checkBatchHealth } from "./src/health.js";
+import { checkUrlHealth, checkBatchHealth, HEALTH_BATCH_SIZE } from "./src/health.js";
 import { handleSubmitFeedback, handleGetFeedbacks, handleFeedbackAction } from "./src/feedbacks.js";
 import { broadcastHtml } from "./broadcast-html.js";
 
@@ -360,6 +360,19 @@ function renderTable() {
 }
 function filterTable() { renderTable(); }
 function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
+// D1 的 datetime('now') 产出 "YYYY-MM-DD HH:MM:SS"，内容是 UTC 但字符串不带时区标记。
+// 直接 new Date(它) 会被当成本地时间，UTC+8 下实测偏 8 小时；某些浏览器还会返回 Invalid Date。
+// 传入毫秒时间戳（如 dead_urls.added_at）则原样使用。
+function parseUtc(v) {
+  if (v === null || v === undefined || v === "") return NaN;
+  if (typeof v === "number") return v;
+  var s = String(v).trim();
+  if (/[Zz]$/.test(s) || /[+-]\d{2}:?\d{2}$/.test(s)) return Date.parse(s);
+  var m = s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2})?)/);
+  if (m) return Date.parse(m[1] + "T" + m[2] + "Z");
+  return Date.parse(s);
+}
+function fmtTime(v) { var t = parseUtc(v); return isNaN(t) ? "" : new Date(t).toLocaleString("zh-CN"); }
 function toggleSelect(name, checked) { if (checked) SELECTED.add(name); else SELECTED.delete(name); updateBatchBar(); }
 function toggleSelectAll() {
   const checked = document.getElementById("selectAll").checked;
@@ -453,7 +466,7 @@ async function loadSubmissions() {
     if (!data.submissions || data.submissions.length === 0) { list.innerHTML = '<div class="sub-empty">暂无待审核提交</div>'; countEl.style.display = "none"; return; }
     countEl.textContent = data.submissions.length; countEl.style.display = "inline";
     list.innerHTML = data.submissions.map((sub) => {
-      const time = new Date(sub.createdAt).toLocaleString("zh-CN");
+      const time = fmtTime(sub.createdAt);
       const tags = (sub.site.tags || []).map((t) => '<span class="tag">' + esc(t) + '</span>').join(" ");
       return '<div class="sub-card" id="sub-' + sub.id + '"><div class="sub-header"><span class="sub-name">' + esc(sub.site.name) + '</span><span class="sub-time">' + esc(time) + ' | ' + esc(sub.ip) + '</span></div><div class="sub-url">' + esc(sub.site.url) + '</div>' + (sub.site.summary ? '<div class="sub-summary">' + esc(sub.site.summary) + '</div>' : '') + (tags ? '<div style="margin-top:4px">' + tags + '</div>' : '') + '<div class="sub-actions"><button class="btn btn-sm btn-primary" data-id="' + esc(sub.id) + '" data-action="approve-submission">✅ 批准</button> <button class="btn btn-sm btn-danger" data-id="' + esc(sub.id) + '" data-action="reject-submission">❌ 驳回</button></div></div>';
     }).join("");
@@ -486,7 +499,7 @@ async function loadDeadUrls() {
     countEl.textContent = urls.length > 0 ? ("(" + urls.length + " 个)") : "(空)";
     if (urls.length === 0) { list.innerHTML = '<div style="color:var(--muted);padding:12px">暂无死链接</div>'; return; }
     list.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:2px solid var(--line);font-size:13px;font-weight:700"><input type="checkbox" id="deadSelectAll" data-action="toggle-dead-select-all"><span style="width:30px;text-align:center">全选</span><span style="flex:1">URL</span><span style="width:120px">原因</span><span style="width:60px">操作</span></div>' + urls.map(url => {
-      const info = data.deadUrls[url]; const time = info.addedAt ? new Date(info.addedAt).toLocaleString() : ""; const reason = info.error || info.reason || "";
+      const info = data.deadUrls[url]; const time = fmtTime(info.addedAt); const reason = info.error || info.reason || "";
       return '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--line);font-size:13px"><input type="checkbox" data-url="' + esc(url) + '" data-action="toggle-dead-select"><span style="width:30px;text-align:center;color:var(--muted);font-size:11px">●</span><span style="flex:1;word-break:break-all;color:var(--coral)">' + esc(url) + '</span><span style="width:120px;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + esc(reason) + '">' + esc(reason) + ' ' + time + '</span><button class="btn btn-sm btn-danger" data-url="' + esc(url) + '" data-action="remove-dead">移除</button></div>';
     }).join("");
   } catch (e) { toast("加载死链接失败: " + e.message, "error"); }
@@ -606,7 +619,7 @@ async function loadFeedbacks() {
     var typeLabels = { error: "报错", correction: "纠正", positive: "好评" };
     var statusLabels = { new: "🆕 待处理", read: "👁️ 已读", resolved: "✅ 已解决" };
     list.innerHTML = feedbacks.map(function(f) {
-      var time = f.createdAt ? new Date(f.createdAt).toLocaleString("zh-CN") : "";
+      var time = fmtTime(f.createdAt);
       var statusStyle = f.status === "new" ? "font-weight:700" : "color:var(--muted)";
       var typeStyle = "background:" + (typeColors[f.type] || "var(--tag-bg)") + ";color:#fff";
       return '<div class="sub-card" style="border-left:3px solid ' + (typeColors[f.type] || "var(--line)") + '">' +
@@ -952,7 +965,8 @@ export default {
   // ── Cron Trigger：定时健康检查 ────────────────────────────────────────────
   // 每6小时自动检查所有启用站点的 URL 可达性
   // 写入 verified_at/verified_by 字段，为前端鲜度可视化提供数据
-  // 设计：只写正面结果（成功 → 更新验证时间），失败不自动下线（P0-2 修复原则）
+  // 设计：失败绝不自动下线（概率性探测不驱动不可逆动作），
+  //       只累计 health_fail_count 供管理员判断，成功则清零。
   async scheduled(event, env, ctx) {
     const db = getDb(env);
     try {
@@ -960,22 +974,43 @@ export default {
       if (sites.length === 0) return;
 
       let checked = 0, alive = 0;
-      // 每批45个URL并发检查（Workers Free限制50 subreq/次）
-      const BATCH = 45;
+      // 批次大小与 health.js 的 HEALTH_BATCH_SIZE 一致（=20）。
+      // 不能再用 45：checkUrlHealth 加了 HEAD→GET fallback 后，
+      // 每个失败 URL 最坏消耗 2 个 fetch，45 个 URL 里只要 5 个 HEAD 失败
+      // 就是 45+5+D1 > 50 subreq，整个 cron 直接 1101 挂掉，
+      // 结果是 verified_at 一次都写不进去 —— 鲜度永远显示"未验证"。
+      const BATCH = HEALTH_BATCH_SIZE;
       for (let i = 0; i < sites.length; i += BATCH) {
         const batch = sites.slice(i, i + BATCH);
+        // fallback 预算：先给每个 URL 留 1 个 HEAD，剩余额度才允许 GET 复核
+        const fallbackQuota = Math.max(0, 44 - batch.length);
+        const deadline = Date.now() + 25000;
         const results = await Promise.all(
-          batch.map(async (site) => {
-            const r = await checkUrlHealth(site.url);
+          batch.map(async (site, idx) => {
+            const r = await checkUrlHealth(site.url, undefined, {
+              allowFallback: idx < fallbackQuota,
+              deadline,
+            });
             return { ...site, ...r };
           })
         );
-        // 对成功的检查写入验证时间
-        const stmts = results
-          .filter((r) => r.ok)
-          .map((r) =>
-            db.prepare("UPDATE sites SET verified_at = datetime('now'), verified_by = 'healthcheck' WHERE id = ?").bind(r.id)
-          );
+
+        const stmts = results.map((r) =>
+          r.ok
+            ? // 成功：更新验证时间并把失败计数清零
+              db
+                .prepare(
+                  "UPDATE sites SET verified_at = datetime('now'), verified_by = 'healthcheck', health_fail_count = 0 WHERE id = ?"
+                )
+                .bind(r.id)
+            : // 失败：只累计计数，不动 enabled、不写 dead_urls。
+              // 连续失败到多少次算"确认失效"由管理员看着计数决定。
+              db
+                .prepare(
+                  "UPDATE sites SET health_fail_count = health_fail_count + 1 WHERE id = ?"
+                )
+                .bind(r.id)
+        );
         if (stmts.length > 0) {
           await dbBatch(db, stmts);
         }

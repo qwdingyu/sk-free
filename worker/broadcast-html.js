@@ -1724,13 +1724,42 @@ function debounce(fn, ms) {
 }
 
 /**
+ * 解析 D1 的时间字符串为毫秒时间戳
+ *
+ * D1 里所有时间都是 SQLite 的 datetime('now') 产物，格式为
+ * "YYYY-MM-DD HH:MM:SS"，**内容是 UTC 但字符串里没有时区标记**。
+ * 直接 new Date("2026-08-25 15:24:54") 会被当成本地时间：
+ * 在 UTC+8 下实测偏差 8 小时 —— 刚验证过的站点显示"8小时前"，
+ * 本该保持 24 小时的绿色鲜度只剩 16 小时。
+ * 而且这个格式不是 ISO 8601，某些浏览器直接返回 Invalid Date → NaN。
+ *
+ * 所以必须补上 T 和 Z 再交给 Date 解析。
+ *
+ * @param {string} s - D1 时间字符串，或已带时区的 ISO 字符串
+ * @returns {number} 毫秒时间戳；无法解析时返回 NaN
+ */
+function parseUtc(s) {
+  if (!s) return NaN;
+  if (typeof s === "number") return s;
+  const str = String(s).trim();
+  // 已经带时区信息（Z 或 ±HH:MM）就直接解析
+  if (/[Zz]$/.test(str) || /[+-]\\d{2}:?\\d{2}$/.test(str)) return Date.parse(str);
+  // "YYYY-MM-DD HH:MM:SS" → "YYYY-MM-DDTHH:MM:SSZ"
+  const m = str.match(/^(\\d{4}-\\d{2}-\\d{2})[ T](\\d{2}:\\d{2}(?::\\d{2})?)/);
+  if (m) return Date.parse(\`\${m[1]}T\${m[2]}Z\`);
+  return Date.parse(str);
+}
+
+/**
  * 相对时间格式化（如 "2小时前"、"3天前"）
- * @param {string} isoStr - ISO 8601 时间字符串
+ * @param {string} isoStr - D1 时间字符串或 ISO 8601 字符串
  * @returns {string} 相对时间文本
  */
 function relativeTime(isoStr) {
   if (!isoStr) return "";
-  const diff = Date.now() - new Date(isoStr).getTime();
+  const ts = parseUtc(isoStr);
+  if (Number.isNaN(ts)) return "";
+  const diff = Date.now() - ts;
   if (diff < 0) return "刚刚";
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "刚刚";
@@ -1745,12 +1774,15 @@ function relativeTime(isoStr) {
 
 /**
  * 计算鲜度等级（绿/黄/灰/未验证）
- * @param {string} verifiedAt - ISO 时间字符串
+ * @param {string} verifiedAt - D1 时间字符串
  * @returns {{ color: string, label: string, cls: string }}
  */
 function freshnessLevel(verifiedAt) {
   if (!verifiedAt) return { color: "gray", label: "未验证", cls: "fresh-unknown" };
-  const diff = Date.now() - new Date(verifiedAt).getTime();
+  const ts = parseUtc(verifiedAt);
+  // 时间字段存在但解析不出来 → 说成"未验证"，不假装有鲜度
+  if (Number.isNaN(ts)) return { color: "gray", label: "未验证", cls: "fresh-unknown" };
+  const diff = Date.now() - ts;
   if (diff <= FRESH_24H)  return { color: "green", label: relativeTime(verifiedAt), cls: "fresh-green" };
   if (diff <= FRESH_7D)   return { color: "yellow", label: relativeTime(verifiedAt), cls: "fresh-yellow" };
   return { color: "stale", label: relativeTime(verifiedAt), cls: "fresh-stale" };
@@ -1762,18 +1794,18 @@ function freshnessLevel(verifiedAt) {
  * @returns {string} 如 "25 刀/天"、"100 积分 ≈60次"、"额度未知"
  */
 function quotaText(site) {
-  if (site.quota_tier === "none" || (!site.quota_min && !site.quota_max)) {
-    return site.quota_raw || "额度未知";
+  if (site.quotaTier === "none" || (!site.quotaMin && !site.quotaMax)) {
+    return site.quotaRaw || "额度未知";
   }
-  const unit = QUOTA_UNIT_LABEL[site.quota_unit] || site.quota_unit || "";
-  const period = site.quota_period === "daily" ? "/天" : site.quota_period === "once" ? "（一次性）" : "";
+  const unit = QUOTA_UNIT_LABEL[site.quotaUnit] || site.quotaUnit || "";
+  const period = site.quotaPeriod === "daily" ? "/天" : site.quotaPeriod === "once" ? "（一次性）" : "";
   let text = "";
-  if (site.quota_min === site.quota_max || !site.quota_max) {
-    text = \`\${site.quota_min} \${unit}\`;
+  if (site.quotaMin === site.quotaMax || !site.quotaMax) {
+    text = \`\${site.quotaMin} \${unit}\`;
   } else {
-    text = \`\${site.quota_min}-\${site.quota_max} \${unit}\`;
+    text = \`\${site.quotaMin}-\${site.quotaMax} \${unit}\`;
   }
-  if (site.quota_calls_est) text += \` ≈\${site.quota_calls_est}次\`;
+  if (site.quotaCallsEst) text += \` ≈\${site.quotaCallsEst}次\`;
   return text + period;
 }
 
@@ -2058,11 +2090,11 @@ function initTheme() {
 // ── 快捷视图定义 ──────────────────────────────────────────────────────────────
 const PRESETS = [
   { key: "",       label: "全部",         icon: "📋" },
-  { key: "daily",  label: "今天能签到",   icon: "📅", match: (s) => s.quota_period === "daily" && s.quota_min > 0 },
-  { key: "high",   label: "高额度",       icon: "⭐", match: (s) => s.quota_tier === "high" },
+  { key: "daily",  label: "今天能签到",   icon: "📅", match: (s) => s.quotaPeriod === "daily" && s.quotaMin > 0 },
+  { key: "high",   label: "高额度",       icon: "⭐", match: (s) => s.quotaTier === "high" },
   { key: "image",  label: "免费生图",     icon: "🎨", match: (s) => (s.tags || []).includes("生图") },
-  { key: "proxy",  label: "无需魔法",     icon: "🔓", match: (s) => s.needs_proxy === 0 },
-  { key: "once",   label: "一次性限免",   icon: "🎁", match: (s) => s.quota_period === "once" },
+  { key: "proxy",  label: "无需魔法",     icon: "🔓", match: (s) => s.needsProxy === 0 },
+  { key: "once",   label: "一次性限免",   icon: "🎁", match: (s) => s.quotaPeriod === "once" },
   { key: "noauth", label: "无门槛",       icon: "🚪", match: (s) => !s.register || s.register.trim() === "" }
 ];
 
@@ -2089,14 +2121,14 @@ function matchesFilters(site) {
     const q = state.query.toLowerCase();
     const haystack = [
       site.name, site.url, site.checkin, site.summary, site.models,
-      site.register, site.rate, site.quota_raw, ...(site.tags || []), ...(site.notes || [])
+      site.register, site.rate, site.quotaRaw, ...(site.tags || []), ...(site.notes || [])
     ].join(" ").toLowerCase();
     if (!haystack.includes(q)) return false;
   }
 
   // 4. 额度档位（组内 OR）
   if (state.filterTier.length) {
-    if (!state.filterTier.includes(site.quota_tier || "none")) return false;
+    if (!state.filterTier.includes(site.quotaTier || "none")) return false;
   }
 
   // 5. 能力标签（组内 OR）
@@ -2119,15 +2151,31 @@ function matchesFilters(site) {
   // 8. 隐藏 7 天未验证
   if (state.hideStale) {
     if (!site.verifiedAt) return false;
-    if (Date.now() - new Date(site.verifiedAt).getTime() > FRESH_7D) return false;
+    const ts = parseUtc(site.verifiedAt);
+    // 解析不出来 = 没有可信的验证时间，按"陈旧"处理而不是放过
+    if (Number.isNaN(ts) || Date.now() - ts > FRESH_7D) return false;
   }
 
   return true;
 }
 
 /**
+ * 站点的验证时间戳；缺失或无法解析一律算 0（排到最后）
+ * 单独抽出来是为了不让 NaN 流进比较器 —— NaN 参与比较会让
+ * sort 的结果依赖于原始顺序，表现为"刷新一次顺序就变了"。
+ * @param {Object} site
+ * @returns {number}
+ */
+function verifiedTs(site) {
+  if (!site.verifiedAt) return 0;
+  const ts = parseUtc(site.verifiedAt);
+  return Number.isNaN(ts) ? 0 : ts;
+}
+
+/**
  * 获取筛选+排序后的站点列表
- * 默认排序：鲜度 desc → quota_tier asc → name asc
+ * 默认排序：鲜度 desc → 额度档位 asc → 名称 asc
+ * 已失效的一律沉到末尾（展示但不占决策位）
  */
 function filteredSites() {
   let list = state.sites.filter(matchesFilters);
@@ -2136,19 +2184,22 @@ function filteredSites() {
     case "fresh":
       list.sort((a, b) => {
         // 有验证时间的排前面
-        const aT = a.verifiedAt ? new Date(a.verifiedAt).getTime() : 0;
-        const bT = b.verifiedAt ? new Date(b.verifiedAt).getTime() : 0;
+        const aT = verifiedTs(a);
+        const bT = verifiedTs(b);
         if (aT !== bT) return bT - aT; // 新的在前
-        // 同鲜度按额度
-        return (TIER_ORDER[a.quota_tier] ?? 3) - (TIER_ORDER[b.quota_tier] ?? 3);
+        // 同鲜度按额度档位
+        return (TIER_ORDER[a.quotaTier] ?? 3) - (TIER_ORDER[b.quotaTier] ?? 3);
       });
       break;
     case "quota":
       list.sort((a, b) => {
-        const aT = TIER_ORDER[a.quota_tier] ?? 3;
-        const bT = TIER_ORDER[b.quota_tier] ?? 3;
+        const aT = TIER_ORDER[a.quotaTier] ?? 3;
+        const bT = TIER_ORDER[b.quotaTier] ?? 3;
         if (aT !== bT) return aT - bT; // 高额度在前
-        return (b.quota_min || 0) - (a.quota_min || 0);
+        // 同档位内不比 quotaMin：跨单位没有汇率，
+        // 100 积分 和 25 刀 的数字大小没有可比性，比了就是误导。
+        // 改用与单位无关的鲜度做次级排序。
+        return verifiedTs(b) - verifiedTs(a);
       });
       break;
     case "community":
@@ -2159,12 +2210,12 @@ function filteredSites() {
       break;
     default:
       // 默认鲜度
-      list.sort((a, b) => {
-        const aT = a.verifiedAt ? new Date(a.verifiedAt).getTime() : 0;
-        const bT = b.verifiedAt ? new Date(b.verifiedAt).getTime() : 0;
-        return bT - aT;
-      });
+      list.sort((a, b) => verifiedTs(b) - verifiedTs(a));
   }
+
+  // 已失效的沉底。放在最后单独做一次：Array.prototype.sort 是稳定排序，
+  // 所以上面那一轮的相对顺序在各组内不会被打乱。
+  list.sort((a, b) => (a.dead ? 1 : 0) - (b.dead ? 1 : 0));
 
   return list;
 }
@@ -2179,10 +2230,10 @@ function computeStats() {
     total: all.length,
     enabled: enabled.length,
     dead: all.filter((s) => s.dead).length,
-    daily: enabled.filter((s) => s.quota_period === "daily" && s.quota_min > 0).length,
-    highTier: enabled.filter((s) => s.quota_tier === "high").length,
+    daily: enabled.filter((s) => s.quotaPeriod === "daily" && s.quotaMin > 0).length,
+    highTier: enabled.filter((s) => s.quotaTier === "high").length,
     imageGen: enabled.filter((s) => (s.tags || []).includes("生图")).length,
-    noProxy: enabled.filter((s) => s.needs_proxy === 0).length
+    noProxy: enabled.filter((s) => s.needsProxy === 0).length
   };
 }
 
@@ -2275,7 +2326,7 @@ function makeTableRow(site) {
 
   // ── 站点列：名称 + kind 徽章 + 🔒 需魔法 ──────────────────────────────────
   const kindInfo = KIND_BADGE[site.kind] || KIND_BADGE.api_site;
-  const proxyIcon = site.needs_proxy ? ' <span class="proxy-icon" title="需要代理/魔法">🔒</span>' : "";
+  const proxyIcon = site.needsProxy ? ' <span class="proxy-icon" title="需要代理/魔法">🔒</span>' : "";
   const deadCls = site.dead ? " cell-dead" : "";
   const nameHtml = \`<div class="cell-name\${deadCls}">
     <span class="site-name">\${esc(site.name)}</span>
@@ -2285,15 +2336,15 @@ function makeTableRow(site) {
 
   // ── 额度列 ──────────────────────────────────────────────────────────────────
   const tierLabel = { high: "高额度", mid: "中额度", low: "低额度", none: "" };
-  const tierCls = site.quota_tier === "high" ? " tier-high"
-    : site.quota_tier === "mid" ? " tier-mid"
-    : site.quota_tier === "low" ? " tier-low" : "";
-  const callsEst = site.quota_calls_est ? \`<span class="calls-est">≈\${site.quota_calls_est}次调用</span>\` : "";
+  const tierCls = site.quotaTier === "high" ? " tier-high"
+    : site.quotaTier === "mid" ? " tier-mid"
+    : site.quotaTier === "low" ? " tier-low" : "";
+  const callsEst = site.quotaCallsEst ? \`<span class="calls-est">≈\${site.quotaCallsEst}次调用</span>\` : "";
   const quotaHtml = \`<div class="cell-quota\${tierCls}">
     <span class="quota-main">\${esc(quotaText(site))}</span>
-    \${tierLabel[site.quota_tier] ? \`<span class="tier-badge">\${tierLabel[site.quota_tier]}</span>\` : ""}
+    \${tierLabel[site.quotaTier] ? \`<span class="tier-badge">\${tierLabel[site.quotaTier]}</span>\` : ""}
     \${callsEst}
-    \${site.quota_raw ? \`<span class="quota-raw" title="\${esc(site.quota_raw)}">ℹ️</span>\` : ""}
+    \${site.quotaRaw ? \`<span class="quota-raw" title="\${esc(site.quotaRaw)}">ℹ️</span>\` : ""}
   </div>\`;
 
   // ── 能力列（只显示真实存在的标签）───────────────────────────────────────────
@@ -2389,7 +2440,7 @@ function makeCard(site) {
   // ── 鲜度标记 ────────────────────────────────────────────────────────────────
   const fresh = freshnessLevel(site.verifiedAt);
   const kindInfo = KIND_BADGE[site.kind] || KIND_BADGE.api_site;
-  const proxyIcon = site.needs_proxy ? ' <span class="proxy-icon" title="需要代理">🔒</span>' : "";
+  const proxyIcon = site.needsProxy ? ' <span class="proxy-icon" title="需要代理">🔒</span>' : "";
 
   // ── 卡片头部：名称 + 类型 + 鲜度 ──────────────────────────────────────────
   const header = document.createElement("div");
@@ -2412,7 +2463,7 @@ function makeCard(site) {
   const tierLabel = { high: "⭐高额度", mid: "中额度", low: "低额度", none: "" };
   quota.innerHTML = \`
     <span class="quota-main">\${esc(quotaText(site))}</span>
-    \${tierLabel[site.quota_tier] ? \`<span class="tier-badge">\${esc(tierLabel[site.quota_tier])}</span>\` : ""}
+    \${tierLabel[site.quotaTier] ? \`<span class="tier-badge">\${esc(tierLabel[site.quotaTier])}</span>\` : ""}
   \`;
 
   // ── Summary（2 行截断）─────────────────────────────────────────────────────
@@ -2431,7 +2482,7 @@ function makeCard(site) {
     tag.textContent = c;
     markers.appendChild(tag);
   });
-  if (site.needs_proxy === 0) {
+  if (site.needsProxy === 0) {
     const proxy = document.createElement("span");
     proxy.className = "marker-proxy";
     proxy.textContent = "🔓无需魔法";
@@ -2506,13 +2557,13 @@ function openDrawer(site) {
   // 基本信息
   const infoItems = [
     ["类型", (KIND_BADGE[site.kind] || KIND_BADGE.api_site).label],
-    ["额度原文", site.quota_raw || "—"],
+    ["额度原文", site.quotaRaw || "—"],
     ["模型", site.models || "—"],
     ["倍率", site.rate || "—"],
     ["注册要求", site.register || "—"],
-    ["创建时间", site.createdAt ? new Date(site.createdAt).toLocaleDateString("zh-CN") : "—"],
-    ["最后更新", site.updatedAt ? new Date(site.updatedAt).toLocaleDateString("zh-CN") : "—"],
-    ["最后验证", site.verifiedAt ? \`\${relativeTime(site.verifiedAt)} (\${site.verified_by || ""})\` : "未验证"]
+    ["创建时间", site.createdAt ? new Date(parseUtc(site.createdAt)).toLocaleDateString("zh-CN") : "—"],
+    ["最后更新", site.updatedAt ? new Date(parseUtc(site.updatedAt)).toLocaleDateString("zh-CN") : "—"],
+    ["最后验证", site.verifiedAt ? \`\${relativeTime(site.verifiedAt)} (\${site.verifiedBy || ""})\` : "未验证"]
   ];
 
   const dl = document.createElement("dl");

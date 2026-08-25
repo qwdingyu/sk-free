@@ -32,7 +32,7 @@ function makeCard(site) {
   // ── 鲜度标记 ────────────────────────────────────────────────────────────────
   const fresh = freshnessLevel(site.verifiedAt);
   const kindInfo = KIND_BADGE[site.kind] || KIND_BADGE.api_site;
-  const proxyIcon = site.needs_proxy ? ' <span class="proxy-icon" title="需要代理">🔒</span>' : "";
+  const proxyIcon = site.needsProxy ? ' <span class="proxy-icon" title="需要代理">🔒</span>' : "";
 
   // ── 卡片头部：名称 + 类型 + 鲜度 ──────────────────────────────────────────
   const header = document.createElement("div");
@@ -55,7 +55,7 @@ function makeCard(site) {
   const tierLabel = { high: "⭐高额度", mid: "中额度", low: "低额度", none: "" };
   quota.innerHTML = `
     <span class="quota-main">${esc(quotaText(site))}</span>
-    ${tierLabel[site.quota_tier] ? `<span class="tier-badge">${esc(tierLabel[site.quota_tier])}</span>` : ""}
+    ${tierLabel[site.quotaTier] ? `<span class="tier-badge">${esc(tierLabel[site.quotaTier])}</span>` : ""}
   `;
 
   // ── Summary（2 行截断）─────────────────────────────────────────────────────
@@ -74,7 +74,7 @@ function makeCard(site) {
     tag.textContent = c;
     markers.appendChild(tag);
   });
-  if (site.needs_proxy === 0) {
+  if (site.needsProxy === 0) {
     const proxy = document.createElement("span");
     proxy.className = "marker-proxy";
     proxy.textContent = "🔓无需魔法";
@@ -149,13 +149,13 @@ function openDrawer(site) {
   // 基本信息
   const infoItems = [
     ["类型", (KIND_BADGE[site.kind] || KIND_BADGE.api_site).label],
-    ["额度原文", site.quota_raw || "—"],
+    ["额度原文", site.quotaRaw || "—"],
     ["模型", site.models || "—"],
     ["倍率", site.rate || "—"],
     ["注册要求", site.register || "—"],
-    ["创建时间", site.createdAt ? new Date(site.createdAt).toLocaleDateString("zh-CN") : "—"],
-    ["最后更新", site.updatedAt ? new Date(site.updatedAt).toLocaleDateString("zh-CN") : "—"],
-    ["最后验证", site.verifiedAt ? `${relativeTime(site.verifiedAt)} (${site.verified_by || ""})` : "未验证"]
+    ["创建时间", site.createdAt ? new Date(parseUtc(site.createdAt)).toLocaleDateString("zh-CN") : "—"],
+    ["最后更新", site.updatedAt ? new Date(parseUtc(site.updatedAt)).toLocaleDateString("zh-CN") : "—"],
+    ["最后验证", site.verifiedAt ? `${relativeTime(site.verifiedAt)} (${site.verifiedBy || ""})` : "未验证"]
   ];
 
   const dl = document.createElement("dl");

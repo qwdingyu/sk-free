@@ -16,6 +16,13 @@ const FEEDBACK_RATE_WINDOW_MS = 86400000;
 const VALID_TYPES = ["error", "correction", "positive", "still_works", "reported_dead"];
 const TYPE_LABELS = { error: "报错", correction: "纠正", positive: "好评", still_works: "还能用", reported_dead: "已失效" };
 
+// 一键反馈类型：类型本身就是完整信号，不需要用户写字。
+// 表格视图里的 👍/👎 按钮发的就是这两种，content 为 ""。
+// 把"至少 2 个字符"套在它们身上会让按钮 100% 报错 ——
+// 实测 POST /api/feedback {type:"still_works",content:""} 返回
+// {"ok":false,"error":"反馈内容至少需要 2 个字符"}。
+const NO_CONTENT_TYPES = ["still_works", "reported_dead"];
+
 /**
  * 用户提交反馈
  * @param {object} request — Fetch Request
@@ -32,12 +39,15 @@ export async function handleSubmitFeedback(request, db) {
     return jsonResponse({ ok: false, error: "站点名称为必填项" }, 400, request);
   }
   if (!type || !VALID_TYPES.includes(type)) {
-    return jsonResponse({ ok: false, error: "反馈类型无效，支持: error, correction, positive" }, 400, request);
+    return jsonResponse({ ok: false, error: `反馈类型无效，支持: ${VALID_TYPES.join(", ")}` }, 400, request);
   }
-  if (!content || typeof content !== "string" || content.trim().length < 2) {
+
+  const oneClick = NO_CONTENT_TYPES.includes(type);
+  const text = typeof content === "string" ? content : "";
+  if (!oneClick && text.trim().length < 2) {
     return jsonResponse({ ok: false, error: "反馈内容至少需要 2 个字符" }, 400, request);
   }
-  if (content.length > 500) {
+  if (text.length > 500) {
     return jsonResponse({ ok: false, error: "反馈内容不能超过 500 字符" }, 400, request);
   }
 
@@ -68,7 +78,7 @@ export async function handleSubmitFeedback(request, db) {
     db,
     `INSERT INTO feedbacks (site_name, type, content, ip, status, created_at)
      VALUES (?, ?, ?, ?, 'new', datetime('now'))`,
-    [siteName, type, content.trim(), ip]
+    [siteName, type, text.trim(), ip]
   );
 
   return jsonResponse({ ok: true, message: "感谢您的反馈！" }, 201, request);

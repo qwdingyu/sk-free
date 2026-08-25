@@ -85,7 +85,7 @@ function makeTableRow(site) {
 
   // ── 站点列：名称 + kind 徽章 + 🔒 需魔法 ──────────────────────────────────
   const kindInfo = KIND_BADGE[site.kind] || KIND_BADGE.api_site;
-  const proxyIcon = site.needs_proxy ? ' <span class="proxy-icon" title="需要代理/魔法">🔒</span>' : "";
+  const proxyIcon = site.needsProxy ? ' <span class="proxy-icon" title="需要代理/魔法">🔒</span>' : "";
   const deadCls = site.dead ? " cell-dead" : "";
   const nameHtml = `<div class="cell-name${deadCls}">
     <span class="site-name">${esc(site.name)}</span>
@@ -95,15 +95,15 @@ function makeTableRow(site) {
 
   // ── 额度列 ──────────────────────────────────────────────────────────────────
   const tierLabel = { high: "高额度", mid: "中额度", low: "低额度", none: "" };
-  const tierCls = site.quota_tier === "high" ? " tier-high"
-    : site.quota_tier === "mid" ? " tier-mid"
-    : site.quota_tier === "low" ? " tier-low" : "";
-  const callsEst = site.quota_calls_est ? `<span class="calls-est">≈${site.quota_calls_est}次调用</span>` : "";
+  const tierCls = site.quotaTier === "high" ? " tier-high"
+    : site.quotaTier === "mid" ? " tier-mid"
+    : site.quotaTier === "low" ? " tier-low" : "";
+  const callsEst = site.quotaCallsEst ? `<span class="calls-est">≈${site.quotaCallsEst}次调用</span>` : "";
   const quotaHtml = `<div class="cell-quota${tierCls}">
     <span class="quota-main">${esc(quotaText(site))}</span>
-    ${tierLabel[site.quota_tier] ? `<span class="tier-badge">${tierLabel[site.quota_tier]}</span>` : ""}
+    ${tierLabel[site.quotaTier] ? `<span class="tier-badge">${tierLabel[site.quotaTier]}</span>` : ""}
     ${callsEst}
-    ${site.quota_raw ? `<span class="quota-raw" title="${esc(site.quota_raw)}">ℹ️</span>` : ""}
+    ${site.quotaRaw ? `<span class="quota-raw" title="${esc(site.quotaRaw)}">ℹ️</span>` : ""}
   </div>`;
 
   // ── 能力列（只显示真实存在的标签）───────────────────────────────────────────
