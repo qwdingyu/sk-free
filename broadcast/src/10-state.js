@@ -17,6 +17,7 @@ const state = {
   filterThreshold: [], // ["github","telegram","email","none"] 多选
   hideStale: false,   // 隐藏 7 天未验证的站点
   showDead: false,    // 表格视图中展开死链分组
+  filterPanelOpen: false, // "更多筛选"面板是否展开（必须放 state：筛选栏会整条重建）
   // 抽屉状态
   drawerSite: null    // 当前展开的站点对象，null = 关闭
 };
@@ -27,7 +28,6 @@ const state = {
 const els = {};
 
 function initDom() {
-  els.searchInput = document.getElementById("searchInput");
   els.summaryStrip = document.getElementById("summaryStrip");
   els.filterRow = document.getElementById("filterRow");
   els.noticeBand = document.getElementById("noticeBand");

@@ -94,7 +94,7 @@ function renderFilters() {
   const debouncedSearch = debounce((val) => {
     state.query = val;
     syncToUrl(false);
-    renderResults();
+    applyFilterChange();
   }, SEARCH_DEBOUNCE_MS);
   searchInput.addEventListener("input", (e) => debouncedSearch(e.target.value.trim()));
   searchWrap.appendChild(searchInput);
@@ -104,16 +104,21 @@ function renderFilters() {
   const toggleBtn = document.createElement("button");
   toggleBtn.type = "button";
   toggleBtn.className = "filter-toggle-btn";
-  toggleBtn.textContent = "更多筛选 ▾";
-  let filterOpen = false;
+  // 展开状态存在 state 里而不是局部变量：renderFilters() 会 innerHTML=""
+  // 重建整条筛选栏，局部变量每次都被重置成"收起"。
+  toggleBtn.textContent = state.filterPanelOpen ? "收起筛选 ▴" : "更多筛选 ▾";
+  toggleBtn.setAttribute("aria-expanded", String(state.filterPanelOpen));
+  toggleBtn.setAttribute("aria-controls", "filterPanel");
   const filterPanel = document.createElement("div");
   filterPanel.className = "filter-panel";
-  filterPanel.hidden = true;
+  filterPanel.id = "filterPanel";
+  filterPanel.hidden = !state.filterPanelOpen;
 
   toggleBtn.addEventListener("click", () => {
-    filterOpen = !filterOpen;
-    filterPanel.hidden = !filterOpen;
-    toggleBtn.textContent = filterOpen ? "收起筛选 ▴" : "更多筛选 ▾";
+    state.filterPanelOpen = !state.filterPanelOpen;
+    filterPanel.hidden = !state.filterPanelOpen;
+    toggleBtn.textContent = state.filterPanelOpen ? "收起筛选 ▴" : "更多筛选 ▾";
+    toggleBtn.setAttribute("aria-expanded", String(state.filterPanelOpen));
   });
 
   // 额度档位
@@ -121,7 +126,7 @@ function renderFilters() {
     { key: "high", label: "高" },
     { key: "mid", label: "中" },
     { key: "low", label: "低" }
-  ], state.filterTier, (vals) => { state.filterTier = vals; syncToUrl(false); renderResults(); }));
+  ], state.filterTier, (vals) => { state.filterTier = vals; syncToUrl(false); applyFilterChange(); }));
 
   // 类型
   filterPanel.appendChild(makeFilterGroup("类型", [
@@ -129,7 +134,7 @@ function renderFilters() {
     { key: "bot", label: "机器人" },
     { key: "account_pool", label: "号池" },
     { key: "tool", label: "工具" }
-  ], state.filterKind, (vals) => { state.filterKind = vals; syncToUrl(false); renderResults(); }));
+  ], state.filterKind, (vals) => { state.filterKind = vals; syncToUrl(false); applyFilterChange(); }));
 
   // 门槛
   filterPanel.appendChild(makeFilterGroup("门槛", [
@@ -137,7 +142,7 @@ function renderFilters() {
     { key: "Telegram", label: "Telegram" },
     { key: "邮箱", label: "邮箱" },
     { key: "无门槛", label: "无门槛" }
-  ], state.filterThreshold, (vals) => { state.filterThreshold = vals; syncToUrl(false); renderResults(); }));
+  ], state.filterThreshold, (vals) => { state.filterThreshold = vals; syncToUrl(false); applyFilterChange(); }));
 
   // 隐藏过期
   const staleRow = document.createElement("div");
@@ -152,7 +157,7 @@ function renderFilters() {
   staleCheck.addEventListener("change", (e) => {
     state.hideStale = e.target.checked;
     syncToUrl(false);
-    renderResults();
+    applyFilterChange();
   });
   staleRow.append(staleCheck, staleLabel);
   filterPanel.appendChild(staleRow);
@@ -166,7 +171,8 @@ function renderFilters() {
 
   const resultCount = document.createElement("span");
   resultCount.className = "result-count";
-  const matching = filteredSites().length;
+  resultCount.id = "resultCount";
+  const matching = aliveMatchCount();
   resultCount.textContent = `${state.sites.length} 条中匹配 ${matching} 条`;
   resultBar.appendChild(resultCount);
 
@@ -189,7 +195,7 @@ function renderFilters() {
   sortSelect.addEventListener("change", (e) => {
     state.sortBy = e.target.value;
     syncToUrl(false);
-    renderResults();
+    applyFilterChange();
   });
   sortWrap.append(sortLabel, sortSelect);
   resultBar.appendChild(sortWrap);
@@ -210,17 +216,42 @@ function renderFilters() {
   viewWrap.append(tableBtn, cardBtn);
   resultBar.appendChild(viewWrap);
 
-  // 清除筛选
-  if (hasActiveFilters()) {
-    const clearBtn = document.createElement("button");
-    clearBtn.type = "button";
-    clearBtn.className = "clear-filters-btn";
-    clearBtn.textContent = "清除筛选";
-    clearBtn.addEventListener("click", clearAllFilters);
-    resultBar.appendChild(clearBtn);
-  }
+  // 清除筛选（常驻元素，用 hidden 控制显隐，便于原地更新而不重建整条筛选栏）
+  const clearBtn = document.createElement("button");
+  clearBtn.type = "button";
+  clearBtn.id = "clearFiltersBtn";
+  clearBtn.className = "clear-filters-btn";
+  clearBtn.textContent = "清除筛选";
+  clearBtn.hidden = !hasActiveFilters();
+  clearBtn.addEventListener("click", clearAllFilters);
+  resultBar.appendChild(clearBtn);
 
   els.filterRow.append(presetBar, advancedBar, resultBar);
+}
+
+/**
+ * 原地更新"匹配 N 条"和"清除筛选"按钮
+ *
+ * 为什么需要它：筛选交互原本调 renderResults()，而结果计数是在
+ * renderFilters() 里算的 —— 于是搜索、排序、档位、门槛、隐藏过期
+ * 这些操作全都不会刷新计数，列表明明只剩 1 条，上面还写着"匹配 18 条"。
+ * 而如果改成调 renderFilters()，整条筛选栏会被重建：
+ * 搜索框失去焦点、"更多筛选"面板被关掉。
+ * 所以拆出这个只改文字和显隐的轻量函数。
+ */
+function updateResultBar() {
+  const countEl = document.getElementById("resultCount");
+  if (countEl) {
+    countEl.textContent = `${state.sites.length} 条中匹配 ${aliveMatchCount()} 条`;
+  }
+  const clearEl = document.getElementById("clearFiltersBtn");
+  if (clearEl) clearEl.hidden = !hasActiveFilters();
+}
+
+/** 筛选条件变化后的统一入口：更新计数 + 重渲列表，不重建筛选栏 */
+function applyFilterChange() {
+  updateResultBar();
+  renderResults();
 }
 
 /**
@@ -247,8 +278,14 @@ function makeFilterGroup(label, options, selected, onChange) {
       const idx = selected.indexOf(opt.key);
       if (idx >= 0) selected.splice(idx, 1);
       else selected.push(opt.key);
+      // 只更新这一个按钮自己的状态，不再调 renderFilters()。
+      // 原来那样会 innerHTML="" 重建整条筛选栏，而"更多筛选"面板的
+      // 展开状态是 renderFilters() 里的局部变量 —— 于是点一次筛选项
+      // 面板就自动收起，多选组实际没法多选。
+      const nowActive = selected.includes(opt.key);
+      btn.classList.toggle("is-active", nowActive);
+      btn.setAttribute("aria-pressed", String(nowActive));
       onChange([...selected]);
-      renderFilters();
     });
     group.appendChild(btn);
   });

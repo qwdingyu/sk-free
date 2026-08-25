@@ -2125,6 +2125,125 @@ h1 {
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
+/* ═══════ 详情抽屉（基础样式）═══════
+ *
+ * 这一段此前完全缺失：JS 里 createElement 出了 .drawer-overlay / .drawer /
+ * .drawer-close / .drawer-title，但 CSS 只写了 .drawer-notes / .drawer-vote /
+ * .drawer-feedback，以及一条藏在 @media(max-width:680px) 里的 .drawer。
+ * 结果是点「⋯」之后往 body 尾部追加一个没有任何定位的普通 div ——
+ * 内容出现在页脚下方、没有遮罩、没有动画，closeBtn.focus() 还会把页面
+ * 滚到最底部，看起来就像"点了没反应"。
+ *
+ * 必须写在下面的 @media 之前：媒体查询里那条 .drawer 与这里同特异性，
+ * 如果基础样式放在后面，源码顺序会让它盖掉移动端的全屏规则。
+ */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(15, 23, 42, 0);
+  backdrop-filter: blur(0px);
+  transition: background 0.28s ease, backdrop-filter 0.28s ease;
+}
+
+.drawer-overlay.open {
+  background: rgba(15, 23, 42, 0.44);
+  backdrop-filter: blur(3px);
+}
+
+.drawer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(440px, 92vw);
+  max-width: 92vw;
+  height: 100%;
+  padding: 22px 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  box-shadow: -12px 0 32px rgba(8, 20, 40, 0.18);
+  transform: translateX(100%);
+  transition: transform 0.28s ease;
+}
+
+.drawer-overlay.open .drawer {
+  transform: translateX(0);
+}
+
+.drawer-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  /* 44px 触摸目标，与投票按钮保持一致 */
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.drawer-close:hover {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.drawer-close:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+.drawer-title {
+  margin: 0 52px 14px 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+.drawer-body {
+  flex: 1;
+  min-height: 0;
+}
+
+/* 表格里"需要魔法"的小锁图标 */
+.proxy-icon {
+  font-size: 0.78rem;
+  opacity: 0.75;
+}
+
+/* 表格社区列的净票数 */
+.vote-score-inline {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.vote-score-inline.positive { color: var(--teal-ink, var(--teal)); }
+.vote-score-inline.negative { color: #b4232a; }
+
+/* 死链分组：整组降饱和，明确"看得见但不该优先考虑" */
+.dead-group {
+  filter: saturate(0.4);
+  opacity: 0.7;
+}
+
+.dead-group:hover,
+.dead-group:focus-within {
+  filter: none;
+  opacity: 1;
+}
+
 /* ═══════ 移动端响应式（表格 + 筛选 + 卡片）═══════ */
 
 @media (max-width: 680px) {

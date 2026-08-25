@@ -121,7 +121,11 @@ function openDrawer(site) {
   // 记录触发元素，关闭时恢复焦点（a11y）
   const triggerEl = document.activeElement;
   const existing = document.querySelector(".drawer-overlay");
-  if (existing) existing.remove();
+  if (existing) {
+    // 直接 remove() 不会注销挂在 document 上的 keydown 监听器，必须先 cleanup
+    if (typeof existing.__cleanup === "function") existing.__cleanup();
+    existing.remove();
+  }
 
   const overlay = document.createElement("div");
   overlay.className = "drawer-overlay";
@@ -221,17 +225,23 @@ function openDrawer(site) {
   });
 
   // Focus trap + ESC 关闭（a11y）
+  //
+  // 注意监听器的注销时机：onKey 挂在 document 上，如果只在 Escape 分支里注销，
+  // 那么从 ✕ 按钮或点遮罩关闭时它会永久留在 document 上。开关几次抽屉之后，
+  // 按一下 Escape 会把这些陈旧监听器全部触发，每个都执行 triggerEl.focus()
+  // —— 焦点会跳到好几个抽屉之前的那一行。所以统一收敛到 cleanup()，
+  // 并挂在 overlay 上让 closeDrawer 无论走哪条路径都能调到。
   const onKey = (e) => {
     if (e.key === "Escape") {
       closeDrawer(triggerEl);
-      document.removeEventListener("keydown", onKey);
-      overlay.removeEventListener("focusin", onFocusIn);
       return;
     }
     if (e.key === "Tab") {
-      const focusable = drawer.querySelectorAll(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      );
+      const focusable = Array.from(
+        drawer.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => !el.disabled && el.offsetParent !== null);
       if (!focusable.length) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
@@ -245,18 +255,22 @@ function openDrawer(site) {
     }
   };
   const onFocusIn = (e) => {
-    if (!drawer.contains(e.target)) {
-      e.stopPropagation();
-      closeBtn.focus();
-    }
+    if (!drawer.contains(e.target)) closeBtn.focus();
   };
   document.addEventListener("keydown", onKey);
   overlay.addEventListener("focusin", onFocusIn);
+  overlay.__cleanup = () => {
+    document.removeEventListener("keydown", onKey);
+    overlay.removeEventListener("focusin", onFocusIn);
+  };
 }
 
 function closeDrawer(triggerEl) {
   const overlay = document.querySelector(".drawer-overlay");
   if (overlay) {
+    // 先注销监听器，再做退场动画：动画期间 overlay 还在 DOM 里，
+    // 不注销的话这 300ms 内的 Tab/Escape 仍会被已经"关掉"的抽屉截获。
+    if (typeof overlay.__cleanup === "function") overlay.__cleanup();
     overlay.classList.remove("open");
     setTimeout(() => overlay.remove(), 300);
   }

@@ -10,3 +10,6 @@ wrangler.toml.bak
 .dev.vars*
 !.dev.vars.example
 !.env.example
+
+# 前端测试用（scripts/test-frontend.mjs 需要 jsdom）
+node_modules/

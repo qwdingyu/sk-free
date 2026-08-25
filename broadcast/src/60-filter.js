@@ -15,11 +15,17 @@ const PRESETS = [
 
 /**
  * 单条站点是否匹配当前所有筛选条件（组间 AND，组内 OR）
+ *
+ * 注意：这里**不过滤死链**。
+ * 死链的呈现方式是"表格底部一个默认折叠的分组"，由 renderTable() 负责，
+ * 折叠状态是 state.showDead。曾经这里有一句
+ *   if (site.dead && !state.showDead) return false;
+ * 结果形成死锁：死链被筛掉 → dead 数组恒为空 → 展开按钮永不渲染 →
+ * state.showDead 永远没有入口翻成 true → 死链分组、.row-dead 样式、
+ * 沉底排序全部变成不可达代码。用注入 dead=true 的数据实测过：
+ * 18 条里 3 条 dead，页面只剩 15 行，连"已失效 (3)"按钮都不存在。
  */
 function matchesFilters(site) {
-  // 0. 死链默认折叠（除非管理员展开）
-  if (site.dead && !state.showDead) return false;
-
   // 1. 快捷视图
   if (state.activePreset) {
     const preset = PRESETS.find((p) => p.key === state.activePreset);
@@ -133,6 +139,16 @@ function filteredSites() {
   list.sort((a, b) => (a.dead ? 1 : 0) - (b.dead ? 1 : 0));
 
   return list;
+}
+
+/**
+ * 当前筛选下"仍然可用"的条数
+ * 结果条上的"匹配 N 条"用这个，而不是 filteredSites().length：
+ * 死链虽然在列表里，但被折叠在底部分组，把它们算进"匹配"会虚高。
+ * @returns {number}
+ */
+function aliveMatchCount() {
+  return filteredSites().filter((s) => !s.dead).length;
 }
 
 /**

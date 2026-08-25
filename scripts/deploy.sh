@@ -32,18 +32,32 @@ echo "2️⃣  前后端字段契约检查..."
 node "$SCRIPT_DIR/check-api-contract.js"
 echo ""
 
-# ── 3. 从 broadcast/ 源文件构建产物（消灭手工双副本）──────────────────────────
-echo "3️⃣  构建 broadcast-html.js + 开发 bundle..."
+# ── 3. CSS 覆盖检查 ────────────────────────────────────────────────────────────
+# JS createElement 出的 class 如果没有对应 CSS 规则，元素会以无定位的
+# 普通块渲染（抽屉就这样飘到了页脚下方），JS 和 CSS 都不会报错。
+echo "3️⃣  CSS 覆盖检查..."
+node "$SCRIPT_DIR/check-css-coverage.js"
+echo ""
+
+# ── 4. 从 broadcast/ 源文件构建产物（消灭手工双副本）──────────────────────────
+echo "4️⃣  构建 broadcast-html.js + 开发 bundle..."
 node "$SCRIPT_DIR/build-html.js"
 echo ""
 
-# ── 4. 模板字面量转义安全检查（两个内联 HTML 的文件都要查）─────────────────────
-echo "4️⃣  模板字面量转义检查..."
+# ── 5. 前端行为回归测试（需要 jsdom，没装则自动跳过）──────────────────────────
+# 拦的是"页面照样渲染、功能静默失效"那一类：字段错配、面板自己关掉、
+# 死链分组不可达、监听器泄漏、时区偏差。
+echo "5️⃣  前端行为回归测试..."
+node "$SCRIPT_DIR/test-frontend.mjs"
+echo ""
+
+# ── 6. 模板字面量转义安全检查（两个内联 HTML 的文件都要查）─────────────────────
+echo "6️⃣  模板字面量转义检查..."
 node "$SCRIPT_DIR/check-template-escapes.js" "$PROJECT_DIR/worker/index.js"
 node "$SCRIPT_DIR/check-template-escapes.js" "$PROJECT_DIR/worker/broadcast-html.js"
 echo ""
 
-# ── 5. 部署 ───────────────────────────────────────────────────────────────────
+# ── 7. 部署 ───────────────────────────────────────────────────────────────────
 echo "📦 开始部署..."
 cd "$PROJECT_DIR/worker"
 npx wrangler deploy
