@@ -144,6 +144,13 @@ export async function handleAdminCreateSite(db, request, kv) {
   const tags = Array.isArray(body.tags) ? body.tags : [];
   const notes = Array.isArray(body.notes) ? body.notes : [];
 
+  // 联动：URL 已在死链接黑名单中 → 新建站点默认禁用（保持用户端/管理端状态一致）
+  let enabled = body.enabled !== false ? 1 : 0;
+  if (cleanUrl) {
+    const deadRow = await dbGet(db, "SELECT url FROM dead_urls WHERE url = ?", [cleanUrl]);
+    if (deadRow) enabled = 0;
+  }
+
   await dbRun(
     db,
     `INSERT INTO sites (name, url, original_url, ref, tags, summary, enabled, checkin, models, rate, register, notes, sort_order, created_at, updated_at)
@@ -155,7 +162,7 @@ export async function handleAdminCreateSite(db, request, kv) {
       ref || body.ref || "",
       JSON.stringify(tags),
       body.summary || "",
-      body.enabled !== false ? 1 : 0,
+      enabled,
       body.checkin || "",
       body.models || "",
       body.rate || "",
@@ -260,6 +267,12 @@ export async function handleAdminUpdateSite(db, request, siteName) {
     );
   }
 
+  // 联动：站点从禁用恢复为启用时，从死链接表移除对应 URL
+  // （管理员明确恢复上线 = 认为 URL 已可达，与死链接黑名单矛盾，必须清除）
+  if (updated.enabled && existing.enabled === 0 && updated.url) {
+    await dbRun(db, "DELETE FROM dead_urls WHERE url = ?", [updated.url]);
+  }
+
   return jsonResponse({ ok: true, site: updated }, 200, request);
 }
 
@@ -314,6 +327,15 @@ export async function handleAdminBatch(db, request) {
       [enableVal, ...names]
     );
     affected = result.meta?.changes || 0;
+    // 联动：批量启用站点时，从死链接表移除对应 URL（启用 = 认为可达）
+    if (action === "enable") {
+      const rows = await dbAll(db, `SELECT url FROM sites WHERE name IN (${placeholders}) AND url != ''`, names);
+      const urls = rows.map((r) => r.url);
+      if (urls.length > 0) {
+        const urlPlaceholders = urls.map(() => "?").join(",");
+        await dbRun(db, `DELETE FROM dead_urls WHERE url IN (${urlPlaceholders})`, urls);
+      }
+    }
   } else if (action === "add_tag" || action === "remove_tag") {
     if (!tag) {
       return jsonResponse(

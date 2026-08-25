@@ -38,22 +38,9 @@
   --hero-ink: #17201c;
   --hero-muted: rgba(42, 60, 52, 0.72);
   --hero-eyebrow: #087f78;
-  --hero-image-mask: linear-gradient(
-    90deg,
-    var(--hero-bg) 0%,
-    rgba(238, 247, 243, 0.86) 22%,
-    rgba(238, 247, 243, 0.3) 58%,
-    rgba(238, 247, 243, 0) 100%
-  );
   --hero-overlay:
     radial-gradient(circle at 18% 18%, rgba(8, 127, 120, 0.12), transparent 28%),
     radial-gradient(circle at 74% 74%, rgba(200, 84, 69, 0.1), transparent 30%);
-  --hero-mobile-overlay: linear-gradient(
-    90deg,
-    rgba(238, 247, 243, 0.96) 0%,
-    rgba(238, 247, 243, 0.78) 58%,
-    rgba(238, 247, 243, 0.42) 100%
-  );
   --theme-panel-bg: rgba(255, 255, 255, 0.72);
   --theme-panel-border: rgba(23, 32, 28, 0.14);
   --theme-active-bg: rgba(8, 127, 120, 0.14);
@@ -101,22 +88,9 @@
   --hero-ink: #f8fff9;
   --hero-muted: rgba(237, 250, 242, 0.76);
   --hero-eyebrow: #bdebd9;
-  --hero-image-mask: linear-gradient(
-    90deg,
-    var(--hero-bg) 0%,
-    rgba(16, 24, 25, 0.88) 22%,
-    rgba(16, 24, 25, 0.34) 58%,
-    rgba(16, 24, 25, 0) 100%
-  );
   --hero-overlay:
     radial-gradient(circle at 24% 20%, rgba(120, 155, 40, 0.18), transparent 26%),
     radial-gradient(circle at 62% 84%, rgba(200, 84, 69, 0.14), transparent 28%);
-  --hero-mobile-overlay: linear-gradient(
-    90deg,
-    rgba(16, 24, 25, 0.96) 0%,
-    rgba(16, 24, 25, 0.78) 58%,
-    rgba(16, 24, 25, 0.38) 100%
-  );
   --theme-panel-bg: rgba(12, 18, 18, 0.72);
   --theme-panel-border: rgba(190, 224, 212, 0.18);
   --theme-active-bg: rgba(110, 231, 216, 0.16);
