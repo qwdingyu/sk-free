@@ -4,7 +4,7 @@
 // Rebuild: node scripts/build-html.js
 export const broadcastHtml = `<!doctype html>
 <html lang="zh-CN">
-    <!-- build:8276ba7a3b44 -->
+    <!-- build:49e240989744 -->
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -1354,6 +1354,16 @@ h1 {
     min-height: 160px;
   }
 
+  /* ── 表格视图移动端：隐藏社区列 + 紧凑间距 ──────────────────────────────── */
+  .site-table th.col-community,
+  .site-table td.col-community { display: none; }
+  .site-table th,
+  .site-table td { padding: 8px 6px; font-size: 0.82rem; }
+  .col-name    { min-width: 140px; }
+  .col-quota   { min-width: 110px; }
+  .col-action  { min-width: 120px; }
+  .btn-visit { padding: 4px 8px; font-size: 0.75rem; }
+  .btn-detail { padding: 4px 6px; font-size: 0.75rem; }
 }
 
 @media (max-width: 380px) {
@@ -2154,8 +2164,15 @@ h1 {
 .skeleton-cell.name  { width: 140px; height: 16px; }
 .skeleton-cell.quota { width: 100px; }
 .skeleton-cell.cap   { width: 60px; }
+.skeleton-cell.threshold { width: 70px; }
 .skeleton-cell.fresh { width: 80px; }
+.skeleton-cell.community { width: 30px; margin: 0 auto; }
 .skeleton-cell.action { width: 70px; margin-left: auto; }
+
+/* 表格骨架屏：<table> 形态占位，与真实表格同构避免布局跳跃 */
+.skeleton-table { pointer-events: none; }
+.skeleton-table td { border-bottom-color: transparent; }
+.skeleton-table .skeleton-cell { margin: 4px 0; }
 
 @keyframes skeleton-shimmer {
   0%   { background-position: 200% 0; }
@@ -4294,11 +4311,43 @@ async function init() {
   initSubmitForm();
   initFeedbackForm();
 
-  // 首屏骨架屏：加载期间显示 6 行占位
-  const skeletonRows = Array.from({ length: 6 }, () =>
-    '<div class="skeleton-row"><div class="skeleton-cell name"></div><div class="skeleton-cell quota"></div><div class="skeleton-cell cap"></div><div class="skeleton-cell fresh"></div><div class="skeleton-cell action"></div></div>'
-  ).join("");
-  els.cardsArea.innerHTML = skeletonRows;
+  // 首屏骨架屏：加载期间显示占位，按当前视图模式渲染对应形态
+  // 表格视图用 <table> 骨架（与真实表格同构），卡片视图用 flex 行骨架。
+  // 之前统一用 flex 行骨架，表格视图下首屏会先闪一排"卡片"再跳成表格，
+  // 视觉上像布局错乱。这里按 state.viewMode 区分。
+  if (state.viewMode === "table") {
+    const skeletonTable = \`
+      <table class="site-table skeleton-table" aria-hidden="true">
+        <thead><tr>
+          <th class="col-name">站点</th>
+          <th class="col-quota">每日额度</th>
+          <th class="col-cap">能力</th>
+          <th class="col-threshold">门槛</th>
+          <th class="col-fresh">鲜度</th>
+          <th class="col-community">社区</th>
+          <th class="col-action">操作</th>
+        </tr></thead>
+        <tbody>
+          \${Array.from({ length: 6 }, () => \`
+            <tr>
+              <td class="col-name"><div class="skeleton-cell name"></div></td>
+              <td class="col-quota"><div class="skeleton-cell quota"></div></td>
+              <td class="col-cap"><div class="skeleton-cell cap"></div></td>
+              <td class="col-threshold"><div class="skeleton-cell threshold"></div></td>
+              <td class="col-fresh"><div class="skeleton-cell fresh"></div></td>
+              <td class="col-community"><div class="skeleton-cell community"></div></td>
+              <td class="col-action"><div class="skeleton-cell action"></div></td>
+            </tr>\`).join("")}
+        </tbody>
+      </table>\`;
+    els.cardsArea.innerHTML = skeletonTable;
+  } else {
+    // 卡片视图骨架：flex 行，每行模拟一个卡片的关键信息占位
+    const skeletonRows = Array.from({ length: 6 }, () =>
+      '<div class="skeleton-row"><div class="skeleton-cell name"></div><div class="skeleton-cell quota"></div><div class="skeleton-cell cap"></div><div class="skeleton-cell fresh"></div><div class="skeleton-cell action"></div></div>'
+    ).join("");
+    els.cardsArea.innerHTML = skeletonRows;
+  }
 
   try {
     const data = await loadSites();

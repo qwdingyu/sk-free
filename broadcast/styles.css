@@ -1302,6 +1302,16 @@ h1 {
     min-height: 160px;
   }
 
+  /* ── 表格视图移动端：隐藏社区列 + 紧凑间距 ──────────────────────────────── */
+  .site-table th.col-community,
+  .site-table td.col-community { display: none; }
+  .site-table th,
+  .site-table td { padding: 8px 6px; font-size: 0.82rem; }
+  .col-name    { min-width: 140px; }
+  .col-quota   { min-width: 110px; }
+  .col-action  { min-width: 120px; }
+  .btn-visit { padding: 4px 8px; font-size: 0.75rem; }
+  .btn-detail { padding: 4px 6px; font-size: 0.75rem; }
 }
 
 @media (max-width: 380px) {
@@ -2102,8 +2112,15 @@ h1 {
 .skeleton-cell.name  { width: 140px; height: 16px; }
 .skeleton-cell.quota { width: 100px; }
 .skeleton-cell.cap   { width: 60px; }
+.skeleton-cell.threshold { width: 70px; }
 .skeleton-cell.fresh { width: 80px; }
+.skeleton-cell.community { width: 30px; margin: 0 auto; }
 .skeleton-cell.action { width: 70px; margin-left: auto; }
+
+/* 表格骨架屏：<table> 形态占位，与真实表格同构避免布局跳跃 */
+.skeleton-table { pointer-events: none; }
+.skeleton-table td { border-bottom-color: transparent; }
+.skeleton-table .skeleton-cell { margin: 4px 0; }
 
 @keyframes skeleton-shimmer {
   0%   { background-position: 200% 0; }
