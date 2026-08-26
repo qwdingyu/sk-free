@@ -4,7 +4,7 @@
 // Rebuild: node scripts/build-html.js
 export const broadcastHtml = `<!doctype html>
 <html lang="zh-CN">
-    <!-- build:ecb6742f4b36 -->
+    <!-- build:5a41ae0d7105 -->
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -1713,6 +1713,7 @@ h1 {
 
 .advanced-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
@@ -1762,6 +1763,7 @@ h1 {
 .filter-panel {
   display: flex;
   flex-wrap: wrap;
+  flex-basis: 100%;
   gap: 12px;
   padding: 10px 12px;
   border: 1px solid var(--line);

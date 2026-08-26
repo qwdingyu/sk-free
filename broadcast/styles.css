@@ -1661,6 +1661,7 @@ h1 {
 
 .advanced-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
@@ -1710,6 +1711,7 @@ h1 {
 .filter-panel {
   display: flex;
   flex-wrap: wrap;
+  flex-basis: 100%;
   gap: 12px;
   padding: 10px 12px;
   border: 1px solid var(--line);
