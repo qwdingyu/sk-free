@@ -165,9 +165,16 @@ console.log("\n6. 投票与一键反馈");
     // 201 Created：表格视图的 👍/👎 发的就是空 content，曾经后端要求 ≥2 字符 → 100% 400
     check(`一键反馈 ${t}（空 content）成功`, r.status, 201);
   }
-  // 需要正文的类型仍应拦住
-  const r2 = await pub("/api/feedback", "POST", { siteName: NAME, type: "quota_changed", content: "" });
-  check("quota_changed 空正文 → 400", r2.status, 400);
+  // 需要正文的类型仍应拦住。
+  // 注意：这里必须用后端白名单里真实存在的类型（error/correction/positive），
+  // 否则 400 是"类型非法"给出的，测不到"正文太短"这条分支 ——
+  // 第一版写了个不存在的 quota_changed，断言通过但通过的原因是错的。
+  for (const t of ["error", "correction", "positive"]) {
+    const r = await pub("/api/feedback", "POST", { siteName: NAME, type: t, content: "" });
+    check(`${t} 空正文 → 400`, r.status, 400);
+    const ok = await pub("/api/feedback", "POST", { siteName: NAME, type: t, content: "内容足够长" });
+    check(`${t} 有正文 → 成功`, ok.status, 201);
+  }
   const r3 = await pub("/api/feedback", "POST", { siteName: NAME, type: "garbage_type", content: "有效正文" });
   check("非法反馈类型 → 400", r3.status, 400);
 }

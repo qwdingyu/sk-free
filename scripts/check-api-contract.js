@@ -94,13 +94,61 @@ for (const f of srcFiles) {
   });
 }
 
-// ── 3. 报告 ───────────────────────────────────────────────────────────────────
+// ── 3. 反馈类型白名单必须两边一致 ─────────────────────────────────────────────
+// 这一类错配已经真实发生过一次：前端"还能用/已失效"一键反馈发的 still_works，
+// 后端白名单里没有，用户每次点都是 400，而页面只弹一句"反馈失败"。
+// 前端能发出的类型有两个来源：
+//   1) index.html 里反馈弹窗按钮的 data-fb-type
+//   2) 90-forms.js 里一键反馈直接写死的字面量
+const typeErrors = [];
+{
+  const feedbacksJs = readFileSync(join(ROOT, "worker", "src", "feedbacks.js"), "utf-8");
+  const vm = feedbacksJs.match(/const VALID_TYPES\s*=\s*\[([^\]]*)\]/);
+  const backendTypes = vm
+    ? [...vm[1].matchAll(/"([^"]+)"/g)].map((m) => m[1])
+    : [];
+  if (backendTypes.length === 0) {
+    typeErrors.push("没能从 worker/src/feedbacks.js 解析出 VALID_TYPES —— 检查器失效比没有检查更危险，请修检查器");
+  }
+
+  const indexHtml = readFileSync(join(ROOT, "broadcast", "index.html"), "utf-8");
+  const frontendTypes = new Set(
+    [...indexHtml.matchAll(/data-fb-type="([^"]+)"/g)].map((m) => m[1])
+  );
+  const formsJs = readFileSync(join(ROOT, "broadcast", "src", "90-forms.js"), "utf-8");
+  // sendQuickFeedback(name, "still_works") 这类写死的一键反馈类型
+  for (const m of formsJs.matchAll(/["'](still_works|reported_dead)["']/g)) {
+    frontendTypes.add(m[1]);
+  }
+  if (frontendTypes.size === 0) {
+    typeErrors.push("没能从前端解析出任何反馈类型 —— 检查器失效，请修检查器");
+  }
+
+  for (const t of frontendTypes) {
+    if (!backendTypes.includes(t)) {
+      typeErrors.push(`前端会发出 type="${t}"，但后端 VALID_TYPES 不接受 → 用户每次点都是 400`);
+    }
+  }
+  console.log(
+    `📋 反馈类型：后端接受 ${backendTypes.length} 种，前端会发出 ${frontendTypes.size} 种` +
+      (typeErrors.length === 0 ? "，两边一致" : "")
+  );
+}
+
+// ── 4. 报告 ───────────────────────────────────────────────────────────────────
 console.log(`📋 后端 formatSiteRow 产出 ${produced.size} 个字段`);
 
-if (violations.length === 0) {
+if (violations.length === 0 && typeErrors.length === 0) {
   console.log(`✅ check-api-contract: broadcast/src/*.js 读取的字段全部由后端产出`);
   process.exit(0);
 }
+
+if (typeErrors.length > 0) {
+  console.error(`\n❌ check-api-contract: 反馈类型契约不一致\n`);
+  typeErrors.forEach((e) => console.error(`  ${e}`));
+}
+
+if (violations.length === 0) process.exit(1);
 
 console.error(`\n❌ check-api-contract: 发现 ${violations.length} 处读取后端不产出的字段\n`);
 for (const v of violations) {

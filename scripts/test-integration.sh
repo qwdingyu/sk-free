@@ -32,9 +32,13 @@ cleanup() {
     kill "$WDEV_PID" 2>/dev/null || true
     wait "$WDEV_PID" 2>/dev/null || true
   fi
-  # 顺手清掉本地测试库里的数据，避免下次跑受上一次影响
+  # 清掉本次跑脏的所有表。**rate_limits 必须一起清**：
+  # 投票限流是 (site_name, ip) 每小时 10 次，窗口 1 小时内的行不会被自动清理。
+  # 只删 sites/votes 的话，rate_limits 里的旧行会跨多次运行累积，
+  # 跑到第 10 次以后 /api/vote 就开始 429，测试变成偶发失败 —— 实测复现过：
+  # 连跑两次都是"投 up 期望 200 实际 429"。
   (cd "$WORKER_DIR" && npx wrangler d1 execute SKFREE_DB --local \
-     --command "DELETE FROM sites; DELETE FROM votes; DELETE FROM feedbacks; DELETE FROM submissions;" \
+     --command "DELETE FROM sites; DELETE FROM votes; DELETE FROM feedbacks; DELETE FROM submissions; DELETE FROM rate_limits; DELETE FROM dead_urls;" \
      >/dev/null 2>&1) || true
   rm -f "$WDEV_LOG"
 }
@@ -71,6 +75,13 @@ if [ "${TABLES:-0}" -lt 6 ]; then
 fi
 echo "    ✅ 6 张表就绪"
 
+# 开跑前先清一次：上一次异常退出（Ctrl-C、超时）可能留下脏状态，
+# 尤其是 rate_limits 里没过期的行会让投票断言直接 429。
+(cd "$WORKER_DIR" && npx wrangler d1 execute SKFREE_DB --local \
+   --command "DELETE FROM sites; DELETE FROM votes; DELETE FROM feedbacks; DELETE FROM submissions; DELETE FROM rate_limits; DELETE FROM dead_urls;" \
+   >/dev/null 2>&1) || true
+echo "    ✅ 已重置本地测试数据（含 rate_limits）"
+
 # ── 4. 起 wrangler dev ────────────────────────────────────────────────────────
 echo "4️⃣  启动 wrangler dev (:${PORT})..."
 (cd "$WORKER_DIR" && npx wrangler dev --local --port "$PORT" --test-scheduled > "$WDEV_LOG" 2>&1) &
@@ -102,12 +113,18 @@ echo ""
 # ── 7. 定时健康检查 ───────────────────────────────────────────────────────────
 # 只验最关键的两条不变量：活站写 verified_at、失败站绝不被自动禁用。
 echo "7️⃣  定时健康检查（cron）..."
-curl -s -X POST "${BASE}/api/admin/sites" -H "Authorization: Bearer ${TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"cron活站","url":"https://example.com","tags":[]}' >/dev/null
-curl -s -X POST "${BASE}/api/admin/sites" -H "Authorization: Bearer ${TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"cron死站","url":"https://no-such-host-9x8y7z.invalid","tags":[]}' >/dev/null
+# 建两个站。创建失败必须立刻红 —— 否则后面的断言会因为"行不存在"而
+# 全部变成 undefined，其中"死站不写 verified_at"还会假通过（isNull(undefined)
+# 也是真）。空断言报通过比没有断言更危险。
+for pair in "cron活站|https://example.com" "cron死站|https://no-such-host-9x8y7z.invalid"; do
+  n="${pair%%|*}"; u="${pair##*|}"
+  RESP=$(curl -s -X POST "${BASE}/api/admin/sites" -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" -d "{\"name\":\"${n}\",\"url\":\"${u}\",\"tags\":[]}")
+  if ! printf '%s' "$RESP" | grep -q '"ok":true'; then
+    echo "    ❌ 建站 ${n} 失败，后续 cron 断言无意义：${RESP}"
+    exit 1
+  fi
+done
 curl -s -m 90 "${BASE}/__scheduled?cron=0+*/6+*+*+*" >/dev/null
 sleep 3
 CRON_JSON=$(cd "$WORKER_DIR" && npx wrangler d1 execute SKFREE_DB --local \
@@ -125,6 +142,7 @@ const isNull = (v) => v === null || v === undefined || v === "null";
 let bad = 0;
 const chk = (name, ok, detail) => { console.log(`    ${ok ? "✅" : "❌"} ${name}${ok ? "" : "  → " + detail}`); if (!ok) bad++; };
 const alive = by("cron活站"), dead = by("cron死站");
+chk("两个测试站都查到了（否则后面全是空断言）", rows.length === 2 && alive.name && dead.name, `rows=${rows.length}`);
 chk("活站写入 verified_at", !isNull(alive.verified_at), `verified_at=${alive.verified_at}`);
 chk("活站 verified_by=healthcheck", alive.verified_by === "healthcheck", `verified_by=${alive.verified_by}`);
 chk("死站累加 health_fail_count", dead.health_fail_count >= 1, `fail=${dead.health_fail_count}`);
