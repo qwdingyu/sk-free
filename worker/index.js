@@ -573,6 +573,11 @@ function switchTab(tab) {
   if (tab === "submissions") loadSubmissions();
   if (tab === "feedback") loadFeedbacks();
   if (tab === "schema") loadSchema();
+  // 健康 tab：有缓存结果则自动恢复，无需重新扫描
+  if (tab === "health" && LAST_HEALTH_SCAN) {
+    document.getElementById("healthResults").innerHTML = LAST_HEALTH_SCAN.html;
+    document.getElementById("healthStatus").textContent = "上次检查：" + LAST_HEALTH_SCAN.time + " — " + LAST_HEALTH_SCAN.summary + "（数据基于扫描时的站点列表，与当前站点管理可能有差异，点【批量检查】刷新）";
+  }
 }
 async function loadSubmissions() {
   try {
@@ -614,6 +619,8 @@ async function setDeadByName(name, isDead) {
     await loadSites();
   } catch (e) { toast(e.message, "error"); }
 }
+// 上次健康扫描结果缓存（切换 tab 不丢失）
+var LAST_HEALTH_SCAN = null;
 /**
  * 共享的健康扫描逻辑（链接健康 tab 和站点管理 tab 共用）
  * @param {object} opts
@@ -695,6 +702,8 @@ async function batchCheckUrls() {
         }
         html += '<div style="margin:12px 0 4px;color:var(--muted);font-size:12px">\u5df2\u4e00\u81f4\uff08\u65e0\u9700\u64cd\u4f5c\uff09\uff1a\u4e0d\u53ef\u8fbe\u4e14\u5df2\u6807\u8bb0\u6b7b\u94fe ' + unreachDisabled.length + ' \u4e2a\uff1b\u53ef\u8fbe\u4e14\u53ef\u7528 ' + reachEnabled.length + ' \u4e2a\u3002</div>';
         resultsEl.innerHTML = html; loadSites();
+        // 缓存结果，切换 tab 后重新打开时自动恢复
+        LAST_HEALTH_SCAN = { html: html, time: new Date().toLocaleString(), summary: alive + " 可达，" + dead + " 不可达" };
       },
     });
   } catch (e) { statusEl.textContent = "检查失败: " + e.message; }
@@ -711,19 +720,43 @@ async function sitesCleanupDeadLinks() {
       onResult: ({ alive, dead, allResults }) => {
         var byUrl = {};
         SITES.forEach(function(s) { byUrl[s.url] = s; });
-        var unreachEnabled = 0, reachDisabled = 0;
+        var unreachEnabled = [], reachDisabled = [];
         allResults.forEach(function(r) {
           var s = byUrl[r.url];
           var isEnabled = s ? s.enabled !== false : true;
-          if (r.ok) { if (!isEnabled) reachDisabled++; }
-          else { if (isEnabled) unreachEnabled++; }
+          if (r.ok) { if (!isEnabled) reachDisabled.push(r); }
+          else { if (isEnabled) unreachEnabled.push(r); }
         });
+        // 构建与 batchCheckUrls 一致的对账报告，存入缓存供健康 tab 查看
+        var html = "";
+        if (unreachEnabled.length > 0) {
+          html += '<div style="margin-bottom:10px"><strong style="color:var(--coral)">\u26a1 \u4e0d\u53ef\u8fbe\u4f46\u5f53\u524d\u53ef\u7528\uff08\u5efa\u8bae\u6807\u8bb0\u4e3a\u6b7b\u94fe\uff09(' + unreachEnabled.length + ')</strong></div>';
+          html += unreachEnabled.map(function(r) {
+            var s = byUrl[r.url];
+            return '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)">' +
+              '<span style="flex:1;word-break:break-all"><a href="' + esc(r.url) + '" target="_blank">' + esc(s.name) + '</a> <span style="color:var(--muted)">' + esc(r.url) + '</span></span>' +
+              '<span style="color:var(--coral);white-space:nowrap">' + esc(r.error || ("HTTP " + r.status)) + '</span>' +
+              '<button class="btn btn-sm btn-danger" data-name="' + esc(s.name) + '" data-action="mark-dead">\u6807\u8bb0\u4e3a\u6b7b\u94fe</button></div>';
+          }).join("");
+        }
+        if (reachDisabled.length > 0) {
+          html += '<div style="margin:12px 0 10px"><strong style="color:var(--teal)">\ud83d\udd04 \u5df2\u53ef\u8fbe\u4f46\u5f53\u524d\u4e3a\u6b7b\u94fe\uff08\u5efa\u8bae\u6062\u590d\u4e3a\u53ef\u7528\uff09(' + reachDisabled.length + ')</strong></div>';
+          html += reachDisabled.map(function(r) {
+            var s = byUrl[r.url];
+            return '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)">' +
+              '<span style="flex:1;word-break:break-all"><a href="' + esc(r.url) + '" target="_blank">' + esc(s.name) + '</a> <span style="color:var(--muted)">' + esc(r.url) + '</span></span>' +
+              '<span style="color:var(--teal);white-space:nowrap">HTTP ' + r.status + '</span>' +
+              '<button class="btn btn-sm btn-primary" data-name="' + esc(s.name) + '" data-action="restore-dead">\u6062\u590d\u4e3a\u53ef\u7528</button></div>';
+          }).join("");
+        }
+        html += '<div style="margin:12px 0 4px;color:var(--muted);font-size:12px">\u5df2\u4e00\u81f4\uff08\u65e0\u9700\u64cd\u4f5c\uff09\uff1a\u4e0d\u53ef\u8fbe\u4e14\u5df2\u6807\u8bb0\u6b7b\u94fe ' + (allResults.length - unreachEnabled.length - reachDisabled.length) + ' \u4e2a\uff1b\u53ef\u8fbe\u4e14\u53ef\u7528 0 \u4e2a\u3002</div>';
+        LAST_HEALTH_SCAN = { html: html, time: new Date().toLocaleString(), summary: alive + " 可达，" + dead + " 不可达" };
         var msg = "检查完成：" + alive + " 正常，" + dead + " 不可达";
-        if (unreachEnabled > 0) msg += "（" + unreachEnabled + " 个待标记死链）";
-        if (reachDisabled > 0) msg += "（" + reachDisabled + " 个待恢复）";
-        if (unreachEnabled > 0 || reachDisabled > 0) msg += "，请切换到链接健康标签页查看详情及操作。";
+        if (unreachEnabled.length > 0) msg += "（" + unreachEnabled.length + " 个待标记死链）";
+        if (reachDisabled.length > 0) msg += "（" + reachDisabled.length + " 个待恢复）";
+        if (unreachEnabled.length > 0 || reachDisabled.length > 0) msg += "，请切换到链接健康标签页查看详情及操作。";
         statusEl.textContent = msg;
-        toast(msg, (unreachEnabled > 0 || reachDisabled > 0) ? "info" : "success");
+        toast(msg, (unreachEnabled.length > 0 || reachDisabled.length > 0) ? "info" : "success");
         loadSites();
       },
     });
