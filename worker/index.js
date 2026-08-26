@@ -615,7 +615,7 @@ async function setDeadByName(name, isDead) {
   try {
     const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: isDead ? "disable" : "enable", names: [name] }) });
     toast(isDead ? "已标记为死链：" + name : "已恢复为可用：" + name, "success");
-    await loadSites();
+    await loadSites(); renderHealthFromSites();
   } catch (e) { toast(e.message, "error"); }
 }
 // 上次健康扫描结果缓存（切换 tab 不丢失）
@@ -634,31 +634,45 @@ function healthBadge(s) {
   return '<span style="color:var(--muted);font-size:11px">\u25cb 未验证</span>';
 }
 // 从数据库已有数据构建健康对账报告（无需扫描）
+// 包含批量操作：死链可批量恢复，异常可批量标记
+var HEALTH_DEAD_SELECTED = new Set();
+var HEALTH_FAIL_SELECTED = new Set();
 function renderHealthFromSites() {
   var statusEl = document.getElementById("healthStatus");
   var resultsEl = document.getElementById("healthResults");
   if (!SITES || SITES.length === 0) { statusEl.textContent = "请先加载站点列表"; return; }
-  var byUrl = {};
-  SITES.forEach(function(s) { byUrl[s.url] = s; });
   // 从数据库数据派生对账报告
   var unreachEnabled = SITES.filter(function(s) { return s.dead; });
   var reachWithFails = SITES.filter(function(s) { return !s.dead && s.healthFailCount > 0; });
   var reachVerified = SITES.filter(function(s) { return !s.dead && s.healthFailCount === 0 && s.verifiedAt; });
   var reachUnverified = SITES.filter(function(s) { return !s.dead && s.healthFailCount === 0 && !s.verifiedAt; });
   var html = "";
+  // ── 死链区：批量恢复 ──────────────────────────────────────────────────
   if (unreachEnabled.length > 0) {
-    html += '<div style="margin-bottom:10px"><strong style="color:var(--coral)">\u2716 已标记为死链（' + unreachEnabled.length + '）</strong></div>';
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">';
+    html += '<strong style="color:var(--coral)">\u2716 已标记为死链（' + unreachEnabled.length + '）</strong>';
+    html += '<button class="btn btn-sm btn-primary" onclick="healthBatchRestoreDead()">\u2705 恢复选中</button>';
+    html += '<button class="btn btn-sm btn-danger" onclick="healthRestoreAllDead()">\u2705 恢复全部</button>';
+    html += '<span id="healthDeadCount" style="color:var(--muted);font-size:12px">已选 0 个</span>';
+    html += '</div>';
     html += unreachEnabled.map(function(s) {
       return '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)">' +
+        '<input type="checkbox" data-name="' + esc(s.name) + '" onchange="healthToggleDeadSelect(this)">' +
         '<span style="flex:1;word-break:break-all"><a href="' + esc(s.url) + '" target="_blank">' + esc(s.name) + '</a></span>' +
         '<span style="color:var(--muted);font-size:11px">' + (s.verifiedAt ? "\u2705 验证于 " + fmtTime(s.verifiedAt) : '\u25cb 未验证') + '</span>' +
         '<button class="btn btn-sm btn-primary" data-name="' + esc(s.name) + '" data-action="restore-dead">\u6062\u590d\u4e3a\u53ef\u7528</button></div>';
     }).join("");
   }
+  // ── 异常区：可批量标记死链 ────────────────────────────────────────────
   if (reachWithFails.length > 0) {
-    html += '<div style="margin:12px 0 10px"><strong style="color:var(--coral)">\u26a0 可用但连续失败（' + reachWithFails.length + '）</strong></div>';
+    html += '<div style="display:flex;align-items:center;gap:8px;margin:12px 0 8px;flex-wrap:wrap">';
+    html += '<strong style="color:var(--coral)">\u26a0 可用但连续失败（' + reachWithFails.length + '）</strong>';
+    html += '<button class="btn btn-sm btn-danger" onclick="healthBatchMarkDead()">\u2716 标记选中为死链</button>';
+    html += '<span id="healthFailCount" style="color:var(--muted);font-size:12px">已选 0 个</span>';
+    html += '</div>';
     html += reachWithFails.map(function(s) {
       return '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)">' +
+        '<input type="checkbox" data-name="' + esc(s.name) + '" onchange="healthToggleFailSelect(this)">' +
         '<span style="flex:1;word-break:break-all"><a href="' + esc(s.url) + '" target="_blank">' + esc(s.name) + '</a></span>' +
         '<span style="color:var(--coral);white-space:nowrap">\u26a0 ' + s.healthFailCount + ' 次失败</span>' +
         '<button class="btn btn-sm btn-danger" data-name="' + esc(s.name) + '" data-action="mark-dead">\u6807\u8bb0\u4e3a\u6b7b\u94fe</button></div>';
@@ -667,7 +681,32 @@ function renderHealthFromSites() {
   html += '<div style="margin:12px 0 4px;color:var(--muted);font-size:12px">\u2705 正常：' + (reachVerified.length + reachUnverified.length) + '（已验证 ' + reachVerified.length + '，未验证 ' + reachUnverified.length + '）。</div>';
   resultsEl.innerHTML = html;
   statusEl.textContent = "基于数据库最近一次 cron 检查结果（每 6 小时自动更新）。需要最新数据请点【批量检查】。";
-  LAST_HEALTH_SCAN = { html: html, time: new Date().toLocaleString(), summary: "死链 " + unreachEnabled.length + "，异常 " + reachWithFails.length + "，正常 " + (reachVerified.length + reachUnverified.length) };
+}
+// 死链区的批量选择
+function healthToggleDeadSelect(cb) {
+  if (cb.checked) HEALTH_DEAD_SELECTED.add(cb.getAttribute("data-name"));
+  else HEALTH_DEAD_SELECTED.delete(cb.getAttribute("data-name"));
+  document.getElementById("healthDeadCount").textContent = "已选 " + HEALTH_DEAD_SELECTED.size + " 个";
+}
+async function healthBatchRestoreDead() {
+  if (HEALTH_DEAD_SELECTED.size === 0) { toast("请先选择要恢复的站点", "info"); return; }
+  try { await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "enable", names: [...HEALTH_DEAD_SELECTED] }) }); toast("已恢复 " + HEALTH_DEAD_SELECTED.size + " 个站点", "success"); HEALTH_DEAD_SELECTED.clear(); await loadSites(); renderHealthFromSites(); } catch (e) { toast(e.message, "error"); }
+}
+async function healthRestoreAllDead() {
+  var names = SITES.filter(function(s) { return s.dead; }).map(function(s) { return s.name; });
+  if (names.length === 0) { toast("没有死链站点", "info"); return; }
+  if (!confirm("确认恢复全部 " + names.length + " 个死链站点为可用？")) return;
+  try { await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "enable", names }) }); toast("已恢复 " + names.length + " 个站点", "success"); HEALTH_DEAD_SELECTED.clear(); await loadSites(); renderHealthFromSites(); } catch (e) { toast(e.message, "error"); }
+}
+// 异常区的批量选择
+function healthToggleFailSelect(cb) {
+  if (cb.checked) HEALTH_FAIL_SELECTED.add(cb.getAttribute("data-name"));
+  else HEALTH_FAIL_SELECTED.delete(cb.getAttribute("data-name"));
+  document.getElementById("healthFailCount").textContent = "已选 " + HEALTH_FAIL_SELECTED.size + " 个";
+}
+async function healthBatchMarkDead() {
+  if (HEALTH_FAIL_SELECTED.size === 0) { toast("请先选择要标记的站点", "info"); return; }
+  try { await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "disable", names: [...HEALTH_FAIL_SELECTED] }) }); toast("已标记 " + HEALTH_FAIL_SELECTED.size + " 个站点为死链", "success"); HEALTH_FAIL_SELECTED.clear(); await loadSites(); renderHealthFromSites(); } catch (e) { toast(e.message, "error"); }
 }
 /**
  * 共享的健康扫描逻辑（链接健康 tab 和站点管理 tab 共用）
