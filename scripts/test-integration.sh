@@ -63,17 +63,26 @@ echo "2️⃣  已写入本地 .dev.vars"
 
 # ── 3. 本地 D1 迁移 ───────────────────────────────────────────────────────────
 echo "3️⃣  应用迁移到本地 D1..."
-for m in 0001_init_up 0002_add_feedbacks_up 0003_structured_quota_up 0004_fix_feedbacks_type_up; do
-  (cd "$WORKER_DIR" && npx wrangler d1 execute SKFREE_DB --local --file "migrations/$m.sql" >/dev/null 2>&1) || true
-done
-TABLES=$(cd "$WORKER_DIR" && npx wrangler d1 execute SKFREE_DB --local \
-  --command "SELECT COUNT(*) n FROM sqlite_master WHERE type='table' AND name IN ('sites','votes','feedbacks','submissions','dead_urls','rate_limits')" 2>&1 \
-  | grep -o '"n": *[0-9]*' | grep -o '[0-9]*' | head -1)
-if [ "${TABLES:-0}" -lt 6 ]; then
-  echo "🚫 本地 D1 建表不完整（只找到 ${TABLES:-0}/6 张表），迁移可能失败"
+# 动态应用所有 *_up.sql，而不是写死 0001-0004：
+# 上次这里漏了 0005_site_history，而 worker/src/sites.js 已经引用 site_history，
+# 靠"本地 D1 早就被手动建过表"才没翻车 —— 换个干净环境跑就是 500。
+# 写死清单必会再漏下一个 0006，按文件名排序全部应用才对。
+MIGRATIONS=$(ls "$WORKER_DIR/migrations/"*_up.sql 2>/dev/null | sort)
+if [ -z "$MIGRATIONS" ]; then
+  echo "🚫 没有找到任何 *_up.sql 迁移文件"
   exit 1
 fi
-echo "    ✅ 6 张表就绪"
+for m in $MIGRATIONS; do
+  (cd "$WORKER_DIR" && npx wrangler d1 execute SKFREE_DB --local --file "$m" >/dev/null 2>&1) || true
+done
+TABLES=$(cd "$WORKER_DIR" && npx wrangler d1 execute SKFREE_DB --local \
+  --command "SELECT COUNT(*) n FROM sqlite_master WHERE type='table' AND name IN ('sites','votes','feedbacks','submissions','dead_urls','rate_limits','site_history')" 2>&1 \
+  | grep -o '"n": *[0-9]*' | grep -o '[0-9]*' | head -1)
+if [ "${TABLES:-0}" -lt 7 ]; then
+  echo "🚫 本地 D1 建表不完整（只找到 ${TABLES:-0}/7 张表），迁移可能失败"
+  exit 1
+fi
+echo "    ✅ 7 张表就绪"
 
 # 开跑前先清一次：上一次异常退出（Ctrl-C、超时）可能留下脏状态，
 # 尤其是 rate_limits 里没过期的行会让投票断言直接 429。

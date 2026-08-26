@@ -84,7 +84,26 @@ if ! git -C "$PROJECT_DIR" diff --quiet HEAD -- worker/ 2>/dev/null; then
   echo ""
 fi
 
-# ── 8. 部署 ───────────────────────────────────────────────────────────────────
+# ── 8. 迁移检查（wrangler deploy 不会自动应用迁移，这是最容易漏的一步）─────────
+# wrangler.toml 里没有 migrations_dir，`npx wrangler deploy` 只部署代码、
+# 不碰 D1 的表结构。于是"代码引用了新表/新列，但线上表还没建"会让接口运行时
+# 报错 —— 0005_site_history 就是手工 `d1 execute --remote` 应用的。
+# 这里把 *_up.sql 列出来提醒，绝不自动应用（_down 文件和重复的 0001_init.sql
+# 混在目录里，自动应用会出事故；且 --remote 会动生产数据，必须人工确认）。
+echo "8️⃣  迁移检查（如有 *_up.sql 未应用，必须先手工执行，再部署）..."
+UP_FILES=$(ls "$PROJECT_DIR/worker/migrations/"*_up.sql 2>/dev/null)
+if [ -n "$UP_FILES" ]; then
+  echo "   迁移文件清单："
+  echo "$UP_FILES" | sed 's#^#     - #'
+  echo "   ⚠️  wrangler deploy 不会自动应用迁移。请确认这些 *_up.sql 已在远程 D1 应用："
+  echo "      cd worker && npx wrangler d1 execute SKFREE_DB --remote --file migrations/XXXX_up.sql"
+  echo "   （幂等的 IF NOT EXISTS 可重复执行；含 ALTER/非幂等语句的只能执行一次）"
+else
+  echo "   （没有迁移文件）"
+fi
+echo ""
+
+# ── 9. 部署 ───────────────────────────────────────────────────────────────────
 echo "📦 开始部署..."
 cd "$PROJECT_DIR/worker"
 npx wrangler deploy
@@ -93,7 +112,7 @@ echo ""
 echo "✅ 部署完成"
 echo ""
 
-# ── 9. 部署后自动验证 ──────────────────────────────────────────────────────────
+# ── 10. 部署后自动验证 ─────────────────────────────────────────────────────────
 # 不能只靠"部署命令成功"——上一次就是部署成功但线上跑的是旧 bundle（抽屉
 # 样式缺失、无定位 div），链路本身不报错。必须用构建标识对线上做断言。
 # 验证失败以非零退出，提醒人工检查（wrangler rollback 可回滚）。
