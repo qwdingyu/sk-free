@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ── 模块导入 ──────────────────────────────────────────────────────────────────
-import { getDb, dbAll, dbGet, dbBatch } from "./src/db.js";
+import { getDb, dbAll, dbGet, dbRun, dbBatch } from "./src/db.js";
 import { DEFAULT_SCHEMA, getSchema, saveSchema } from "./src/schema.js";
 import {
   corsHeaders, json, html, requireAuth,
