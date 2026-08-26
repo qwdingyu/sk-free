@@ -4,7 +4,6 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { dbAll, dbGet, dbRun, dbBatch } from "./db.js";
-import { getDeadUrls } from "./deadurls.js";
 import { json as jsonResponse, parseJsonBody, validateUrlProtocol, parseSiteUrl } from "./utils.js";
 
 // 导入限制
@@ -730,13 +729,12 @@ export async function handleAdminImportSites(db, request) {
     existingCleanUrls.set(cleanUrl, s.name);
   }
 
-  // 加载死链接列表，导入时过滤
-  const deadUrls = await getDeadUrls(db);
-
+  // 死链黑名单已退役（可用性由 sites.enabled 单轴决定），导入不再按它过滤。
+  // 旧逻辑会拿残留的 dead_urls 行静默丢弃导入项（deadFiltered）——而这张表
+  // 已无任何写入路径，数据只会越来越陈旧。省一次 D1 读取，行为也更可预期。
   let added = 0,
     skipped = 0,
-    updated = 0,
-    deadFiltered = 0;
+    updated = 0;
   const duplicates = [];
   const statements = [];
 
@@ -753,13 +751,6 @@ export async function handleAdminImportSites(db, request) {
     const urlCheck = validateUrlProtocol(item.url);
     if (!urlCheck.ok) {
       skipped++;
-      continue;
-    }
-
-    // 死链接过滤
-    const { cleanUrl: checkUrl } = parseSiteUrl(item.url);
-    if (deadUrls[checkUrl] || deadUrls[item.url]) {
-      deadFiltered++;
       continue;
     }
 
@@ -852,7 +843,6 @@ export async function handleAdminImportSites(db, request) {
       added,
       updated,
       skipped,
-      deadFiltered: deadFiltered > 0 ? deadFiltered : undefined,
       duplicates: duplicates.length > 0 ? duplicates : undefined,
     },
     200,

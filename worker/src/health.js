@@ -1,8 +1,9 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // health.js — 链接健康检查 + check-batch 批量检测
+// 纯只读探针：只发 fetch、只返回观测结果，绝不写任何状态。
+// （曾经这里会读 dead_urls 黑名单来算 newDeadUrls —— 死链已改为由
+//   sites.enabled 单轴派生，黑名单退役，这个读取纯属浪费 subrequest，已删。）
 // ═══════════════════════════════════════════════════════════════════════════════
-
-import { getDeadUrls } from "./deadurls.js";
 
 // 默认超时时间（毫秒）
 const DEFAULT_TIMEOUT_MS = 8000;
@@ -123,18 +124,15 @@ export async function checkUrlHealth(url, timeoutMs = DEFAULT_TIMEOUT_MS, opts =
 /**
  * 批量检查 URL 健康状态
  * 前端按 HEALTH_BATCH_SIZE 分批调用；本函数再做一次硬截断兜底。
- * @param {object} db — D1 数据库实例
+ * @param {object} db — D1 数据库实例（保留参数以兼容调用方签名；本函数不再读库）
  * @param {string[]} urls — URL 数组
  * @param {number} [timeoutMs] — 每个 URL 的超时时间
- * @returns {Promise<object>} { ok, total, alive, dead, newDeadUrls, results, maxBatch, truncated }
+ * @returns {Promise<object>} { ok, total, alive, dead, results, maxBatch, truncated }
  */
 export async function checkBatchHealth(db, urls, timeoutMs = DEFAULT_TIMEOUT_MS) {
   if (!Array.isArray(urls) || urls.length === 0) {
     return { ok: false, error: "需要 urls 数组" };
   }
-
-  // 先读取死链接列表（1 次 D1 读取，计入 subrequest 配额）
-  const deadUrls = await getDeadUrls(db);
 
   const targets = urls.slice(0, HEALTH_BATCH_SIZE);
   const truncated = urls.length > targets.length;
@@ -156,8 +154,6 @@ export async function checkBatchHealth(db, urls, timeoutMs = DEFAULT_TIMEOUT_MS)
     })
   );
 
-  // 识别新发现的死链接（不在已有黑名单中的）
-  const newDeadUrls = results.filter((r) => !r.ok && !deadUrls[r.url]).map((r) => r.url);
   const alive = results.filter((r) => r.ok).length;
   const dead = results.filter((r) => !r.ok).length;
 
@@ -166,7 +162,6 @@ export async function checkBatchHealth(db, urls, timeoutMs = DEFAULT_TIMEOUT_MS)
     total: results.length,
     alive,
     dead,
-    newDeadUrls,
     results,
     maxBatch: HEALTH_BATCH_SIZE,
     truncated,

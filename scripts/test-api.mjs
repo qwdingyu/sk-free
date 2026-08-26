@@ -322,6 +322,33 @@ console.log("\n11. 死链接移除与站点启用联动");
   await admin(`/api/admin/sites/${enc(DN)}`, "DELETE");
 }
 
+// ══ 14. check-batch 是纯只读探针：绝不改站点状态 ══════════════════════════════
+// 曾有"探测成功 → 自动恢复 enabled=1"的逻辑（result.restored），一次扫描
+// 静默翻转了 15 个站点的决定层状态。探针是证据，不是行动：状态只能由
+// 管理员经 /api/admin/sites/batch 显式变更。此组锁定这条不变量。
+// 注意必须用真实可达的 URL（example.com 恒 200）：旧逻辑只恢复"探测可达"
+// 的站点，用不可达 URL 测不出回归。
+console.log("\n12. check-batch 只读（不自动恢复/不禁用）");
+{
+  const RN = "只读探针站";
+  await admin(`/api/admin/sites/${enc(RN)}`, "DELETE");
+  await admin("/api/admin/sites", "POST", { name: RN, url: "https://example.com", tags: [] });
+  // 停用一个"探测必然可达"的站点再扫描——旧代码会在这里自动恢复它。
+  // 注意用规范化后的 URL（带尾斜杠）：管理端扫描发的是 SITES 里的 url，
+  // 入库时被 parseSiteUrl 规范化成 https://example.com/，不带斜杠匹配不上。
+  await admin(`/api/admin/sites/batch`, "POST", { action: "disable", names: [RN] });
+
+  const scan = await admin("/api/admin/check-batch", "POST", { urls: ["https://example.com/"] });
+  check("check-batch → 200", scan.status, 200);
+  const scanBody = await scan.json();
+  const probe = scanBody.results?.[0];
+  check("探测确认可达（否则本组断言失去意义）", probe?.ok === true && typeof probe?.status === "number", true);
+  check("响应不含 restored 字段（无自动恢复）", "restored" in scanBody, false);
+  check("停用状态未被扫描改变（仍为死链）", (await getSite(RN))?.dead, true);
+
+  await admin(`/api/admin/sites/${enc(RN)}`, "DELETE");
+}
+
 console.log(`\n${"─".repeat(60)}`);
 if (failures.length === 0) {
   console.log(`✅ test-api: ${passed} 项断言全部通过`);
