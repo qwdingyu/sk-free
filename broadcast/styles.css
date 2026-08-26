@@ -136,8 +136,8 @@ input {
 .hero-band {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
-  min-height: 180px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--hero-border);
   border-radius: 8px;
@@ -159,22 +159,21 @@ input {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 28px 32px;
+  padding: 20px 28px;
   color: var(--hero-ink);
 }
 
-.eyebrow {
-  margin: 0 0 12px;
-  color: var(--hero-eyebrow);
-  font-size: 0.78rem;
-  font-weight: 700;
+.hero-title-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 
 h1 {
   margin: 0;
   max-width: none;
-  font-size: 3.25rem;
-  line-height: 1.02;
+  font-size: 2.6rem;
+  line-height: 1.08;
   letter-spacing: 0;
   white-space: nowrap;
 }
@@ -185,14 +184,10 @@ h1 {
 
 .intro {
   max-width: 560px;
-  margin: 12px 0 0;
+  margin: 6px 0 0;
   color: var(--hero-muted);
-  font-size: 1rem;
-  line-height: 1.7;
-}
-
-.hero-actions {
-  margin-top: 16px;
+  font-size: 0.92rem;
+  line-height: 1.6;
 }
 
 .cta-button {
@@ -694,27 +689,27 @@ h1 {
 
 .summary-strip {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .summary-item {
-  display: grid;
-  align-content: center;
-  min-height: 62px;
-  padding: 12px 14px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-height: 0;
+  padding: 8px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
 }
 
 .summary-item strong {
-  font-size: 1.45rem;
+  font-size: 1.3rem;
   line-height: 1;
 }
 
 .summary-item span {
-  margin-top: 8px;
   color: var(--muted);
   font-size: 0.8rem;
 }
@@ -722,8 +717,8 @@ h1 {
 .filter-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin: 16px 0 18px;
+  gap: 6px;
+  margin: 10px 0 12px;
 }
 
 .filter-button {
@@ -1295,16 +1290,15 @@ h1 {
   }
 
   .summary-strip {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .summary-item {
-    min-height: 56px;
-    padding: 9px 10px;
+    padding: 6px 8px;
   }
 
   .summary-item strong {
-    font-size: 1.25rem;
+    font-size: 1.15rem;
   }
 
   .filter-row {
@@ -1612,19 +1606,19 @@ h1 {
 .preset-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 8px;
+  gap: 5px;
+  margin-bottom: 6px;
 }
 
 .preset-btn {
   display: inline-flex;
   align-items: center;
-  padding: 6px 12px;
+  padding: 4px 10px;
   border: 1px solid var(--line);
   border-radius: 20px;
   background: var(--surface);
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
   white-space: nowrap;
@@ -1647,23 +1641,24 @@ h1 {
 
 .advanced-bar {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .search-wrap {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
 }
 
 .search-input {
   width: 100%;
-  padding: 8px 12px;
+  padding: 6px 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--surface);
   color: var(--ink);
-  font-size: 0.88rem;
+  font-size: 0.85rem;
   outline: none;
   transition: border-color 0.15s;
   box-sizing: border-box;
@@ -1675,7 +1670,7 @@ h1 {
 }
 
 .filter-toggle-btn {
-  align-self: flex-start;
+  flex-shrink: 0;
   padding: 4px 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -1684,6 +1679,7 @@ h1 {
   font-size: 0.8rem;
   cursor: pointer;
   transition: background 0.15s;
+  white-space: nowrap;
 }
 
 .filter-toggle-btn:hover {
@@ -1752,10 +1748,10 @@ h1 {
 .result-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
-  padding: 6px 0;
-  font-size: 0.82rem;
+  padding: 4px 0;
+  font-size: 0.8rem;
   color: var(--muted);
 }
 

@@ -4,6 +4,7 @@
 // Rebuild: node scripts/build-html.js
 export const broadcastHtml = `<!doctype html>
 <html lang="zh-CN">
+    <!-- build:2026-08-26T00:38:02.450Z -->
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -187,8 +188,8 @@ input {
 .hero-band {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
-  min-height: 180px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--hero-border);
   border-radius: 8px;
@@ -210,22 +211,21 @@ input {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 28px 32px;
+  padding: 20px 28px;
   color: var(--hero-ink);
 }
 
-.eyebrow {
-  margin: 0 0 12px;
-  color: var(--hero-eyebrow);
-  font-size: 0.78rem;
-  font-weight: 700;
+.hero-title-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 
 h1 {
   margin: 0;
   max-width: none;
-  font-size: 3.25rem;
-  line-height: 1.02;
+  font-size: 2.6rem;
+  line-height: 1.08;
   letter-spacing: 0;
   white-space: nowrap;
 }
@@ -236,14 +236,10 @@ h1 {
 
 .intro {
   max-width: 560px;
-  margin: 12px 0 0;
+  margin: 6px 0 0;
   color: var(--hero-muted);
-  font-size: 1rem;
-  line-height: 1.7;
-}
-
-.hero-actions {
-  margin-top: 16px;
+  font-size: 0.92rem;
+  line-height: 1.6;
 }
 
 .cta-button {
@@ -745,27 +741,27 @@ h1 {
 
 .summary-strip {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .summary-item {
-  display: grid;
-  align-content: center;
-  min-height: 62px;
-  padding: 12px 14px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-height: 0;
+  padding: 8px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
 }
 
 .summary-item strong {
-  font-size: 1.45rem;
+  font-size: 1.3rem;
   line-height: 1;
 }
 
 .summary-item span {
-  margin-top: 8px;
   color: var(--muted);
   font-size: 0.8rem;
 }
@@ -773,8 +769,8 @@ h1 {
 .filter-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin: 16px 0 18px;
+  gap: 6px;
+  margin: 10px 0 12px;
 }
 
 .filter-button {
@@ -1346,16 +1342,15 @@ h1 {
   }
 
   .summary-strip {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .summary-item {
-    min-height: 56px;
-    padding: 9px 10px;
+    padding: 6px 8px;
   }
 
   .summary-item strong {
-    font-size: 1.25rem;
+    font-size: 1.15rem;
   }
 
   .filter-row {
@@ -1663,19 +1658,19 @@ h1 {
 .preset-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 8px;
+  gap: 5px;
+  margin-bottom: 6px;
 }
 
 .preset-btn {
   display: inline-flex;
   align-items: center;
-  padding: 6px 12px;
+  padding: 4px 10px;
   border: 1px solid var(--line);
   border-radius: 20px;
   background: var(--surface);
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
   white-space: nowrap;
@@ -1698,23 +1693,24 @@ h1 {
 
 .advanced-bar {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .search-wrap {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
 }
 
 .search-input {
   width: 100%;
-  padding: 8px 12px;
+  padding: 6px 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--surface);
   color: var(--ink);
-  font-size: 0.88rem;
+  font-size: 0.85rem;
   outline: none;
   transition: border-color 0.15s;
   box-sizing: border-box;
@@ -1726,7 +1722,7 @@ h1 {
 }
 
 .filter-toggle-btn {
-  align-self: flex-start;
+  flex-shrink: 0;
   padding: 4px 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -1735,6 +1731,7 @@ h1 {
   font-size: 0.8rem;
   cursor: pointer;
   transition: background 0.15s;
+  white-space: nowrap;
 }
 
 .filter-toggle-btn:hover {
@@ -1803,10 +1800,10 @@ h1 {
 .result-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
-  padding: 6px 0;
-  font-size: 0.82rem;
+  padding: 4px 0;
+  font-size: 0.8rem;
   color: var(--muted);
 }
 
@@ -2176,6 +2173,125 @@ h1 {
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
+/* ═══════ 详情抽屉（基础样式）═══════
+ *
+ * 这一段此前完全缺失：JS 里 createElement 出了 .drawer-overlay / .drawer /
+ * .drawer-close / .drawer-title，但 CSS 只写了 .drawer-notes / .drawer-vote /
+ * .drawer-feedback，以及一条藏在 @media(max-width:680px) 里的 .drawer。
+ * 结果是点「⋯」之后往 body 尾部追加一个没有任何定位的普通 div ——
+ * 内容出现在页脚下方、没有遮罩、没有动画，closeBtn.focus() 还会把页面
+ * 滚到最底部，看起来就像"点了没反应"。
+ *
+ * 必须写在下面的 @media 之前：媒体查询里那条 .drawer 与这里同特异性，
+ * 如果基础样式放在后面，源码顺序会让它盖掉移动端的全屏规则。
+ */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(15, 23, 42, 0);
+  backdrop-filter: blur(0px);
+  transition: background 0.28s ease, backdrop-filter 0.28s ease;
+}
+
+.drawer-overlay.open {
+  background: rgba(15, 23, 42, 0.44);
+  backdrop-filter: blur(3px);
+}
+
+.drawer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(440px, 92vw);
+  max-width: 92vw;
+  height: 100%;
+  padding: 22px 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  box-shadow: -12px 0 32px rgba(8, 20, 40, 0.18);
+  transform: translateX(100%);
+  transition: transform 0.28s ease;
+}
+
+.drawer-overlay.open .drawer {
+  transform: translateX(0);
+}
+
+.drawer-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  /* 44px 触摸目标，与投票按钮保持一致 */
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.drawer-close:hover {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.drawer-close:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+.drawer-title {
+  margin: 0 52px 14px 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+.drawer-body {
+  flex: 1;
+  min-height: 0;
+}
+
+/* 表格里"需要魔法"的小锁图标 */
+.proxy-icon {
+  font-size: 0.78rem;
+  opacity: 0.75;
+}
+
+/* 表格社区列的净票数 */
+.vote-score-inline {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.vote-score-inline.positive { color: var(--teal-ink, var(--teal)); }
+.vote-score-inline.negative { color: #b4232a; }
+
+/* 死链分组：整组降饱和，明确"看得见但不该优先考虑" */
+.dead-group {
+  filter: saturate(0.4);
+  opacity: 0.7;
+}
+
+.dead-group:hover,
+.dead-group:focus-within {
+  filter: none;
+  opacity: 1;
+}
+
 /* ═══════ 移动端响应式（表格 + 筛选 + 卡片）═══════ */
 
 @media (max-width: 680px) {
@@ -2257,6 +2373,18 @@ h1 {
     <a href="#main-content" class="skip-link">跳到主要内容</a>
     <main class="page-shell" id="main-content">
       <section class="hero-band" aria-labelledby="pageTitle">
+        <div class="hero-copy">
+          <div class="hero-title-row">
+            <h1 id="pageTitle">TOKEN <span class="keep-together">站点速查</span></h1>
+            <button class="cta-button" id="submitSiteBtn" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+              提交站点
+            </button>
+          </div>
+          <p class="intro">
+            收录可注册、可签到、可生图和长期备用的 API 站点。
+          </p>
+        </div>
         <div class="theme-switcher" role="group" aria-label="主题模式">
           <button class="theme-button" type="button" data-theme-choice="light" aria-label="亮色主题" aria-pressed="false" title="亮色主题">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -2283,19 +2411,6 @@ h1 {
               <path d="M12 16v4" />
             </svg>
           </button>
-        </div>
-        <div class="hero-copy">
-          <p class="eyebrow">FREE.EFORGE.XYZ</p>
-          <h1 id="pageTitle">TOKEN <span class="keep-together">站点速查</span></h1>
-          <p class="intro">
-            收录可注册、可签到、可生图和长期备用的 API 站点。
-          </p>
-          <div class="hero-actions">
-            <button class="cta-button" id="submitSiteBtn" type="button">
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-              提交站点
-            </button>
-          </div>
         </div>
       </section>
 
@@ -2460,6 +2575,7 @@ const state = {
   filterThreshold: [], // ["github","telegram","email","none"] 多选
   hideStale: false,   // 隐藏 7 天未验证的站点
   showDead: false,    // 表格视图中展开死链分组
+  filterPanelOpen: false, // "更多筛选"面板是否展开（必须放 state：筛选栏会整条重建）
   // 抽屉状态
   drawerSite: null    // 当前展开的站点对象，null = 关闭
 };
@@ -2470,7 +2586,6 @@ const state = {
 const els = {};
 
 function initDom() {
-  els.searchInput = document.getElementById("searchInput");
   els.summaryStrip = document.getElementById("summaryStrip");
   els.filterRow = document.getElementById("filterRow");
   els.noticeBand = document.getElementById("noticeBand");
@@ -2926,11 +3041,17 @@ const PRESETS = [
 
 /**
  * 单条站点是否匹配当前所有筛选条件（组间 AND，组内 OR）
+ *
+ * 注意：这里**不过滤死链**。
+ * 死链的呈现方式是"表格底部一个默认折叠的分组"，由 renderTable() 负责，
+ * 折叠状态是 state.showDead。曾经这里有一句
+ *   if (site.dead && !state.showDead) return false;
+ * 结果形成死锁：死链被筛掉 → dead 数组恒为空 → 展开按钮永不渲染 →
+ * state.showDead 永远没有入口翻成 true → 死链分组、.row-dead 样式、
+ * 沉底排序全部变成不可达代码。用注入 dead=true 的数据实测过：
+ * 18 条里 3 条 dead，页面只剩 15 行，连"已失效 (3)"按钮都不存在。
  */
 function matchesFilters(site) {
-  // 0. 死链默认折叠（除非管理员展开）
-  if (site.dead && !state.showDead) return false;
-
   // 1. 快捷视图
   if (state.activePreset) {
     const preset = PRESETS.find((p) => p.key === state.activePreset);
@@ -3047,6 +3168,16 @@ function filteredSites() {
 }
 
 /**
+ * 当前筛选下"仍然可用"的条数
+ * 结果条上的"匹配 N 条"用这个，而不是 filteredSites().length：
+ * 死链虽然在列表里，但被折叠在底部分组，把它们算进"匹配"会虚高。
+ * @returns {number}
+ */
+function aliveMatchCount() {
+  return filteredSites().filter((s) => !s.dead).length;
+}
+
+/**
  * 统计信息（用全量数据计算，不受筛选影响）
  */
 function computeStats() {
@@ -3088,13 +3219,20 @@ function renderTable() {
 
   const table = document.createElement("table");
   table.className = "site-table";
-  table.setAttribute("role", "grid");
+  // 不加 role="grid"：grid 角色向读屏器承诺一套完整的方格键盘导航
+  // （方向键在单元格间移动），而这里并没有实现。承诺了不实现比不承诺更糟——
+  // 读屏器会切到 grid 浏览模式，用户反而读不到表格内容。
+  // 原生 <table> 语义本身就够用。
   table.setAttribute("aria-label", "站点对比表");
 
   // ── 表头（aria-sort 标记当前排序列）─────────────────────────────────────────
   const sortColMap = { fresh: "col-fresh", quota: "col-quota", community: "col-community", name: "col-name" };
   const activeSortCol = sortColMap[state.sortBy] || "col-fresh";
-  const th = (cls, label) => \`<th scope="col" class="\${cls}" aria-sort="\${cls === activeSortCol ? "descending" : "none"}">\${label}</th>\`;
+  // 方向要跟真实排序一致：按名称是 localeCompare 升序，
+  // 鲜度/额度/社区都是"最优先在前"，语义上是降序。
+  const activeDir = state.sortBy === "name" ? "ascending" : "descending";
+  const th = (cls, label) =>
+    \`<th scope="col" class="\${cls}" aria-sort="\${cls === activeSortCol ? activeDir : "none"}">\${label}</th>\`;
   const thead = document.createElement("thead");
   thead.innerHTML = \`<tr>
     \${th("col-name", "站点")}
@@ -3117,20 +3255,22 @@ function renderTable() {
     deadGroup.className = "dead-group";
     deadGroup.hidden = !state.showDead;
 
+    const label = (open) => \`已失效 (\${dead.length}) — 点击\${open ? "折叠" : "展开"}\`;
     const toggleRow = document.createElement("tr");
     toggleRow.className = "dead-toggle";
+    // 按钮文字与 aria-expanded 必须由 state 推导：表格会因为筛选/排序反复重建，
+    // 写死 "点击展开"/false 会在 showDead 已经是 true 时和实际状态对不上。
     toggleRow.innerHTML = \`<td colspan="7">
-      <button class="dead-toggle-btn" aria-expanded="false">
-        已失效 (\${dead.length}) — 点击展开
+      <button class="dead-toggle-btn" type="button" aria-expanded="\${state.showDead}" aria-controls="deadGroup">
+        \${label(state.showDead)}
       </button>
     </td>\`;
+    deadGroup.id = "deadGroup";
     toggleRow.querySelector("button").addEventListener("click", (e) => {
       state.showDead = !state.showDead;
       deadGroup.hidden = !state.showDead;
       e.currentTarget.setAttribute("aria-expanded", String(state.showDead));
-      e.currentTarget.textContent = state.showDead
-        ? \`已失效 (\${dead.length}) — 点击折叠\`
-        : \`已失效 (\${dead.length}) — 点击展开\`;
+      e.currentTarget.textContent = label(state.showDead);
     });
     tbody.appendChild(toggleRow);
 
@@ -3139,10 +3279,15 @@ function renderTable() {
       row.classList.add("row-dead");
       deadGroup.appendChild(row);
     });
-    tbody.appendChild(deadGroup);
+    // deadGroup 是 <tbody>，必须挂在 <table> 上而不是另一个 <tbody> 里面。
+    // 原来 tbody.appendChild(deadGroup) 会造出 <tbody><tbody>…</tbody></tbody>
+    // 这种非法嵌套（DOM 不拦，浏览器渲染行为无保证）。
+    table.appendChild(tbody);
+    table.appendChild(deadGroup);
+  } else {
+    table.appendChild(tbody);
   }
 
-  table.appendChild(tbody);
   els.cardsArea.replaceChildren(table);
 }
 
@@ -3358,7 +3503,11 @@ function openDrawer(site) {
   // 记录触发元素，关闭时恢复焦点（a11y）
   const triggerEl = document.activeElement;
   const existing = document.querySelector(".drawer-overlay");
-  if (existing) existing.remove();
+  if (existing) {
+    // 直接 remove() 不会注销挂在 document 上的 keydown 监听器，必须先 cleanup
+    if (typeof existing.__cleanup === "function") existing.__cleanup();
+    existing.remove();
+  }
 
   const overlay = document.createElement("div");
   overlay.className = "drawer-overlay";
@@ -3458,17 +3607,23 @@ function openDrawer(site) {
   });
 
   // Focus trap + ESC 关闭（a11y）
+  //
+  // 注意监听器的注销时机：onKey 挂在 document 上，如果只在 Escape 分支里注销，
+  // 那么从 ✕ 按钮或点遮罩关闭时它会永久留在 document 上。开关几次抽屉之后，
+  // 按一下 Escape 会把这些陈旧监听器全部触发，每个都执行 triggerEl.focus()
+  // —— 焦点会跳到好几个抽屉之前的那一行。所以统一收敛到 cleanup()，
+  // 并挂在 overlay 上让 closeDrawer 无论走哪条路径都能调到。
   const onKey = (e) => {
     if (e.key === "Escape") {
       closeDrawer(triggerEl);
-      document.removeEventListener("keydown", onKey);
-      overlay.removeEventListener("focusin", onFocusIn);
       return;
     }
     if (e.key === "Tab") {
-      const focusable = drawer.querySelectorAll(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      );
+      const focusable = Array.from(
+        drawer.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => !el.disabled && el.offsetParent !== null);
       if (!focusable.length) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
@@ -3482,18 +3637,22 @@ function openDrawer(site) {
     }
   };
   const onFocusIn = (e) => {
-    if (!drawer.contains(e.target)) {
-      e.stopPropagation();
-      closeBtn.focus();
-    }
+    if (!drawer.contains(e.target)) closeBtn.focus();
   };
   document.addEventListener("keydown", onKey);
   overlay.addEventListener("focusin", onFocusIn);
+  overlay.__cleanup = () => {
+    document.removeEventListener("keydown", onKey);
+    overlay.removeEventListener("focusin", onFocusIn);
+  };
 }
 
 function closeDrawer(triggerEl) {
   const overlay = document.querySelector(".drawer-overlay");
   if (overlay) {
+    // 先注销监听器，再做退场动画：动画期间 overlay 还在 DOM 里，
+    // 不注销的话这 300ms 内的 Tab/Escape 仍会被已经"关掉"的抽屉截获。
+    if (typeof overlay.__cleanup === "function") overlay.__cleanup();
     overlay.classList.remove("open");
     setTimeout(() => overlay.remove(), 300);
   }
@@ -3832,7 +3991,7 @@ function renderFilters() {
   const debouncedSearch = debounce((val) => {
     state.query = val;
     syncToUrl(false);
-    renderResults();
+    applyFilterChange();
   }, SEARCH_DEBOUNCE_MS);
   searchInput.addEventListener("input", (e) => debouncedSearch(e.target.value.trim()));
   searchWrap.appendChild(searchInput);
@@ -3842,16 +4001,21 @@ function renderFilters() {
   const toggleBtn = document.createElement("button");
   toggleBtn.type = "button";
   toggleBtn.className = "filter-toggle-btn";
-  toggleBtn.textContent = "更多筛选 ▾";
-  let filterOpen = false;
+  // 展开状态存在 state 里而不是局部变量：renderFilters() 会 innerHTML=""
+  // 重建整条筛选栏，局部变量每次都被重置成"收起"。
+  toggleBtn.textContent = state.filterPanelOpen ? "收起筛选 ▴" : "更多筛选 ▾";
+  toggleBtn.setAttribute("aria-expanded", String(state.filterPanelOpen));
+  toggleBtn.setAttribute("aria-controls", "filterPanel");
   const filterPanel = document.createElement("div");
   filterPanel.className = "filter-panel";
-  filterPanel.hidden = true;
+  filterPanel.id = "filterPanel";
+  filterPanel.hidden = !state.filterPanelOpen;
 
   toggleBtn.addEventListener("click", () => {
-    filterOpen = !filterOpen;
-    filterPanel.hidden = !filterOpen;
-    toggleBtn.textContent = filterOpen ? "收起筛选 ▴" : "更多筛选 ▾";
+    state.filterPanelOpen = !state.filterPanelOpen;
+    filterPanel.hidden = !state.filterPanelOpen;
+    toggleBtn.textContent = state.filterPanelOpen ? "收起筛选 ▴" : "更多筛选 ▾";
+    toggleBtn.setAttribute("aria-expanded", String(state.filterPanelOpen));
   });
 
   // 额度档位
@@ -3859,7 +4023,7 @@ function renderFilters() {
     { key: "high", label: "高" },
     { key: "mid", label: "中" },
     { key: "low", label: "低" }
-  ], state.filterTier, (vals) => { state.filterTier = vals; syncToUrl(false); renderResults(); }));
+  ], state.filterTier, (vals) => { state.filterTier = vals; syncToUrl(false); applyFilterChange(); }));
 
   // 类型
   filterPanel.appendChild(makeFilterGroup("类型", [
@@ -3867,7 +4031,7 @@ function renderFilters() {
     { key: "bot", label: "机器人" },
     { key: "account_pool", label: "号池" },
     { key: "tool", label: "工具" }
-  ], state.filterKind, (vals) => { state.filterKind = vals; syncToUrl(false); renderResults(); }));
+  ], state.filterKind, (vals) => { state.filterKind = vals; syncToUrl(false); applyFilterChange(); }));
 
   // 门槛
   filterPanel.appendChild(makeFilterGroup("门槛", [
@@ -3875,7 +4039,7 @@ function renderFilters() {
     { key: "Telegram", label: "Telegram" },
     { key: "邮箱", label: "邮箱" },
     { key: "无门槛", label: "无门槛" }
-  ], state.filterThreshold, (vals) => { state.filterThreshold = vals; syncToUrl(false); renderResults(); }));
+  ], state.filterThreshold, (vals) => { state.filterThreshold = vals; syncToUrl(false); applyFilterChange(); }));
 
   // 隐藏过期
   const staleRow = document.createElement("div");
@@ -3890,7 +4054,7 @@ function renderFilters() {
   staleCheck.addEventListener("change", (e) => {
     state.hideStale = e.target.checked;
     syncToUrl(false);
-    renderResults();
+    applyFilterChange();
   });
   staleRow.append(staleCheck, staleLabel);
   filterPanel.appendChild(staleRow);
@@ -3904,7 +4068,8 @@ function renderFilters() {
 
   const resultCount = document.createElement("span");
   resultCount.className = "result-count";
-  const matching = filteredSites().length;
+  resultCount.id = "resultCount";
+  const matching = aliveMatchCount();
   resultCount.textContent = \`\${state.sites.length} 条中匹配 \${matching} 条\`;
   resultBar.appendChild(resultCount);
 
@@ -3927,7 +4092,7 @@ function renderFilters() {
   sortSelect.addEventListener("change", (e) => {
     state.sortBy = e.target.value;
     syncToUrl(false);
-    renderResults();
+    applyFilterChange();
   });
   sortWrap.append(sortLabel, sortSelect);
   resultBar.appendChild(sortWrap);
@@ -3948,17 +4113,42 @@ function renderFilters() {
   viewWrap.append(tableBtn, cardBtn);
   resultBar.appendChild(viewWrap);
 
-  // 清除筛选
-  if (hasActiveFilters()) {
-    const clearBtn = document.createElement("button");
-    clearBtn.type = "button";
-    clearBtn.className = "clear-filters-btn";
-    clearBtn.textContent = "清除筛选";
-    clearBtn.addEventListener("click", clearAllFilters);
-    resultBar.appendChild(clearBtn);
-  }
+  // 清除筛选（常驻元素，用 hidden 控制显隐，便于原地更新而不重建整条筛选栏）
+  const clearBtn = document.createElement("button");
+  clearBtn.type = "button";
+  clearBtn.id = "clearFiltersBtn";
+  clearBtn.className = "clear-filters-btn";
+  clearBtn.textContent = "清除筛选";
+  clearBtn.hidden = !hasActiveFilters();
+  clearBtn.addEventListener("click", clearAllFilters);
+  resultBar.appendChild(clearBtn);
 
   els.filterRow.append(presetBar, advancedBar, resultBar);
+}
+
+/**
+ * 原地更新"匹配 N 条"和"清除筛选"按钮
+ *
+ * 为什么需要它：筛选交互原本调 renderResults()，而结果计数是在
+ * renderFilters() 里算的 —— 于是搜索、排序、档位、门槛、隐藏过期
+ * 这些操作全都不会刷新计数，列表明明只剩 1 条，上面还写着"匹配 18 条"。
+ * 而如果改成调 renderFilters()，整条筛选栏会被重建：
+ * 搜索框失去焦点、"更多筛选"面板被关掉。
+ * 所以拆出这个只改文字和显隐的轻量函数。
+ */
+function updateResultBar() {
+  const countEl = document.getElementById("resultCount");
+  if (countEl) {
+    countEl.textContent = \`\${state.sites.length} 条中匹配 \${aliveMatchCount()} 条\`;
+  }
+  const clearEl = document.getElementById("clearFiltersBtn");
+  if (clearEl) clearEl.hidden = !hasActiveFilters();
+}
+
+/** 筛选条件变化后的统一入口：更新计数 + 重渲列表，不重建筛选栏 */
+function applyFilterChange() {
+  updateResultBar();
+  renderResults();
 }
 
 /**
@@ -3985,8 +4175,14 @@ function makeFilterGroup(label, options, selected, onChange) {
       const idx = selected.indexOf(opt.key);
       if (idx >= 0) selected.splice(idx, 1);
       else selected.push(opt.key);
+      // 只更新这一个按钮自己的状态，不再调 renderFilters()。
+      // 原来那样会 innerHTML="" 重建整条筛选栏，而"更多筛选"面板的
+      // 展开状态是 renderFilters() 里的局部变量 —— 于是点一次筛选项
+      // 面板就自动收起，多选组实际没法多选。
+      const nowActive = selected.includes(opt.key);
+      btn.classList.toggle("is-active", nowActive);
+      btn.setAttribute("aria-pressed", String(nowActive));
       onChange([...selected]);
-      renderFilters();
     });
     group.appendChild(btn);
   });

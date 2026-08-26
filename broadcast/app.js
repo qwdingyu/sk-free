@@ -76,6 +76,7 @@ const state = {
   filterThreshold: [], // ["github","telegram","email","none"] 多选
   hideStale: false,   // 隐藏 7 天未验证的站点
   showDead: false,    // 表格视图中展开死链分组
+  filterPanelOpen: false, // "更多筛选"面板是否展开（必须放 state：筛选栏会整条重建）
   // 抽屉状态
   drawerSite: null    // 当前展开的站点对象，null = 关闭
 };
@@ -86,7 +87,6 @@ const state = {
 const els = {};
 
 function initDom() {
-  els.searchInput = document.getElementById("searchInput");
   els.summaryStrip = document.getElementById("summaryStrip");
   els.filterRow = document.getElementById("filterRow");
   els.noticeBand = document.getElementById("noticeBand");
@@ -542,11 +542,17 @@ const PRESETS = [
 
 /**
  * 单条站点是否匹配当前所有筛选条件（组间 AND，组内 OR）
+ *
+ * 注意：这里**不过滤死链**。
+ * 死链的呈现方式是"表格底部一个默认折叠的分组"，由 renderTable() 负责，
+ * 折叠状态是 state.showDead。曾经这里有一句
+ *   if (site.dead && !state.showDead) return false;
+ * 结果形成死锁：死链被筛掉 → dead 数组恒为空 → 展开按钮永不渲染 →
+ * state.showDead 永远没有入口翻成 true → 死链分组、.row-dead 样式、
+ * 沉底排序全部变成不可达代码。用注入 dead=true 的数据实测过：
+ * 18 条里 3 条 dead，页面只剩 15 行，连"已失效 (3)"按钮都不存在。
  */
 function matchesFilters(site) {
-  // 0. 死链默认折叠（除非管理员展开）
-  if (site.dead && !state.showDead) return false;
-
   // 1. 快捷视图
   if (state.activePreset) {
     const preset = PRESETS.find((p) => p.key === state.activePreset);
@@ -663,6 +669,16 @@ function filteredSites() {
 }
 
 /**
+ * 当前筛选下"仍然可用"的条数
+ * 结果条上的"匹配 N 条"用这个，而不是 filteredSites().length：
+ * 死链虽然在列表里，但被折叠在底部分组，把它们算进"匹配"会虚高。
+ * @returns {number}
+ */
+function aliveMatchCount() {
+  return filteredSites().filter((s) => !s.dead).length;
+}
+
+/**
  * 统计信息（用全量数据计算，不受筛选影响）
  */
 function computeStats() {
@@ -704,13 +720,20 @@ function renderTable() {
 
   const table = document.createElement("table");
   table.className = "site-table";
-  table.setAttribute("role", "grid");
+  // 不加 role="grid"：grid 角色向读屏器承诺一套完整的方格键盘导航
+  // （方向键在单元格间移动），而这里并没有实现。承诺了不实现比不承诺更糟——
+  // 读屏器会切到 grid 浏览模式，用户反而读不到表格内容。
+  // 原生 <table> 语义本身就够用。
   table.setAttribute("aria-label", "站点对比表");
 
   // ── 表头（aria-sort 标记当前排序列）─────────────────────────────────────────
   const sortColMap = { fresh: "col-fresh", quota: "col-quota", community: "col-community", name: "col-name" };
   const activeSortCol = sortColMap[state.sortBy] || "col-fresh";
-  const th = (cls, label) => `<th scope="col" class="${cls}" aria-sort="${cls === activeSortCol ? "descending" : "none"}">${label}</th>`;
+  // 方向要跟真实排序一致：按名称是 localeCompare 升序，
+  // 鲜度/额度/社区都是"最优先在前"，语义上是降序。
+  const activeDir = state.sortBy === "name" ? "ascending" : "descending";
+  const th = (cls, label) =>
+    `<th scope="col" class="${cls}" aria-sort="${cls === activeSortCol ? activeDir : "none"}">${label}</th>`;
   const thead = document.createElement("thead");
   thead.innerHTML = `<tr>
     ${th("col-name", "站点")}
@@ -733,20 +756,22 @@ function renderTable() {
     deadGroup.className = "dead-group";
     deadGroup.hidden = !state.showDead;
 
+    const label = (open) => `已失效 (${dead.length}) — 点击${open ? "折叠" : "展开"}`;
     const toggleRow = document.createElement("tr");
     toggleRow.className = "dead-toggle";
+    // 按钮文字与 aria-expanded 必须由 state 推导：表格会因为筛选/排序反复重建，
+    // 写死 "点击展开"/false 会在 showDead 已经是 true 时和实际状态对不上。
     toggleRow.innerHTML = `<td colspan="7">
-      <button class="dead-toggle-btn" aria-expanded="false">
-        已失效 (${dead.length}) — 点击展开
+      <button class="dead-toggle-btn" type="button" aria-expanded="${state.showDead}" aria-controls="deadGroup">
+        ${label(state.showDead)}
       </button>
     </td>`;
+    deadGroup.id = "deadGroup";
     toggleRow.querySelector("button").addEventListener("click", (e) => {
       state.showDead = !state.showDead;
       deadGroup.hidden = !state.showDead;
       e.currentTarget.setAttribute("aria-expanded", String(state.showDead));
-      e.currentTarget.textContent = state.showDead
-        ? `已失效 (${dead.length}) — 点击折叠`
-        : `已失效 (${dead.length}) — 点击展开`;
+      e.currentTarget.textContent = label(state.showDead);
     });
     tbody.appendChild(toggleRow);
 
@@ -755,10 +780,15 @@ function renderTable() {
       row.classList.add("row-dead");
       deadGroup.appendChild(row);
     });
-    tbody.appendChild(deadGroup);
+    // deadGroup 是 <tbody>，必须挂在 <table> 上而不是另一个 <tbody> 里面。
+    // 原来 tbody.appendChild(deadGroup) 会造出 <tbody><tbody>…</tbody></tbody>
+    // 这种非法嵌套（DOM 不拦，浏览器渲染行为无保证）。
+    table.appendChild(tbody);
+    table.appendChild(deadGroup);
+  } else {
+    table.appendChild(tbody);
   }
 
-  table.appendChild(tbody);
   els.cardsArea.replaceChildren(table);
 }
 
@@ -974,7 +1004,11 @@ function openDrawer(site) {
   // 记录触发元素，关闭时恢复焦点（a11y）
   const triggerEl = document.activeElement;
   const existing = document.querySelector(".drawer-overlay");
-  if (existing) existing.remove();
+  if (existing) {
+    // 直接 remove() 不会注销挂在 document 上的 keydown 监听器，必须先 cleanup
+    if (typeof existing.__cleanup === "function") existing.__cleanup();
+    existing.remove();
+  }
 
   const overlay = document.createElement("div");
   overlay.className = "drawer-overlay";
@@ -1074,17 +1108,23 @@ function openDrawer(site) {
   });
 
   // Focus trap + ESC 关闭（a11y）
+  //
+  // 注意监听器的注销时机：onKey 挂在 document 上，如果只在 Escape 分支里注销，
+  // 那么从 ✕ 按钮或点遮罩关闭时它会永久留在 document 上。开关几次抽屉之后，
+  // 按一下 Escape 会把这些陈旧监听器全部触发，每个都执行 triggerEl.focus()
+  // —— 焦点会跳到好几个抽屉之前的那一行。所以统一收敛到 cleanup()，
+  // 并挂在 overlay 上让 closeDrawer 无论走哪条路径都能调到。
   const onKey = (e) => {
     if (e.key === "Escape") {
       closeDrawer(triggerEl);
-      document.removeEventListener("keydown", onKey);
-      overlay.removeEventListener("focusin", onFocusIn);
       return;
     }
     if (e.key === "Tab") {
-      const focusable = drawer.querySelectorAll(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      );
+      const focusable = Array.from(
+        drawer.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => !el.disabled && el.offsetParent !== null);
       if (!focusable.length) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
@@ -1098,18 +1138,22 @@ function openDrawer(site) {
     }
   };
   const onFocusIn = (e) => {
-    if (!drawer.contains(e.target)) {
-      e.stopPropagation();
-      closeBtn.focus();
-    }
+    if (!drawer.contains(e.target)) closeBtn.focus();
   };
   document.addEventListener("keydown", onKey);
   overlay.addEventListener("focusin", onFocusIn);
+  overlay.__cleanup = () => {
+    document.removeEventListener("keydown", onKey);
+    overlay.removeEventListener("focusin", onFocusIn);
+  };
 }
 
 function closeDrawer(triggerEl) {
   const overlay = document.querySelector(".drawer-overlay");
   if (overlay) {
+    // 先注销监听器，再做退场动画：动画期间 overlay 还在 DOM 里，
+    // 不注销的话这 300ms 内的 Tab/Escape 仍会被已经"关掉"的抽屉截获。
+    if (typeof overlay.__cleanup === "function") overlay.__cleanup();
     overlay.classList.remove("open");
     setTimeout(() => overlay.remove(), 300);
   }
@@ -1448,7 +1492,7 @@ function renderFilters() {
   const debouncedSearch = debounce((val) => {
     state.query = val;
     syncToUrl(false);
-    renderResults();
+    applyFilterChange();
   }, SEARCH_DEBOUNCE_MS);
   searchInput.addEventListener("input", (e) => debouncedSearch(e.target.value.trim()));
   searchWrap.appendChild(searchInput);
@@ -1458,16 +1502,21 @@ function renderFilters() {
   const toggleBtn = document.createElement("button");
   toggleBtn.type = "button";
   toggleBtn.className = "filter-toggle-btn";
-  toggleBtn.textContent = "更多筛选 ▾";
-  let filterOpen = false;
+  // 展开状态存在 state 里而不是局部变量：renderFilters() 会 innerHTML=""
+  // 重建整条筛选栏，局部变量每次都被重置成"收起"。
+  toggleBtn.textContent = state.filterPanelOpen ? "收起筛选 ▴" : "更多筛选 ▾";
+  toggleBtn.setAttribute("aria-expanded", String(state.filterPanelOpen));
+  toggleBtn.setAttribute("aria-controls", "filterPanel");
   const filterPanel = document.createElement("div");
   filterPanel.className = "filter-panel";
-  filterPanel.hidden = true;
+  filterPanel.id = "filterPanel";
+  filterPanel.hidden = !state.filterPanelOpen;
 
   toggleBtn.addEventListener("click", () => {
-    filterOpen = !filterOpen;
-    filterPanel.hidden = !filterOpen;
-    toggleBtn.textContent = filterOpen ? "收起筛选 ▴" : "更多筛选 ▾";
+    state.filterPanelOpen = !state.filterPanelOpen;
+    filterPanel.hidden = !state.filterPanelOpen;
+    toggleBtn.textContent = state.filterPanelOpen ? "收起筛选 ▴" : "更多筛选 ▾";
+    toggleBtn.setAttribute("aria-expanded", String(state.filterPanelOpen));
   });
 
   // 额度档位
@@ -1475,7 +1524,7 @@ function renderFilters() {
     { key: "high", label: "高" },
     { key: "mid", label: "中" },
     { key: "low", label: "低" }
-  ], state.filterTier, (vals) => { state.filterTier = vals; syncToUrl(false); renderResults(); }));
+  ], state.filterTier, (vals) => { state.filterTier = vals; syncToUrl(false); applyFilterChange(); }));
 
   // 类型
   filterPanel.appendChild(makeFilterGroup("类型", [
@@ -1483,7 +1532,7 @@ function renderFilters() {
     { key: "bot", label: "机器人" },
     { key: "account_pool", label: "号池" },
     { key: "tool", label: "工具" }
-  ], state.filterKind, (vals) => { state.filterKind = vals; syncToUrl(false); renderResults(); }));
+  ], state.filterKind, (vals) => { state.filterKind = vals; syncToUrl(false); applyFilterChange(); }));
 
   // 门槛
   filterPanel.appendChild(makeFilterGroup("门槛", [
@@ -1491,7 +1540,7 @@ function renderFilters() {
     { key: "Telegram", label: "Telegram" },
     { key: "邮箱", label: "邮箱" },
     { key: "无门槛", label: "无门槛" }
-  ], state.filterThreshold, (vals) => { state.filterThreshold = vals; syncToUrl(false); renderResults(); }));
+  ], state.filterThreshold, (vals) => { state.filterThreshold = vals; syncToUrl(false); applyFilterChange(); }));
 
   // 隐藏过期
   const staleRow = document.createElement("div");
@@ -1506,7 +1555,7 @@ function renderFilters() {
   staleCheck.addEventListener("change", (e) => {
     state.hideStale = e.target.checked;
     syncToUrl(false);
-    renderResults();
+    applyFilterChange();
   });
   staleRow.append(staleCheck, staleLabel);
   filterPanel.appendChild(staleRow);
@@ -1520,7 +1569,8 @@ function renderFilters() {
 
   const resultCount = document.createElement("span");
   resultCount.className = "result-count";
-  const matching = filteredSites().length;
+  resultCount.id = "resultCount";
+  const matching = aliveMatchCount();
   resultCount.textContent = `${state.sites.length} 条中匹配 ${matching} 条`;
   resultBar.appendChild(resultCount);
 
@@ -1543,7 +1593,7 @@ function renderFilters() {
   sortSelect.addEventListener("change", (e) => {
     state.sortBy = e.target.value;
     syncToUrl(false);
-    renderResults();
+    applyFilterChange();
   });
   sortWrap.append(sortLabel, sortSelect);
   resultBar.appendChild(sortWrap);
@@ -1564,17 +1614,42 @@ function renderFilters() {
   viewWrap.append(tableBtn, cardBtn);
   resultBar.appendChild(viewWrap);
 
-  // 清除筛选
-  if (hasActiveFilters()) {
-    const clearBtn = document.createElement("button");
-    clearBtn.type = "button";
-    clearBtn.className = "clear-filters-btn";
-    clearBtn.textContent = "清除筛选";
-    clearBtn.addEventListener("click", clearAllFilters);
-    resultBar.appendChild(clearBtn);
-  }
+  // 清除筛选（常驻元素，用 hidden 控制显隐，便于原地更新而不重建整条筛选栏）
+  const clearBtn = document.createElement("button");
+  clearBtn.type = "button";
+  clearBtn.id = "clearFiltersBtn";
+  clearBtn.className = "clear-filters-btn";
+  clearBtn.textContent = "清除筛选";
+  clearBtn.hidden = !hasActiveFilters();
+  clearBtn.addEventListener("click", clearAllFilters);
+  resultBar.appendChild(clearBtn);
 
   els.filterRow.append(presetBar, advancedBar, resultBar);
+}
+
+/**
+ * 原地更新"匹配 N 条"和"清除筛选"按钮
+ *
+ * 为什么需要它：筛选交互原本调 renderResults()，而结果计数是在
+ * renderFilters() 里算的 —— 于是搜索、排序、档位、门槛、隐藏过期
+ * 这些操作全都不会刷新计数，列表明明只剩 1 条，上面还写着"匹配 18 条"。
+ * 而如果改成调 renderFilters()，整条筛选栏会被重建：
+ * 搜索框失去焦点、"更多筛选"面板被关掉。
+ * 所以拆出这个只改文字和显隐的轻量函数。
+ */
+function updateResultBar() {
+  const countEl = document.getElementById("resultCount");
+  if (countEl) {
+    countEl.textContent = `${state.sites.length} 条中匹配 ${aliveMatchCount()} 条`;
+  }
+  const clearEl = document.getElementById("clearFiltersBtn");
+  if (clearEl) clearEl.hidden = !hasActiveFilters();
+}
+
+/** 筛选条件变化后的统一入口：更新计数 + 重渲列表，不重建筛选栏 */
+function applyFilterChange() {
+  updateResultBar();
+  renderResults();
 }
 
 /**
@@ -1601,8 +1676,14 @@ function makeFilterGroup(label, options, selected, onChange) {
       const idx = selected.indexOf(opt.key);
       if (idx >= 0) selected.splice(idx, 1);
       else selected.push(opt.key);
+      // 只更新这一个按钮自己的状态，不再调 renderFilters()。
+      // 原来那样会 innerHTML="" 重建整条筛选栏，而"更多筛选"面板的
+      // 展开状态是 renderFilters() 里的局部变量 —— 于是点一次筛选项
+      // 面板就自动收起，多选组实际没法多选。
+      const nowActive = selected.includes(opt.key);
+      btn.classList.toggle("is-active", nowActive);
+      btn.setAttribute("aria-pressed", String(nowActive));
       onChange([...selected]);
-      renderFilters();
     });
     group.appendChild(btn);
   });
