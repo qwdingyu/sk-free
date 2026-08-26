@@ -228,7 +228,67 @@ console.log("\n10. 删除");
   check("删除不存在的站点 → 404", (await admin(`/api/admin/sites/${enc("根本没有这个站")}`, "DELETE")).status, 404);
 }
 
-// ══ 11. 死链接移除 → 站点自动恢复启用（URL 尾斜杠必须容差）═══════════════════
+// ══ 11. 导入：结构化字段应被完整接受 ══════════════════════════════════════════
+console.log("\n11. 导入（含结构化字段）");
+{
+  const importData = [
+    { name: "导入站A", url: "https://import-a.example.com", tags: ["签到"], kind: "api_site", quotaTier: "high", quotaMin: 25, quotaMax: 25, quotaUnit: "usd", quotaPeriod: "daily", checkin: "每日 25 刀" },
+    { name: "导入站B", url: "https://import-b.example.com", tags: [], kind: "bot", quotaTier: "low", quotaMin: 1, quotaUnit: "credit", quotaPeriod: "daily" },
+    // 旧版导出格式：不含结构化字段，应能正常导入并用默认值
+    { name: "导入站C（旧版）", url: "https://import-c.example.com", tags: [], summary: "无结构化字段" },
+  ];
+  const r = await admin("/api/admin/sites/import", "POST", { sites: importData });
+  check("导入 → 200", r.status, 200);
+  const result = await r.json();
+  check("3 条全部新增", result.added, 3);
+  check("无重复/跳过", result.skipped, 0);
+
+  const sA = await getSite("导入站A");
+  check("导入站A kind 落库", sA?.kind, "api_site");
+  check("导入站A quotaTier 落库", sA?.quotaTier, "high");
+  check("导入站A quotaMin 落库", sA?.quotaMin, 25);
+  check("导入站A quotaRaw 用 checkin 兜底", sA?.quotaRaw, "每日 25 刀");
+
+  const sB = await getSite("导入站B");
+  check("导入站B kind 落库", sB?.kind, "bot");
+  check("导入站B quotaTier 落库", sB?.quotaTier, "low");
+
+  const sC = await getSite("导入站C（旧版）");
+  check("旧版导入 kind 默认 api_site", sC?.kind, "api_site");
+  check("旧版导入 quotaTier 默认 none", sC?.quotaTier, "none");
+  check("旧版导入 quotaPeriod 默认 none", sC?.quotaPeriod, "none");
+
+  // 清理
+  for (const n of ["导入站A", "导入站B", "导入站C（旧版）"]) await admin(`/api/admin/sites/${enc(n)}`, "DELETE");
+}
+
+// ══ 12. 提交批准：结构化字段默认值 ════════════════════════════════════════════
+console.log("\n12. 提交批准（结构化字段默认值）");
+{
+  // 用户提交
+  const subR = await pub("/api/submit", "POST", { name: "提交批准站", url: "https://approve.example.com", tags: [], summary: "通过提交创建" });
+  check("用户提交 → 201", subR.status, 201);
+
+  // 管理员获取待审核列表
+  const subs = await (await admin("/api/admin/submissions", "GET")).json();
+  const sub = subs.submissions?.find((s) => s.site.name === "提交批准站");
+  check("待审核提交存在", !!sub, true);
+
+  // 原子批准
+  const approveR = await admin(`/api/admin/submissions/${enc(sub.id)}/approve`, "POST");
+  check("批准 → 201", approveR.status, 201);
+
+  const site = await getSite("提交批准站");
+  check("批准站 kind 默认 api_site", site?.kind, "api_site");
+  check("批准站 quotaTier 默认 none", site?.quotaTier, "none");
+  check("批准站 quotaPeriod 默认 none", site?.quotaPeriod, "none");
+  check("批准站 url 已入库", site?.url, "https://approve.example.com/");
+
+  // 清理
+  await admin(`/api/admin/sites/${enc("提交批准站")}`, "DELETE");
+}
+
+// ══ 13. 死链接移除 → 站点自动恢复启用（URL 尾斜杠必须容差）═══════════════════
 // sites.url 经 parseSiteUrl 规范化后带尾斜杠（https://x.com → https://x.com/），
 // dead_urls.url 存的是调用方原样传的字符串。两边形式不一致时，
 // "移除死链 → 恢复站点启用"这条联动会静默失效，而 UI 文案承诺了它会生效。
