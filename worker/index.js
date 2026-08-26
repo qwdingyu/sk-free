@@ -624,42 +624,6 @@ async function setDeadByName(name, isDead) {
   } catch (e) { toast(e.message, "error"); }
 }
 /**
- * 共享的健康扫描逻辑（链接健康 tab 和站点管理 tab 共用） '</span></span><span style="width:150px;color:var(--muted);font-size:11px">' + deadFreshness(s) + '</span><button class="btn btn-sm btn-primary" data-name="' + esc(s.name) + '" data-action="restore-dead">恢复</button></div>';
-  }).join("");
-}
-function toggleDeadSelect(name, checked) { if (checked) DEAD_SELECTED.add(name); else DEAD_SELECTED.delete(name); updateDeadBatchBar(); }
-function toggleDeadSelectAll(checked) { document.querySelectorAll('#deadUrlsList input[data-action="toggle-dead-select"]').forEach((cb) => { cb.checked = checked; const name = cb.getAttribute("data-name"); if (checked) DEAD_SELECTED.add(name); else DEAD_SELECTED.delete(name); }); updateDeadBatchBar(); }
-function clearDeadSelection() { DEAD_SELECTED.clear(); document.getElementById("deadSelectAll").checked = false; document.querySelectorAll('#deadUrlsList input[data-action="toggle-dead-select"]').forEach((cb) => cb.checked = false); updateDeadBatchBar(); }
-function updateDeadBatchBar() { const bar = document.getElementById("deadBatchBar"); const count = DEAD_SELECTED.size; document.getElementById("deadBatchCount").textContent = count; bar.classList.toggle("active", count > 0); }
-// 恢复死链 = 启用站点（走 /api/admin/sites/batch 的 enable，写人工验证时间）
-async function setDeadByName(name, isDead) {
-  try {
-    const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: isDead ? "disable" : "enable", names: [name] }) });
-    toast(isDead ? "已标记为死链：" + name : "已恢复为可用：" + name, "success");
-    await loadSites(); loadDeadUrls();
-  } catch (e) { toast(e.message, "error"); }
-}
-async function batchRestoreDead() {
-  if (DEAD_SELECTED.size === 0) return;
-  try { const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "enable", names: [...DEAD_SELECTED] }) }); toast("已恢复 " + data.affected + " 个站点为可用", "success"); DEAD_SELECTED.clear(); await loadSites(); loadDeadUrls(); } catch (e) { toast(e.message, "error"); }
-}
-async function restoreDeadUrl(name) {
-  await setDeadByName(name, false);
-}
-// 一键恢复全部死链
-async function restoreAllDeadUrls() {
-  const dead = SITES.filter((s) => s.dead);
-  if (dead.length === 0) { toast("当前没有死链站点", "info"); return; }
-  if (!confirm("确认恢复全部 " + dead.length + " 个死链站点为可用？")) return;
-  try {
-    const names = dead.map((s) => s.name);
-    const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "enable", names }) });
-    toast("已恢复 " + data.affected + " 个站点为可用", "success");
-    DEAD_SELECTED.clear();
-    await loadSites(); loadDeadUrls();
-  } catch (e) { toast(e.message, "error"); }
-}
-/**
  * 共享的健康扫描逻辑（链接健康 tab 和站点管理 tab 共用）
  * @param {object} opts
  * @param {function} opts.onProgress — 进度回调 (msg) => void
