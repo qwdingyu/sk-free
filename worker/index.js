@@ -200,14 +200,6 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
       <span id="healthStatus" style="color:var(--muted);font-size:13px"></span>
     </div>
     <div id="healthResults"></div>
-    <h4 style="margin:16px 0 8px">死链站点名单 <span id="deadCount" style="color:var(--muted);font-size:13px"></span></h4>
-    <div class="batch-bar" id="deadBatchBar">
-      <span>已选 <span class="count" id="deadBatchCount">0</span> 项</span>
-      <button class="btn btn-sm btn-primary" onclick="batchRestoreDead()">✅ 批量恢复</button>
-      <button class="btn btn-sm btn-danger" onclick="restoreAllDeadUrls()">🧹 一键恢复全部</button>
-      <button class="btn btn-sm" onclick="clearDeadSelection()">取消选择</button>
-    </div>
-    <div id="deadUrlsList"></div>
   </div>
   <div id="panelFeedback" class="tab-panel">
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
@@ -579,7 +571,6 @@ function switchTab(tab) {
   document.getElementById("panelFeedback").classList.toggle("active", tab === "feedback");
   document.getElementById("panelSchema").classList.toggle("active", tab === "schema");
   if (tab === "submissions") loadSubmissions();
-  if (tab === "health") loadDeadUrls();
   if (tab === "feedback") loadFeedbacks();
   if (tab === "schema") loadSchema();
 }
@@ -703,7 +694,7 @@ async function batchCheckUrls() {
           }).join("");
         }
         html += '<div style="margin:12px 0 4px;color:var(--muted);font-size:12px">\u5df2\u4e00\u81f4\uff08\u65e0\u9700\u64cd\u4f5c\uff09\uff1a\u4e0d\u53ef\u8fbe\u4e14\u5df2\u6807\u8bb0\u6b7b\u94fe ' + unreachDisabled.length + ' \u4e2a\uff1b\u53ef\u8fbe\u4e14\u53ef\u7528 ' + reachEnabled.length + ' \u4e2a\u3002</div>';
-        resultsEl.innerHTML = html; loadSites().then(loadDeadUrls);
+        resultsEl.innerHTML = html; loadSites();
       },
     });
   } catch (e) { statusEl.textContent = "检查失败: " + e.message; }
@@ -827,9 +818,8 @@ document.addEventListener("click", function(e) {
     case "delete-site":      deleteSite(name); break;
     case "approve-submission": approveSubmission(id); break;
     case "reject-submission":  rejectSubmission(id); break;
-    case "restore-dead":     restoreDeadUrl(name); break;
+    case "restore-dead":     setDeadByName(name, false); break;
     case "mark-dead":        setDeadByName(name, true); break;
-    case "toggle-dead-select-all": toggleDeadSelectAll(el.checked); break;
     case "fb-action":         feedbackAction(el.getAttribute("data-fb-id"), el.getAttribute("data-fb-action")); break;
   }
 });
@@ -838,7 +828,6 @@ document.addEventListener("change", function(e) {
   var action = el.getAttribute("data-action"); var name = el.getAttribute("data-name") || "";
   if (action === "toggle-select") toggleSelect(name, el.checked);
   if (action === "toggle-enable") toggleEnable(name, el.checked);
-  if (action === "toggle-dead-select") toggleDeadSelect(el.getAttribute("data-name"), el.checked);
 });
 </script>
 </body>
