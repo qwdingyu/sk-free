@@ -212,6 +212,33 @@ console.log("\n6. 鲜度时间");
   check("鲜度为绿", cls.includes("fresh-green"), true);
 }
 
+// ══ 7. 额度文本：0 是有效额度，null 才是未知 ════════════════════════════════════
+// 修复前的实测行为：min=null/max=50 → "null-50 积分/天"（把 null 印给用户）；
+// min=0/max=0 与 min=0/max=null → "额度未知"（明确填了 0 却当成没填）。
+// 管理后台补上结构化字段输入框之后，"只填上限"和"填 0"都能真填进来。
+console.log("\n7. 额度文本的 0 与 null");
+{
+  const { doc } = await boot([
+    makeSite({ name: "区间站", slug: "q1", quotaTier: "high", quotaMin: 25, quotaMax: 50, quotaUnit: "usd", quotaPeriod: "daily" }),
+    makeSite({ name: "零额度站", slug: "q2", quotaTier: "low", quotaMin: 0, quotaMax: 0, quotaUnit: "usd", quotaPeriod: "daily" }),
+    makeSite({ name: "只有上限站", slug: "q3", quotaTier: "mid", quotaMin: null, quotaMax: 50, quotaUnit: "credit", quotaPeriod: "daily" }),
+    makeSite({ name: "真未知站", slug: "q4", quotaMin: null, quotaMax: null, quotaRaw: null }),
+  ]);
+  // 按行名取值，不按位置 —— 默认排序是按 quotaTier 降序，位置会变。
+  const quotaOf = (siteName) => {
+    const row = Array.from(doc.querySelectorAll("tbody:first-of-type tr")).find(
+      (tr) => tr.querySelector(".site-name")?.textContent.trim() === siteName
+    );
+    return row?.querySelector(".quota-main")?.textContent.trim();
+  };
+  const allTexts = Array.from(doc.querySelectorAll("tbody:first-of-type .quota-main")).map((e) => e.textContent.trim());
+  check("区间正常显示", quotaOf("区间站"), "25-50 刀/天");
+  check("明确的 0 显示为「0 刀/天」而不是「额度未知」", quotaOf("零额度站"), "0 刀/天");
+  check("只有上限时不把 null 印出来", quotaOf("只有上限站"), "最多 50 积分/天");
+  check("没有任何 null 字样漏进页面", allTexts.some((t) => t.includes("null")), false);
+  check("真未知如实显示「额度未知」", quotaOf("真未知站"), "额度未知");
+}
+
 // ── 汇总 ──────────────────────────────────────────────────────────────────────
 console.log(`\n${"─".repeat(60)}`);
 if (failures.length === 0) {

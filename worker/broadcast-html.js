@@ -4,7 +4,7 @@
 // Rebuild: node scripts/build-html.js
 export const broadcastHtml = `<!doctype html>
 <html lang="zh-CN">
-    <!-- build:015fef7c05c7 -->
+    <!-- build:1f43fee91956 -->
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -2731,13 +2731,27 @@ function freshnessLevel(verifiedAt) {
  * @returns {string} 如 "25 刀/天"、"100 积分 ≈60次"、"额度未知"
  */
 function quotaText(site) {
-  if (site.quotaTier === "none" || (!site.quotaMin && !site.quotaMax)) {
+  // 必须用"是否为 null/undefined"判断，不能用真假值判断。
+  // 0 是有效额度，null 才是未知，两者不能混。修复前的实测行为：
+  //   min=null, max=50   → "null-50 积分/天"  ← 把 null 直接印给用户看
+  //   min=0,    max=0    → "额度未知"         ← 明确填了 0 却当成没填
+  //   min=0,    max=null → "额度未知"         ← 同上
+  //   （min=0, max=50 这种区间修复前是对的，没有回归风险）
+  // 管理后台加上结构化字段输入框之后，"只填上限"和"填 0"都能真填进来，
+  // 这两条就会被踩到。
+  const hasMin = site.quotaMin !== null && site.quotaMin !== undefined;
+  const hasMax = site.quotaMax !== null && site.quotaMax !== undefined;
+
+  if (site.quotaTier === "none" || (!hasMin && !hasMax)) {
     return site.quotaRaw || "额度未知";
   }
   const unit = QUOTA_UNIT_LABEL[site.quotaUnit] || site.quotaUnit || "";
   const period = site.quotaPeriod === "daily" ? "/天" : site.quotaPeriod === "once" ? "（一次性）" : "";
   let text = "";
-  if (site.quotaMin === site.quotaMax || !site.quotaMax) {
+  if (!hasMin) {
+    // 只有上限：写成"最多 N"，别把缺失的下限印成 null
+    text = \`最多 \${site.quotaMax} \${unit}\`;
+  } else if (!hasMax || site.quotaMin === site.quotaMax) {
     text = \`\${site.quotaMin} \${unit}\`;
   } else {
     text = \`\${site.quotaMin}-\${site.quotaMax} \${unit}\`;

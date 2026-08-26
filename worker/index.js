@@ -265,6 +265,69 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
     <div class="form-row"><label>注册方式</label><input id="editRegister" placeholder="如：GitHub、邮箱"></div>
     <div class="form-row"><label>邀请码 (ref)</label><input id="editRef" placeholder="如：aff=FWQS 或 ref=ABC123"><div class="hint">导入时自动从 URL 剥离 aff/ref/invite 等推广参数存入此字段</div></div>
     <div class="form-row"><label>备注（每行一条）</label><textarea id="editNotes" placeholder="第一行备注&#10;第二行备注"></textarea></div>
+    <!-- ── 0003 结构化字段 ────────────────────────────────────────────────────
+         这些字段决定前端能不能"横向比较"：额度档位驱动排序，单位/周期决定
+         展示成"25 刀/天"还是"额度未知"。之前后端 API 已经能收，但表单里
+         一个输入框都没有 —— 结果是从后台新建的站点，结构化字段全是 NULL，
+         额度那栏永远显示"未知"，只有直接写 SQL 或走导入才能填上。
+         枚举值必须与 worker/src/sites.js 的 QUOTA_* / SITE_KINDS 完全一致，
+         中文标签与 broadcast/src/00-config.js 保持一致，避免两边叫法不同。 -->
+    <div class="form-row" style="border-top:1px solid var(--border);padding-top:14px;margin-top:6px">
+      <label style="font-weight:600">结构化额度（决定前端排序与"25 刀/天"这类展示）</label>
+      <div class="hint">留空 = 未知，前端会诚实显示"未知"，不会编造。跨单位没有汇率，排序只看档位。</div>
+    </div>
+    <div class="form-row"><label>额度档位（排序依据）</label>
+      <select id="editQuotaTier">
+        <option value="">未设置（未知）</option>
+        <option value="high">高</option>
+        <option value="mid">中</option>
+        <option value="low">低</option>
+        <option value="none">无额度</option>
+      </select>
+      <div class="hint">人工判定。刀/元/积分互不可换算，所以排序不比数值、只比档位。</div>
+    </div>
+    <div class="form-row"><label>额度下限</label><input id="editQuotaMin" type="number" step="any" placeholder="如：25"></div>
+    <div class="form-row"><label>额度上限</label><input id="editQuotaMax" type="number" step="any" placeholder="区间额度填上限，固定额度与下限填同值"></div>
+    <div class="form-row"><label>额度单位</label>
+      <select id="editQuotaUnit">
+        <option value="">未设置</option>
+        <option value="usd">刀 (usd)</option>
+        <option value="cny">元 (cny)</option>
+        <option value="credit">积分 (credit)</option>
+        <option value="coin">硬币 (coin)</option>
+        <option value="token">代币 (token)</option>
+        <option value="call">次 (call)</option>
+      </select>
+    </div>
+    <div class="form-row"><label>额度周期</label>
+      <select id="editQuotaPeriod">
+        <option value="">未设置</option>
+        <option value="daily">每日</option>
+        <option value="weekly">每周</option>
+        <option value="once">一次性</option>
+        <option value="none">无周期</option>
+      </select>
+      <div class="hint">选"每日"且额度下限 &gt; 0 才会进前端"今天能签到"筛选。</div>
+    </div>
+    <div class="form-row"><label>估算可调用次数</label><input id="editQuotaCallsEst" type="number" step="1" placeholder="如：100"></div>
+    <div class="form-row"><label>额度原文</label><input id="editQuotaRaw" placeholder="如：每日签到送 25 刀"><div class="hint">拿不到结构化数值时，前端退回展示这段原文。留空则用"签到额度"兜底。</div></div>
+    <div class="form-row"><label>站点类型</label>
+      <select id="editKind">
+        <option value="">未设置（前端按 API站 处理）</option>
+        <option value="api_site">API站</option>
+        <option value="bot">机器人</option>
+        <option value="account_pool">号池</option>
+        <option value="tool">工具</option>
+      </select>
+    </div>
+    <div class="form-row"><label>是否需要代理</label>
+      <select id="editNeedsProxy">
+        <option value="">未知</option>
+        <option value="1">需要</option>
+        <option value="0">不需要</option>
+      </select>
+    </div>
+    <div class="form-row"><label>slug（URL 短标识）</label><input id="editSlug" placeholder="留空则不设置"><div class="hint">全站唯一。留空写 NULL，不会与其它空 slug 冲突。</div></div>
     <div class="form-actions">
       <button class="btn" onclick="closeModal()">取消</button>
       <button class="btn btn-primary" onclick="saveSite()">保存</button>
@@ -382,10 +445,25 @@ function toggleSelectAll() {
 }
 function clearSelection() { SELECTED.clear(); document.getElementById("selectAll").checked = false; document.querySelectorAll('#sitesBody input[data-action="toggle-select"]').forEach((cb) => cb.checked = false); updateBatchBar(); }
 function updateBatchBar() { const bar = document.getElementById("batchBar"); const count = SELECTED.size; document.getElementById("batchCount").textContent = count; bar.classList.toggle("active", count > 0); }
+// 结构化字段的输入框 id ↔ API 字段名。新增/编辑/保存三处共用这一张表，
+// 避免"表单加了框但保存漏了"或"保存发了但回填漏了"这种半截修改。
+const STRUCT_FIELDS = [
+  ["editQuotaTier", "quotaTier"],
+  ["editQuotaMin", "quotaMin"],
+  ["editQuotaMax", "quotaMax"],
+  ["editQuotaUnit", "quotaUnit"],
+  ["editQuotaPeriod", "quotaPeriod"],
+  ["editQuotaCallsEst", "quotaCallsEst"],
+  ["editQuotaRaw", "quotaRaw"],
+  ["editKind", "kind"],
+  ["editNeedsProxy", "needsProxy"],
+  ["editSlug", "slug"]
+];
+const TEXT_FIELDS = ["editName","editUrl","editOriginalUrl","editTags","editSummary","editCheckin","editModels","editRate","editRegister","editRef","editNotes"];
 function showCreate() {
   document.getElementById("editTitle").textContent = "新增站点";
   document.getElementById("editOriginalName").value = "";
-  ["editName","editUrl","editOriginalUrl","editTags","editSummary","editCheckin","editModels","editRate","editRegister","editRef","editNotes"].forEach((id) => { document.getElementById(id).value = ""; });
+  TEXT_FIELDS.concat(STRUCT_FIELDS.map((f) => f[0])).forEach((id) => { document.getElementById(id).value = ""; });
   document.getElementById("editModal").classList.add("active");
   document.getElementById("editName").focus();
 }
@@ -405,6 +483,12 @@ function showEdit(name) {
   document.getElementById("editRegister").value = site.register || "";
   document.getElementById("editRef").value = site.ref || "";
   document.getElementById("editNotes").value = (site.notes || []).join("\\n");
+  // 结构化字段回填：null/undefined → 空字符串（对应各 select 的"未设置"项）。
+  // 注意不能用 || ""：quotaMin=0 和 needsProxy=0 都是有效值，会被 || 吃掉变成未设置。
+  STRUCT_FIELDS.forEach(function (f) {
+    const v = site[f[1]];
+    document.getElementById(f[0]).value = v === null || v === undefined ? "" : String(v);
+  });
   document.getElementById("editModal").classList.add("active");
 }
 function closeModal() { document.getElementById("editModal").classList.remove("active"); }
@@ -433,7 +517,28 @@ async function saveSite() {
     ref: val("editRef"),
     notes,
   };
+  // 结构化字段：空 = 显式 null（把字段改回"未知"），后端用 pick() 按键
+  // 是否存在判断，所以这里必须把键都带上，null 才能真的写进去。
+  // 数值字段要转成 number；空串转 null 而不是 0 —— 0 是有效额度，不能与未知混。
+  const NUMERIC = { quotaMin: 1, quotaMax: 1, quotaCallsEst: 1, needsProxy: 1 };
+  for (const f of STRUCT_FIELDS) {
+    const raw = val(f[0]);
+    if (raw === "") { body[f[1]] = null; continue; }
+    if (NUMERIC[f[1]]) {
+      const n = Number(raw);
+      if (!Number.isFinite(n)) { toast(f[1] + " 必须是数字", "error"); return; }
+      body[f[1]] = n;
+    } else {
+      body[f[1]] = raw;
+    }
+  }
   if (!body.name || !body.url) { toast("名称和 URL 为必填项", "error"); return; }
+  // 额度区间的方向性：上限小于下限一定是填错了，让它在提交前就被挡住，
+  // 否则前端会显示成 "25-5 刀/天" 这种读不通的区间。
+  if (body.quotaMin !== null && body.quotaMax !== null && body.quotaMax < body.quotaMin) {
+    toast("额度上限不能小于下限", "error");
+    return;
+  }
   try {
     if (originalName) { await api("/api/admin/sites/" + encodeURIComponent(originalName), { method: "PUT", body: JSON.stringify(body) }); toast("更新成功", "success"); }
     else { await api("/api/admin/sites", { method: "POST", body: JSON.stringify(body) }); toast("创建成功", "success"); }

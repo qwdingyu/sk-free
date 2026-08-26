@@ -5,7 +5,7 @@
 # 使用方式：bash scripts/deploy.sh
 # 替代直接运行：npx wrangler deploy
 #
-# 预检查任何一步失败都会阻止部署（set -e）。
+# 预检查任何一步失败都会阻止部署（set -e）。共 9 步：6 步预检查 + 提醒 + 部署 + 部署后验证。
 # 检查顺序按"越便宜越靠前"排列，快速失败。
 #
 # pipefail 是必需的：第 4 步用 `node build-html.js | tee` 同时保留输出和取
@@ -72,7 +72,19 @@ node "$SCRIPT_DIR/check-template-escapes.js" "$PROJECT_DIR/worker/index.js"
 node "$SCRIPT_DIR/check-template-escapes.js" "$PROJECT_DIR/worker/broadcast-html.js"
 echo ""
 
-# ── 7. 部署 ───────────────────────────────────────────────────────────────────
+# ── 7. 后端改动提醒（不做静默跳过）─────────────────────────────────────────────
+# 集成测试要真起一个 wrangler dev（约 15 秒）+ 本地 D1，不适合每次部署都跑。
+# 但它拦的是只有打真实接口才能发现的那一类：合并语义看错导致静默数据丢失、
+# 表单加了输入框但没发出去。所以 worker/ 有改动时明确提醒一次，
+# 而不是假装检查过了。
+if ! git -C "$PROJECT_DIR" diff --quiet HEAD -- worker/ 2>/dev/null; then
+  echo "⚠️  worker/ 有未提交改动。建议先跑一次集成测试："
+  echo "      bash scripts/test-integration.sh"
+  echo "   （它会自己起本地 Worker + D1，跑 108 项后端与后台表单断言）"
+  echo ""
+fi
+
+# ── 8. 部署 ───────────────────────────────────────────────────────────────────
 echo "📦 开始部署..."
 cd "$PROJECT_DIR/worker"
 npx wrangler deploy
@@ -81,7 +93,7 @@ echo ""
 echo "✅ 部署完成"
 echo ""
 
-# ── 8. 部署后自动验证 ──────────────────────────────────────────────────────────
+# ── 9. 部署后自动验证 ──────────────────────────────────────────────────────────
 # 不能只靠"部署命令成功"——上一次就是部署成功但线上跑的是旧 bundle（抽屉
 # 样式缺失、无定位 div），链路本身不报错。必须用构建标识对线上做断言。
 # 验证失败以非零退出，提醒人工检查（wrangler rollback 可回滚）。
