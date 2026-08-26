@@ -153,7 +153,7 @@ console.log("\n3. 高级筛选交互");
   await tick();
   check("点选筛选项后面板仍展开", doc.getElementById("filterPanel").hidden, false);
   check("chip aria-pressed 已翻转", doc.querySelector("#filterPanel .filter-chip").getAttribute("aria-pressed"), "true");
-  check("结果计数已刷新（只剩 1 条活的高额度）", doc.getElementById("resultCount").textContent, "5 条中匹配 1 条");
+  check("结果计数已刷新（只剩 1 条活的高额度）", doc.getElementById("resultCount").textContent, "2 条中匹配 1 条");
   check("清除筛选按钮出现", doc.getElementById("clearFiltersBtn").hidden, false);
 }
 

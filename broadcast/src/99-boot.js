@@ -178,8 +178,8 @@ function renderFilters() {
   const resultCount = document.createElement("span");
   resultCount.className = "result-count";
   resultCount.id = "resultCount";
-  const matching = aliveMatchCount();
-  resultCount.textContent = `${state.sites.length} 条中匹配 ${matching} 条`;
+  const filtered = filteredSites();
+  resultCount.textContent = `${filtered.length} 条中匹配 ${aliveMatchCount(filtered)} 条`;
   resultBar.appendChild(resultCount);
 
   // 排序选择
@@ -248,7 +248,8 @@ function renderFilters() {
 function updateResultBar() {
   const countEl = document.getElementById("resultCount");
   if (countEl) {
-    countEl.textContent = `${state.sites.length} 条中匹配 ${aliveMatchCount()} 条`;
+    const filtered = filteredSites();
+    countEl.textContent = `${filtered.length} 条中匹配 ${aliveMatchCount(filtered)} 条`;
   }
   const clearEl = document.getElementById("clearFiltersBtn");
   if (clearEl) clearEl.hidden = !hasActiveFilters();

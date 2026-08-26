@@ -142,8 +142,9 @@ function filteredSites() {
  * 死链虽然在列表里，但被折叠在底部分组，把它们算进"匹配"会虚高。
  * @returns {number}
  */
-function aliveMatchCount() {
-  return filteredSites().filter((s) => !s.dead).length;
+function aliveMatchCount(list) {
+  const base = Array.isArray(list) ? list : state.sites;
+  return base.filter((s) => !s.dead).length;
 }
 
 /**

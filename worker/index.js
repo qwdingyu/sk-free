@@ -1344,7 +1344,7 @@ export default {
         return json({ ok: true, schema }, 200, request);
       }
 
-      // GET /api/sites — 仅返回已启用站点
+      // GET /api/sites — 返回全量站点（含停用），死链由前端 dead 标记折叠展示
       if (path === "/api/sites" && request.method === "GET") {
         const data = await handleGetEnabledSites(db);
         return json(data, 200, request);
