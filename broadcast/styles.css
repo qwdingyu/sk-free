@@ -1877,6 +1877,35 @@ h1 {
   font-size: 0.75rem;
 }
 
+.card-history-wrap {
+  margin: 2px 0 0;
+}
+
+.history-badge {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--teal-soft);
+  color: var(--teal-ink);
+  font-size: 0.72rem;
+  line-height: 1.6;
+  vertical-align: middle;
+}
+
+.drawer-history {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--teal-ink);
+  font-size: 0.82rem;
+  background: var(--teal-soft);
+}
+
 .card-summary {
   font-size: 0.85rem;
   color: var(--muted);

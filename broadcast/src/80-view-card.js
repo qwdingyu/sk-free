@@ -24,6 +24,31 @@ function renderCards() {
  * 只放高填充率字段：name / quota / summary / 3 个决策标记 / 操作按钮
  * 低填充率字段（models/register/rate/notes）下沉到详情抽屉
  */
+
+/**
+ * 额度变更历史的展示文案（docs/09 阶段 D："↓ 额度从 25 降到 10（3天前）"）
+ * @param {object|null} h — { field, oldValue, newValue, changedAt }
+ * @returns {string|null}
+ */
+function historyLabel(h) {
+  if (!h || !h.field) return null;
+  const fmt = (v) => (v === null || v === undefined || v === "" ? "未知" : v);
+  let dir = "→";
+  const oldN = Number(h.oldValue);
+  const newN = Number(h.newValue);
+  // 数值字段按大小定方向（额度升降是用户最关心的信号）
+  if (h.oldValue !== null && h.newValue !== null && !Number.isNaN(oldN) && !Number.isNaN(newN)) {
+    dir = oldN > newN ? "↓ 降到" : oldN < newN ? "↑ 升到" : "→ 变为";
+  } else if (h.field === "quotaTier") {
+    // 档位是有序的：high > mid > low，即使值本身不是数字也要能判断升降
+    const rank = { high: 3, mid: 2, low: 1 };
+    if (rank[h.oldValue] !== undefined && rank[h.newValue] !== undefined && rank[h.oldValue] !== rank[h.newValue]) {
+      dir = rank[h.oldValue] > rank[h.newValue] ? "↓ 降到" : "↑ 升到";
+    }
+  }
+  return `${dir} 额度 ${fmt(h.oldValue)} → ${fmt(h.newValue)}（${relativeTime(h.changedAt)}）`;
+}
+
 function makeCard(site) {
   const node = document.createElement("div");
   node.className = "site-card" + (site.dead ? " card-dead" : "");
@@ -57,6 +82,13 @@ function makeCard(site) {
     <span class="quota-main">${esc(quotaText(site))}</span>
     ${tierLabel[site.quotaTier] ? `<span class="tier-badge">${esc(tierLabel[site.quotaTier])}</span>` : ""}
   `;
+
+  // ── 额度变化角标（site_history，docs/09 阶段 D）───────────────────────────
+  // "↓ 额度降到 10（3天前）"——变化信号是决策信息，放额度下面而不是塞详情里
+  const historyText = historyLabel(site.history);
+  const historyTag = historyText
+    ? `<div class="history-badge" title="${esc(historyText)}">${esc(historyText)}</div>`
+    : "";
 
   // ── Summary（2 行截断）─────────────────────────────────────────────────────
   const summary = document.createElement("div");
@@ -108,7 +140,14 @@ function makeCard(site) {
   actions.append(visitLink, detailBtn, voteBar);
 
   // ── 组装 ────────────────────────────────────────────────────────────────────
-  node.append(header, quota, summary, markers, actions);
+  node.append(header, quota);
+  if (historyTag) {
+    const tagWrap = document.createElement("div");
+    tagWrap.className = "card-history-wrap";
+    tagWrap.innerHTML = historyTag;
+    node.appendChild(tagWrap);
+  }
+  node.append(summary, markers, actions);
   return node;
 }
 
@@ -180,6 +219,15 @@ function openDrawer(site) {
     dl.append(dt, dd);
   });
   body.appendChild(dl);
+
+  // 最近一次额度变化（site_history，docs/09 阶段 D）
+  const historyText = historyLabel(site.history);
+  if (historyText) {
+    const changeRow = document.createElement("div");
+    changeRow.className = "drawer-history";
+    changeRow.textContent = "🕐 " + historyText;
+    body.appendChild(changeRow);
+  }
 
   // 备注
   if (site.notes && site.notes.length) {

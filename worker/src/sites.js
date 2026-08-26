@@ -121,7 +121,80 @@ function formatSiteRow(row) {
     verifiedAt: row.verified_at || null,
     verifiedBy: row.verified_by || null,
     healthFailCount: row.health_fail_count ?? 0,
+    // 0005 变更历史：最近一条额度相关变化（由调用方 attach，无则 null）
+    history: null,
   };
+}
+
+// ─── site_history：额度变更历史（docs/09 阶段 D）──────────────────────────────
+
+// 需要追踪的额度字段（变化检测与前端展示共用这一份定义）
+const HISTORY_FIELDS = ["quotaMin", "quotaMax", "quotaUnit", "quotaTier", "rate"];
+
+/**
+ * 检测额度字段变化并生成 history INSERT 语句（并入 update 的 dbBatch，原子）
+ * @param {object} db — D1 数据库实例
+ * @param {string} siteName — 站点名（用 DB 中的实际名）
+ * @param {object} existing — UPDATE 前的站点行（snake_case）
+ * @param {object} updated — 合并后的新值（camelCase）
+ * @returns {Array} db.prepare(...).bind(...) 数组（可能为空）
+ */
+function buildHistoryStmts(db, siteName, existing, updated) {
+  // old/new 都统一成字符串（或 null）比较：DB 原生值可能是数字（10），
+  // updated 侧是 String(10)，10 === "10" 为 false 会把"无变化"误报成一次变更。
+  const oldVal = (existing, field) => {
+    if (field === "rate") return existing.rate ? String(existing.rate) : null;
+    const raw = existing["quota_" + field.toLowerCase().replace("quota", "")];
+    // quotaMin → quota_min；quotaUnit → quota_unit；quotaTier → quota_tier
+    if (raw === null || raw === undefined) return null;
+    return String(raw);
+  };
+  const newVal = (updated, field) => {
+    if (field === "rate") return updated.rate ? String(updated.rate) : null;
+    const v = updated[field];
+    if (v === undefined || v === null || v === "") return null;
+    return String(v);
+  };
+
+  const stmts = [];
+  for (const field of HISTORY_FIELDS) {
+    const o = oldVal(existing, field);
+    const n = newVal(updated, field);
+    if (o === n) continue; // 无变化（含双方都 null）
+    stmts.push(
+      db
+        .prepare(
+          "INSERT INTO site_history (site_name, field, old_value, new_value) VALUES (?, ?, ?, ?)"
+        )
+        .bind(siteName, field, o, n)
+    );
+  }
+  return stmts;
+}
+
+/**
+ * 一次查询所有站点最近一条额度变化（GROUP BY MAX(id)）
+ * @param {object} db — D1 数据库实例
+ * @returns {Promise<Map<string, object>>} site_name → { field, oldValue, newValue, changedAt }
+ */
+async function getLatestHistoryMap(db) {
+  const rows = await dbAll(
+    db,
+    `SELECT h.site_name, h.field, h.old_value, h.new_value, h.changed_at
+     FROM site_history h
+     JOIN (SELECT site_name, MAX(id) AS max_id FROM site_history GROUP BY site_name) m
+       ON h.id = m.max_id`
+  );
+  const map = new Map();
+  for (const r of rows) {
+    map.set(r.site_name, {
+      field: r.field,
+      oldValue: r.old_value,
+      newValue: r.new_value,
+      changedAt: r.changed_at,
+    });
+  }
+  return map;
 }
 
 // ─── 公开 API ─────────────────────────────────────────────────────────────────
@@ -132,10 +205,12 @@ function formatSiteRow(row) {
  * @returns {Promise<object>} { ok, sites, metadata }
  */
 export async function handleGetSites(db) {
-  const sites = await dbAll(db, "SELECT * FROM sites ORDER BY sort_order ASC, name ASC");
-  const votes = await dbAll(db, "SELECT site_name, up_count, down_count FROM votes");
-  // 死链 URL 集合：给管理端站点列表打"死链"标记，便于管理员识别
-  const deadUrlRows = await dbAll(db, "SELECT url FROM dead_urls");
+  const [sites, votes, deadUrlRows, historyMap] = await Promise.all([
+    dbAll(db, "SELECT * FROM sites ORDER BY sort_order ASC, name ASC"),
+    dbAll(db, "SELECT site_name, up_count, down_count FROM votes"),
+    dbAll(db, "SELECT url FROM dead_urls"),
+    getLatestHistoryMap(db),
+  ]);
 
   const voteMap = {};
   for (const v of votes) {
@@ -149,6 +224,7 @@ export async function handleGetSites(db) {
       ...formatSiteRow(s),
       votes: voteMap[s.name] || { up: 0, down: 0 },
       dead: deadUrlSet.has(s.url),
+      history: historyMap.get(s.name) || null,
     })),
     metadata: {
       total: sites.length,
@@ -165,12 +241,13 @@ export async function handleGetSites(db) {
  * @returns {Promise<object>} { ok, sites }
  */
 export async function handleGetEnabledSites(db) {
-  // 查询启用站点 + 死链接黑名单 + 投票数据（3 次并行查询）
+  // 查询启用站点 + 死链接黑名单 + 投票数据 + 变更历史（并行查询）
   // 死链标记为 dead:true，由前端决定展示策略（折叠/降饱和），不直接过滤
-  const [sites, votes, deadUrlRows] = await Promise.all([
+  const [sites, votes, deadUrlRows, historyMap] = await Promise.all([
     dbAll(db, "SELECT * FROM sites WHERE enabled = 1 ORDER BY sort_order ASC, name ASC"),
     dbAll(db, "SELECT site_name, up_count, down_count FROM votes"),
     dbAll(db, "SELECT url FROM dead_urls"),
+    getLatestHistoryMap(db),
   ]);
 
   const voteMap = {};
@@ -188,6 +265,7 @@ export async function handleGetEnabledSites(db) {
       ...formatSiteRow(s),
       votes: voteMap[s.name] || { up: 0, down: 0 },
       dead: deadUrlSet.has(s.url),
+      history: historyMap.get(s.name) || null,
     })),
     metadata: {
       total: enabledCount,
@@ -434,9 +512,12 @@ export async function handleAdminUpdateSite(db, request, siteName) {
       updateSites,
       db.prepare("UPDATE votes SET site_name = ? WHERE site_name = ?").bind(updated.name, siteName),
       db.prepare("UPDATE feedbacks SET site_name = ? WHERE site_name = ?").bind(updated.name, siteName),
+      db.prepare("UPDATE site_history SET site_name = ? WHERE site_name = ?").bind(updated.name, siteName),
     ]);
   } else {
-    await dbBatch(db, [updateSites]);
+    // 额度变化写入 site_history：与 UPDATE 同一 batch，原子
+    const historyStmts = buildHistoryStmts(db, siteName, existing, updated);
+    await dbBatch(db, [updateSites, ...historyStmts]);
   }
 
   // 联动：站点从禁用恢复为启用时，从死链接表移除对应 URL
@@ -469,6 +550,7 @@ export async function handleAdminDeleteSite(db, request, siteName) {
     db.prepare("DELETE FROM sites WHERE name = ?").bind(siteName),
     db.prepare("DELETE FROM votes WHERE site_name = ?").bind(siteName),
     db.prepare("DELETE FROM feedbacks WHERE site_name = ?").bind(siteName),
+    db.prepare("DELETE FROM site_history WHERE site_name = ?").bind(siteName),
   ];
   // 同步清理死链表中的孤立记录（站点已删除，其 URL 不应再留在黑名单）
   if (existing.url) {
