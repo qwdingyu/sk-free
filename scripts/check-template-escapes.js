@@ -98,16 +98,26 @@ for (const region of templateRegions) {
             }
 
             if (inScript) {
-              // 检查这行是否有未闭合的引号（字符串跨行）
-              let singleQ = 0, doubleQ = 0;
+              // 判断这个 \n 是否落在**字符串字面量内部**。
+              //
+              // 原来的判据是"该行引号总数为奇数（字符串跨行）"，太窄：
+              //   const BAD = "line1\nline2";
+              // 引号配对、单反斜杠，模板求值后 \n 变成真换行 → 字符串未终止
+              // → 整块 <script> 解析失败。实测这一行原判据不报警，
+              // 而它恰恰是本检查要防的那个 bug 的典型形态。
+              //
+              // 改成从行首扫描引号状态，判断 pos 是否处于字符串内。
+              let inS = false, inD = false;
+              let insideString = false;
               for (let p2 = 0; p2 < line.length; p2++) {
-                if (line[p2] === "\\") { p2++; continue; }
-                if (line[p2] === "'") singleQ++;
-                if (line[p2] === '"') doubleQ++;
+                if (p2 === pos) { insideString = inS || inD; break; }
+                const ch = line[p2];
+                if (ch === "\\") { p2++; continue; } // 跳过被转义的下一个字符
+                if (ch === "'" && !inD) inS = !inS;
+                else if (ch === '"' && !inS) inD = !inD;
               }
-              const hasUnclosed = (singleQ % 2 === 1) || (doubleQ % 2 === 1);
 
-              if (hasUnclosed) {
+              if (insideString) {
                 const name = nextChar === 'n' ? '换行符' : nextChar === 't' ? '制表符' : '回车符';
                 issues.push({
                   line: i + 1,

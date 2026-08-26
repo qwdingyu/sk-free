@@ -4,7 +4,7 @@
 // Rebuild: node scripts/build-html.js
 export const broadcastHtml = `<!doctype html>
 <html lang="zh-CN">
-    <!-- build:2026-08-26T00:38:02.450Z -->
+    <!-- build:015fef7c05c7 -->
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />

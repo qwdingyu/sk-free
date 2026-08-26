@@ -16,9 +16,12 @@
  *
  * 配套：deploy.sh 在 wrangler deploy 前自动调用此脚本
  */
-import { readFileSync, writeFileSync, readdirSync } from "fs";
+import { readFileSync, writeFileSync, readdirSync, unlinkSync } from "fs";
 import { join, dirname } from "path";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
+import { tmpdir } from "os";
+import { execFileSync } from "child_process";
+import { createHash } from "crypto";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -67,13 +70,17 @@ if (!JS_TAG.test(html)) fail("index.html 里找不到 app.js 的 <script> 标签
 let result = html.replace(CSS_TAG, `<style>\n${css}\n</style>`);
 result = result.replace(JS_TAG, `<script defer>\n${js}\n</script>`);
 
-// 注入构建标识：`<!-- build:<ISO时间戳> -->`，供部署后自动验证用
-// （curl 线上页面断言该时间戳存在 = 线上跑的就是刚构建的这份产物）。
-// 不注入会回到"部署完成但线上是旧 bundle"的无声状态。
-const BUILD_TS = new Date().toISOString();
+// 注入构建标识：`<!-- build:<内容哈希> -->`，供部署后自动验证用
+// （curl 线上页面断言该标识存在 = 线上跑的就是这份内容）。
+//
+// 用内容哈希而不是时间戳，有两个实际好处：
+//   1. 源码没变时产物逐字节相同 —— 时间戳版本每跑一次构建都会改动
+//      worker/broadcast-html.js，git status 永远是脏的，真正的改动被噪音埋掉。
+//   2. 断言更强：时间戳只能证明"构建过"，哈希能证明"线上内容 == 本地内容"。
+const BUILD_ID = createHash("sha256").update(result).digest("hex").slice(0, 12);
 const HTML_TAG = /<html[^>]*>/;
 if (!HTML_TAG.test(result)) fail("内联后的 HTML 里找不到 <html> 标签，无法注入构建标识");
-result = result.replace(HTML_TAG, (m) => `${m}\n    <!-- build:${BUILD_TS} -->`);
+result = result.replace(HTML_TAG, (m) => `${m}\n    <!-- build:${BUILD_ID} -->`);
 
 // 兜底自检：内联后不应再残留对外部资源的引用
 if (/src="\.\/app\.js"/.test(result) || /href="\.\/styles\.css"/.test(result)) {
@@ -84,6 +91,7 @@ if (/src="\.\/app\.js"/.test(result) || /href="\.\/styles\.css"/.test(result)) {
 // 1. 反斜杠必须最先处理（否则后面插入的 \` 会被二次转义）
 // 2. 反引号 → \`
 // 3. ${ → \${（防止 JS 模板引擎解析）
+const rawHtml = result; // 转义前的原文，供下面往返验证比对
 result = result.replace(/\\/g, "\\\\");
 result = result.replace(/`/g, "\\`");
 result = result.replace(/\$\{/g, "\\${");
@@ -100,8 +108,77 @@ export const broadcastHtml = \`${result}\`;
 
 writeFileSync(OUTPUT, output, "utf-8");
 console.log(`✅ 线上产物: ${OUTPUT} (${(output.length / 1024).toFixed(1)} KB)`);
-// 供 deploy.sh 捕获：构建时间戳（与 HTML 里注入的 <!-- build: --> 一致）
-console.log(`BUILD_TS=${BUILD_TS}`);
+
+// ── 往返验证：转义是否可逆（可证明的不变量，不是启发式）────────────────────────
+//
+// 上面那三行转义是整条链路上最脆的一环：错了不会抛异常，只会让浏览器收到
+// 一份坏掉的 HTML/JS。check-template-escapes.js 用"单反斜杠 + 该行引号是否
+// 配对"来猜，漏报很容易——实测在 <script> 里插一行
+//   const BAD = "line1\nline2";
+// （单反斜杠、引号配对）它照样报"✅ 通过"，而这正是它要防的那个 bug。
+//
+// 这里换成直接把产物 import 回来：broadcastHtml 就是浏览器实际收到的字符串，
+// 与转义前的 rawHtml 逐字符比对。相等 ⇒ 转义在这份具体内容上可逆，
+// 不需要任何启发式判断。
+// 用 .mjs 临时副本做 import，而不是直接 import 产物本身：
+// 产物落在 worker/ 下，那里的 package.json 没有 "type":"module"，
+// 直接 import 会每次都打一行 MODULE_TYPELESS_PACKAGE_JSON 警告到 stderr。
+// 校验的是同一串字节，结论完全等价。
+const probe = join(tmpdir(), `dsh-bh-${process.pid}.mjs`);
+writeFileSync(probe, output, "utf-8");
+let broadcastHtml;
+try {
+  ({ broadcastHtml } = await import(pathToFileURL(probe).href));
+} catch (e) {
+  unlinkSync(probe);
+  fail(`产物不是合法的 ES 模块（转义把它写坏了）：\n${e.message}`);
+}
+unlinkSync(probe);
+if (typeof broadcastHtml !== "string") {
+  fail("产物没有导出字符串 broadcastHtml，Worker 会拿到 undefined");
+}
+if (broadcastHtml !== rawHtml) {
+  let at = 0;
+  while (at < rawHtml.length && rawHtml[at] === broadcastHtml[at]) at++;
+  const ctx = (s) => JSON.stringify(s.slice(Math.max(0, at - 60), at + 60));
+  fail(
+    "模板字面量转义不可逆——浏览器收到的内容与构建的原文不一致。\n" +
+    `  首个差异位于第 ${at} 个字符（原文 ${rawHtml.length} 字符 / 产物 ${broadcastHtml.length} 字符）\n` +
+    `  原文: ${ctx(rawHtml)}\n` +
+    `  产物: ${ctx(broadcastHtml)}\n` +
+    "  检查 broadcast/index.html、styles.css、src/*.js 里的反引号 / ${ / 反斜杠"
+  );
+}
+console.log("✅ 转义往返验证: 浏览器收到的内容与构建原文逐字符一致");
+
+// ── 内联脚本语法检查（对"求值后"的内容，而不是转义形态）─────────────────────
+// 浏览器解析的是 broadcastHtml 里的 <script> 内容。对转义形态做 node --check
+// 是检查错了对象：单反斜杠的 \n 在转义形态里是合法的两字符转义序列，
+// 求值后才变成真换行并炸掉字符串。
+// 必须遍历**每一个**内联 <script>：页面头部还有个几百字节的主题预设脚本，
+// 只查第一个会漏掉 58 KB 的主 bundle。
+{
+  const blocks = [...broadcastHtml.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)]
+    .filter((m) => !/\bsrc\s*=/.test(m[1])) // 外链脚本没有内联内容可查
+    .map((m) => m[2]);
+  if (blocks.length === 0) fail("产物里找不到内联 <script>，前端不会执行");
+  const totalKb = blocks.reduce((n, b) => n + b.length, 0) / 1024;
+  blocks.forEach((code, i) => {
+    const tmp = join(tmpdir(), `dsh-inline-${process.pid}-${i}.js`);
+    writeFileSync(tmp, code, "utf-8");
+    try {
+      execFileSync(process.execPath, ["--check", tmp], { stdio: "pipe" });
+    } catch (e) {
+      unlinkSync(tmp);
+      fail(`第 ${i + 1} 个内联脚本求值后语法错误（浏览器会整块解析失败，所有函数未定义）：\n${e.stderr?.toString() || e.message}`);
+    }
+    unlinkSync(tmp);
+  });
+  console.log(`✅ 内联脚本语法检查: ${blocks.length} 个 <script>，共 ${totalKb.toFixed(1)} KB 求值后可解析`);
+}
+
+// 供 deploy.sh 捕获：构建标识（与 HTML 里注入的 <!-- build: --> 一致）
+console.log(`BUILD_ID=${BUILD_ID}`);
 
 // ── 开发版 bundle：让本地直接打开 index.html 与线上完全一致 ────────────────────
 // 这一份不做模板字面量转义（它是被 <script src> 直接加载的普通 JS）

@@ -7,9 +7,14 @@
 #
 # 预检查任何一步失败都会阻止部署（set -e）。
 # 检查顺序按"越便宜越靠前"排列，快速失败。
+#
+# pipefail 是必需的：第 4 步用 `node build-html.js | tee` 同时保留输出和取
+# BUILD_ID，没有 pipefail 时管道的退出码是 tee 的（永远 0），构建失败会被
+# 一路带到 wrangler deploy —— 正好是这个脚本要防的事。
 # ═══════════════════════════════════════════════════════════════════════════════
 
 set -e
+set -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -40,12 +45,16 @@ node "$SCRIPT_DIR/check-css-coverage.js"
 echo ""
 
 # ── 4. 从 broadcast/ 源文件构建产物（消灭手工双副本）──────────────────────────
-# 捕获 BUILD_TS（build-html.js 输出），供第 8 步部署后验证使用
+# 捕获 BUILD_ID（build-html.js 输出的内容哈希），供第 8 步部署后验证使用。
+# 用 tee 而不是纯命令替换：build-html.js 会打印转义往返验证、内联脚本语法
+# 检查的结果，这些是部署前最关键的几行，不能因为要取一个变量就把它们吞掉。
 echo "4️⃣  构建 broadcast-html.js + 开发 bundle..."
-BUILD_OUTPUT=$(node "$SCRIPT_DIR/build-html.js")
-BUILD_TS=$(echo "$BUILD_OUTPUT" | sed -n 's/.*BUILD_TS=\([^ ]*\).*/\1/p')
-if [ -z "$BUILD_TS" ]; then
-  echo "🚫 未能从构建输出捕获 BUILD_TS，中止部署"
+BUILD_LOG=$(mktemp)
+node "$SCRIPT_DIR/build-html.js" | tee "$BUILD_LOG"
+BUILD_ID=$(sed -n 's/.*BUILD_ID=\([^ ]*\).*/\1/p' "$BUILD_LOG")
+rm -f "$BUILD_LOG"
+if [ -z "$BUILD_ID" ]; then
+  echo "🚫 未能从构建输出捕获 BUILD_ID，中止部署"
   exit 1
 fi
 echo ""
@@ -77,4 +86,4 @@ echo ""
 # 样式缺失、无定位 div），链路本身不报错。必须用构建标识对线上做断言。
 # 验证失败以非零退出，提醒人工检查（wrangler rollback 可回滚）。
 echo "8️⃣  部署后自动验证..."
-bash "$SCRIPT_DIR/verify-deploy.sh" "$BUILD_TS"
+bash "$SCRIPT_DIR/verify-deploy.sh" "$BUILD_ID"
