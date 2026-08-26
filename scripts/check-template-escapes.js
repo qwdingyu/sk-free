@@ -28,15 +28,41 @@ const src = fs.readFileSync(filePath, "utf8");
 const srcLines = src.split("\n");
 
 // ── 找到所有模板字面量区域 ──────────────────────────────────────────────────
+// 两种文件，两种形态：
+//   1. index.js（手写）：return `...`;  —— 模板内容是未转义形态
+//   2. broadcast-html.js（build 产物）：export const broadcastHtml = \`...\`;
+//      反引号被 build-html.js 转义成 \`、`; 结束符变成 \`;
+//      通用正则在这里全部失配，必须按转义形态显式匹配。
+const ESC_BT = "\\" + BT; // 转义后的反引号：\`
 const templateRegions = [];
-for (let i = 0; i < srcLines.length; i++) {
-  if (srcLines[i].includes("return " + BT)) {
-    const start = i;
-    for (let j = i + 1; j < srcLines.length; j++) {
-      // 关闭行可能是 `; 单独一行，也可能是 </html>`; 等含内容的行
-      if (srcLines[j].includes(BT + ";")) {
-        templateRegions.push({ start, end: j });
-        break;
+const isBroadcast = path.basename(filePath) === "broadcast-html.js";
+
+if (isBroadcast) {
+  // 广播产物：模板定界符是未转义的反引号（打开 1 个 + 关闭 1 个），
+  // 模板内容里的反引号才是 `\` 转义形态（build 只转义 result 内容）。
+  // 开始行：`export const broadcastHtml = \``（行首锚定，内容从同行开始）；
+  // 结束行：开始之后最后一个 `\`;` —— 覆盖真正关闭符，跳过内容里的 `\`;`。
+  const startRe = new RegExp("^\\s*export\\s+const\\s+\\w+\\s*=\\s*" + BT);
+  const startIdx = srcLines.findIndex((l) => startRe.test(l));
+  if (startIdx >= 0) {
+    let endIdx = -1;
+    for (let j = startIdx + 1; j < srcLines.length; j++) {
+      if (srcLines[j].includes(BT + ";")) endIdx = j;
+    }
+    if (endIdx > startIdx) templateRegions.push({ start: startIdx, end: endIdx });
+  }
+} else {
+  for (let i = 0; i < srcLines.length; i++) {
+    const isReturn = srcLines[i].includes("return " + BT);
+    const isExport = /(?:export\s+)?(?:const|let)\s+\w+\s*=\s*\`/.test(srcLines[i]);
+    if (isReturn || isExport) {
+      const start = i;
+      for (let j = i + 1; j < srcLines.length; j++) {
+        // 关闭行可能是 `; 单独一行，也可能是 </html>`; 等含内容的行
+        if (srcLines[j].includes(BT + ";")) {
+          templateRegions.push({ start, end: j });
+          break;
+        }
       }
     }
   }
@@ -62,11 +88,13 @@ for (const region of templateRegions) {
         if (bsCount % 2 === 1) {
           const nextChar = line[pos + 1];
           if ("ntrv".includes(nextChar)) {
-            // 检查是否在 <script> 块内
+            // 检查是否在 <script> 块内（含 <script defer> 等带属性形态；
+            // 注意 </script> 也以 <script 开头，要先排除闭合标签）
             let inScript = false;
             for (let j = region.start; j <= i; j++) {
-              if (srcLines[j].includes("<script>")) inScript = true;
-              if (srcLines[j].includes("</script>")) inScript = false;
+              const t = srcLines[j].trim();
+              if (t.startsWith("</script")) inScript = false;
+              else if (t.includes("<script")) inScript = true;
             }
 
             if (inScript) {
@@ -100,8 +128,23 @@ for (const region of templateRegions) {
 // ── 策略 2：提取脚本做语法检查 ──────────────────────────────────────────────
 let syntaxErrors = [];
 for (const region of templateRegions) {
-  const html = srcLines.slice(region.start + 1, region.end).join("\n");
-  const scriptRegex = new RegExp("<script>([\\s\\S]*?)<\\/script>", "g");
+  let html = srcLines.slice(region.start + 1, region.end).join("\n");
+
+  // 广播产物（build-html.js 生成）的模板字面量是转义过的：
+  //   ` → \`、${ → \${、\ → \\
+  // 必须按构建的逆序还原，否则提取出的 <script> 内容里到处是 \`，
+  // node --check 会误报语法错误。index.js 的手写模板不需要这一步。
+  if (path.basename(filePath) === "broadcast-html.js") {
+    html = html
+      .replace(/\\\$\{/g, "${")
+      .replace(/\\`/g, "`")
+      .replace(/\\\\/g, "\\");
+  }
+
+  // 匹配带属性的 <script defer> 与普通 <script>：
+  // 之前只认 <script>，而广播产物内联的是 <script defer>，策略 2 永远
+  // 提取不到任何内容，语法检查是假的"通过"。
+  const scriptRegex = new RegExp("<script[^>]*>([\\s\\S]*?)<\\/script>", "g");
   let m;
   let scriptIdx = 0;
   while ((m = scriptRegex.exec(html)) !== null) {

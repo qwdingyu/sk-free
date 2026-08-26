@@ -67,6 +67,14 @@ if (!JS_TAG.test(html)) fail("index.html 里找不到 app.js 的 <script> 标签
 let result = html.replace(CSS_TAG, `<style>\n${css}\n</style>`);
 result = result.replace(JS_TAG, `<script defer>\n${js}\n</script>`);
 
+// 注入构建标识：`<!-- build:<ISO时间戳> -->`，供部署后自动验证用
+// （curl 线上页面断言该时间戳存在 = 线上跑的就是刚构建的这份产物）。
+// 不注入会回到"部署完成但线上是旧 bundle"的无声状态。
+const BUILD_TS = new Date().toISOString();
+const HTML_TAG = /<html[^>]*>/;
+if (!HTML_TAG.test(result)) fail("内联后的 HTML 里找不到 <html> 标签，无法注入构建标识");
+result = result.replace(HTML_TAG, (m) => `${m}\n    <!-- build:${BUILD_TS} -->`);
+
 // 兜底自检：内联后不应再残留对外部资源的引用
 if (/src="\.\/app\.js"/.test(result) || /href="\.\/styles\.css"/.test(result)) {
   fail("内联后仍残留外部资源引用，产物不可用");
@@ -92,6 +100,8 @@ export const broadcastHtml = \`${result}\`;
 
 writeFileSync(OUTPUT, output, "utf-8");
 console.log(`✅ 线上产物: ${OUTPUT} (${(output.length / 1024).toFixed(1)} KB)`);
+// 供 deploy.sh 捕获：构建时间戳（与 HTML 里注入的 <!-- build: --> 一致）
+console.log(`BUILD_TS=${BUILD_TS}`);
 
 // ── 开发版 bundle：让本地直接打开 index.html 与线上完全一致 ────────────────────
 // 这一份不做模板字面量转义（它是被 <script src> 直接加载的普通 JS）

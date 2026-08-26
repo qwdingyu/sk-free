@@ -40,8 +40,14 @@ node "$SCRIPT_DIR/check-css-coverage.js"
 echo ""
 
 # ── 4. 从 broadcast/ 源文件构建产物（消灭手工双副本）──────────────────────────
+# 捕获 BUILD_TS（build-html.js 输出），供第 8 步部署后验证使用
 echo "4️⃣  构建 broadcast-html.js + 开发 bundle..."
-node "$SCRIPT_DIR/build-html.js"
+BUILD_OUTPUT=$(node "$SCRIPT_DIR/build-html.js")
+BUILD_TS=$(echo "$BUILD_OUTPUT" | sed -n 's/.*BUILD_TS=\([^ ]*\).*/\1/p')
+if [ -z "$BUILD_TS" ]; then
+  echo "🚫 未能从构建输出捕获 BUILD_TS，中止部署"
+  exit 1
+fi
 echo ""
 
 # ── 5. 前端行为回归测试（需要 jsdom，没装则自动跳过）──────────────────────────
@@ -65,7 +71,10 @@ npx wrangler deploy
 echo ""
 echo "✅ 部署完成"
 echo ""
-echo "👉 部署后请验证（这三条任一失败就要回滚）："
-echo "   curl -s https://free.eforge.xyz/ | grep -c feedbackModal    # 反馈弹窗存在"
-echo "   curl -s https://free.eforge.xyz/api/sites | head -c 200     # API 正常"
-echo "   打开 https://free.eforge.xyz/ 确认额度列不是全部'额度未知'"
+
+# ── 8. 部署后自动验证 ──────────────────────────────────────────────────────────
+# 不能只靠"部署命令成功"——上一次就是部署成功但线上跑的是旧 bundle（抽屉
+# 样式缺失、无定位 div），链路本身不报错。必须用构建标识对线上做断言。
+# 验证失败以非零退出，提醒人工检查（wrangler rollback 可回滚）。
+echo "8️⃣  部署后自动验证..."
+bash "$SCRIPT_DIR/verify-deploy.sh" "$BUILD_TS"
