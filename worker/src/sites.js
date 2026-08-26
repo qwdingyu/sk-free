@@ -495,6 +495,12 @@ export async function handleAdminBatch(db, request) {
     return jsonResponse({ ok: false, error: "需要 action 和 names 参数" }, 400, request);
   }
 
+  // D1 单条查询最多 100 个绑定参数：names 超上限会生成 101+ 个占位符，
+  // 查询必然失败并入全局 catch 返回 500。硬上限 + 逐条类型校验，防 DoS。
+  if (names.length > 99 || !names.every((n) => typeof n === "string" && n.length > 0)) {
+    return jsonResponse({ ok: false, error: "names 必须是 1-99 个非空字符串" }, 400, request);
+  }
+
   let affected = 0;
 
   if (action === "delete") {
@@ -648,6 +654,16 @@ export async function handleAdminImportSites(db, request) {
       continue;
     }
 
+    // H1 修复：与 create/update/submissions 路径一致，导入也必须校验 URL 协议。
+    // 此前 validateUrlProtocol 唯独漏了这里——javascript:/data: URL 能原样入库，
+    // 而前端 esc() 只转义 HTML 实体、不校验 scheme，点击链接即在页面源内执行
+    // JS（admin 页可窃取 localStorage 里的管理 Token），属存储型 XSS。
+    const urlCheck = validateUrlProtocol(item.url);
+    if (!urlCheck.ok) {
+      skipped++;
+      continue;
+    }
+
     // 死链接过滤
     const { cleanUrl: checkUrl } = parseSiteUrl(item.url);
     if (deadUrls[checkUrl] || deadUrls[item.url]) {
@@ -712,9 +728,13 @@ export async function handleAdminImportSites(db, request) {
     added++;
   }
 
-  // 执行批量操作
-  if (statements.length > 0) {
-    await db.batch(statements);
+  // Free 计划每次 Worker 调用最多 50 次 D1 查询，batch 内每条语句都计入。
+  // 500 条一次性 batch 会直接触发 1101 配额错误（此前与 IMPORT_MAX_BATCH=500
+  // 自相矛盾）。按每批 40 条循环提交，给同次调用的 SELECT（现有站点/死链
+  // 读取）留出余量。
+  const IMPORT_BATCH_SIZE = 40;
+  for (let i = 0; i < statements.length; i += IMPORT_BATCH_SIZE) {
+    await db.batch(statements.slice(i, i + IMPORT_BATCH_SIZE));
   }
 
   return jsonResponse(

@@ -62,8 +62,10 @@ export async function removeDeadUrl(db, url) {
 
 /**
  * 批量操作死链接（添加或移除）
- * 注意：不再自动联动站点 enabled 状态（概率性探测不应驱动不可逆动作）
- * 站点启用状态由管理员手动管理
+ * 移除语义与单条 removeDeadUrl 一致：从黑名单删除的同时恢复 URL 匹配站点的
+ * 启用状态（死链接移除说明站点已恢复）。UI 文案"相关站点将自动恢复启用状态"
+ * 承诺的就是这个行为，此前批量只 DELETE 不联动，与文案矛盾。
+ * 添加路径不动站点（概率性探测不应驱动不可逆动作）。
  *
  * @param {object} db — D1 数据库实例
  * @param {string[]} urls — URL 数组
@@ -86,9 +88,20 @@ export async function batchDeadUrls(db, urls, action = "remove") {
             )
             .bind(url, now)
         )
-      : urls.map((url) => db.prepare("DELETE FROM dead_urls WHERE url = ?").bind(url));
+      // remove：DELETE + 恢复站点，两条一组（batch 内原子）
+      : urls.flatMap((url) => [
+          db.prepare("DELETE FROM dead_urls WHERE url = ?").bind(url),
+          db
+            .prepare("UPDATE sites SET enabled = 1, updated_at = datetime('now') WHERE url = ? AND enabled = 0")
+            .bind(url),
+        ]);
 
   const results = await dbBatch(db, statements);
-  const changed = (results || []).reduce((sum, r) => sum + (r?.meta?.changes || 0), 0);
+  // 只统计 DELETE（偶数位）的影响行数为"移除的死链数"：
+  // UPDATE 恢复站点行数不算在内，避免前端"已移除 N 个死链接"虚高。
+  const changed = (results || []).reduce(
+    (sum, r, idx) => sum + (idx % 2 === 0 ? r?.meta?.changes || 0 : 0),
+    0
+  );
   return { changed };
 }

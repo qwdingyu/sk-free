@@ -91,6 +91,21 @@ export async function handleSubmitSite(request, db) {
 }
 
 /**
+ * SQLite datetime('now') 是**不带时区标记的 UTC 字符串**（"YYYY-MM-DD HH:MM:SS"）。
+ * 直接 new Date() 会按 ES 规范当成本地时间解析，UTC+8 环境下展示时间整体
+ * 偏移 +8 小时（前端 broadcast/src/20-utils.js 的 parseUtc() 早已记录过同一坑）。
+ * 按正则补 UTC 解释，解析失败时回退到默认行为。
+ * @param {string} s — "YYYY-MM-DD HH:MM:SS" 或 ISO 字符串
+ * @returns {number} UTC 毫秒时间戳
+ */
+function parseUtcTs(s) {
+  if (!s) return 0;
+  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/.exec(s);
+  if (!m) return new Date(s).getTime();
+  return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+}
+
+/**
  * 获取待审核提交列表
  * @param {object} db — D1 数据库实例
  * @returns {Promise<object>} { ok, submissions, total }
@@ -117,7 +132,7 @@ export async function handleAdminGetSubmissions(db) {
       notes: sub.site_notes ? JSON.parse(sub.site_notes) : [],
     },
     ip: sub.ip,
-    createdAt: new Date(sub.created_at).getTime(),
+    createdAt: parseUtcTs(sub.created_at),
     status: sub.status,
   }));
 
