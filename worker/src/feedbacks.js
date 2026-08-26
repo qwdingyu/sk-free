@@ -3,7 +3,7 @@
 // 用户可在站点卡片提交反馈（报错/纠正/好评），admin 后台审核处理
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { dbAll, dbGet, dbRun } from "./db.js";
+import { dbAll, dbGet, dbRun, dbBatch } from "./db.js";
 import { json as jsonResponse, parseJsonBody } from "./utils.js";
 
 // 每 IP 每天最多 10 次反馈
@@ -73,13 +73,37 @@ export async function handleSubmitFeedback(request, db) {
     return jsonResponse({ ok: false, error: `站点 "${siteName}" 不存在` }, 404, request);
   }
 
-  // 插入反馈
-  await dbRun(
-    db,
-    `INSERT INTO feedbacks (site_name, type, content, ip, status, created_at)
-     VALUES (?, ?, ?, ?, 'new', datetime('now'))`,
-    [siteName, type, text.trim(), ip]
-  );
+  // 阶段 D：一键反馈驱动鲜度（与 INSERT 同一 batch，原子）。
+  // still_works（👍 还能用）= 社区实证可用：写 verified_at 并把失败计数清零，
+  //   verified_by='feedback' 区分来源（healthcheck/cron）。这是 docs/09 阶段 D
+  //   "最低摩擦鲜度入口"——健康检查 6 小时一次，用户点赞让站点即时变新鲜。
+  // reported_dead（👎 已失效）= 只累加失败计数，**不写 verified_at**：
+  //   用户可能误报，伪造鲜度比没有更糟；由 cron 后续探测确认、管理员处理。
+  //   健康检查的"失败绝不被自动禁用"原则同样适用于用户反馈。
+  const statements = [
+    db
+      .prepare(
+        `INSERT INTO feedbacks (site_name, type, content, ip, status, created_at)
+         VALUES (?, ?, ?, ?, 'new', datetime('now'))`
+      )
+      .bind(siteName, type, text.trim(), ip),
+  ];
+  if (type === "still_works") {
+    statements.push(
+      db
+        .prepare(
+          "UPDATE sites SET verified_at = datetime('now'), verified_by = 'feedback', health_fail_count = 0 WHERE name = ?"
+        )
+        .bind(siteName)
+    );
+  } else if (type === "reported_dead") {
+    statements.push(
+      db
+        .prepare("UPDATE sites SET health_fail_count = health_fail_count + 1 WHERE name = ?")
+        .bind(siteName)
+    );
+  }
+  await dbBatch(db, statements);
 
   return jsonResponse({ ok: true, message: "感谢您的反馈！" }, 201, request);
 }
