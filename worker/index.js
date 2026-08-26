@@ -178,6 +178,7 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
             <th style="width:30px"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
             <th>启用</th>
             <th>站点名称</th>
+            <th>健康</th>
             <th>标签</th>
             <th>签到</th>
             <th>Ref</th>
@@ -403,6 +404,7 @@ function renderTable() {
       '<td><input type="checkbox" ' + checked + ' data-name="' + esc(s.name) + '" data-action="toggle-select"></td>' +
       '<td><label class="toggle"><input type="checkbox" ' + toggleChecked + ' data-name="' + esc(s.name) + '" data-action="toggle-enable"><span class="slider"></span></label></td>' +
       '<td class="name"><a href="' + esc(s.url) + '" target="_blank" title="' + esc(s.url) + '">' + esc(s.name) + '</a>' + deadBadge + origUrlHtml + '</td>' +
+      '<td class="health">' + healthBadge(s) + '</td>' +
       '<td class="tags">' + tags + '</td>' +
       '<td>' + esc(s.checkin || "") + '</td>' +
       '<td title="' + esc(s.ref || "") + '">' + esc(s.ref || "") + '</td>' +
@@ -573,11 +575,8 @@ function switchTab(tab) {
   if (tab === "submissions") loadSubmissions();
   if (tab === "feedback") loadFeedbacks();
   if (tab === "schema") loadSchema();
-  // 健康 tab：有缓存结果则自动恢复，无需重新扫描
-  if (tab === "health" && LAST_HEALTH_SCAN) {
-    document.getElementById("healthResults").innerHTML = LAST_HEALTH_SCAN.html;
-    document.getElementById("healthStatus").textContent = "上次检查：" + LAST_HEALTH_SCAN.time + " — " + LAST_HEALTH_SCAN.summary + "（数据基于扫描时的站点列表，与当前站点管理可能有差异，点【批量检查】刷新）";
-  }
+  // 健康 tab：从数据库已有数据构建对账报告，无需扫描
+  if (tab === "health") renderHealthFromSites();
 }
 async function loadSubmissions() {
   try {
@@ -621,6 +620,55 @@ async function setDeadByName(name, isDead) {
 }
 // 上次健康扫描结果缓存（切换 tab 不丢失）
 var LAST_HEALTH_SCAN = null;
+// 站点健康状态徽章（基于数据库已有数据，无需扫描）
+function healthBadge(s) {
+  if (s.dead) return '<span style="color:var(--coral);font-size:11px">\u2716 已停用</span>';
+  if (s.healthFailCount > 2) return '<span style="color:var(--coral);font-size:11px">\u26a0 连续失败 ' + s.healthFailCount + ' 次</span>';
+  if (s.verifiedAt) {
+    var ts = parseUtc(s.verifiedAt);
+    var diff = Date.now() - ts;
+    if (diff < 86400000) return '<span style="color:var(--teal);font-size:11px">\u2714 24h内验证</span>';
+    if (diff < 604800000) return '<span style="color:#eab308;font-size:11px">\u25cf 7天内验证</span>';
+    return '<span style="color:var(--muted);font-size:11px">\u25cb 超7天未验证</span>';
+  }
+  return '<span style="color:var(--muted);font-size:11px">\u25cb 未验证</span>';
+}
+// 从数据库已有数据构建健康对账报告（无需扫描）
+function renderHealthFromSites() {
+  var statusEl = document.getElementById("healthStatus");
+  var resultsEl = document.getElementById("healthResults");
+  if (!SITES || SITES.length === 0) { statusEl.textContent = "请先加载站点列表"; return; }
+  var byUrl = {};
+  SITES.forEach(function(s) { byUrl[s.url] = s; });
+  // 从数据库数据派生对账报告
+  var unreachEnabled = SITES.filter(function(s) { return s.dead; });
+  var reachWithFails = SITES.filter(function(s) { return !s.dead && s.healthFailCount > 0; });
+  var reachVerified = SITES.filter(function(s) { return !s.dead && s.healthFailCount === 0 && s.verifiedAt; });
+  var reachUnverified = SITES.filter(function(s) { return !s.dead && s.healthFailCount === 0 && !s.verifiedAt; });
+  var html = "";
+  if (unreachEnabled.length > 0) {
+    html += '<div style="margin-bottom:10px"><strong style="color:var(--coral)">\u2716 已标记为死链（' + unreachEnabled.length + '）</strong></div>';
+    html += unreachEnabled.map(function(s) {
+      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)">' +
+        '<span style="flex:1;word-break:break-all"><a href="' + esc(s.url) + '" target="_blank">' + esc(s.name) + '</a></span>' +
+        '<span style="color:var(--muted);font-size:11px">' + (s.verifiedAt ? "\u2705 验证于 " + fmtTime(s.verifiedAt) : '\u25cb 未验证') + '</span>' +
+        '<button class="btn btn-sm btn-primary" data-name="' + esc(s.name) + '" data-action="restore-dead">\u6062\u590d\u4e3a\u53ef\u7528</button></div>';
+    }).join("");
+  }
+  if (reachWithFails.length > 0) {
+    html += '<div style="margin:12px 0 10px"><strong style="color:var(--coral)">\u26a0 可用但连续失败（' + reachWithFails.length + '）</strong></div>';
+    html += reachWithFails.map(function(s) {
+      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)">' +
+        '<span style="flex:1;word-break:break-all"><a href="' + esc(s.url) + '" target="_blank">' + esc(s.name) + '</a></span>' +
+        '<span style="color:var(--coral);white-space:nowrap">\u26a0 ' + s.healthFailCount + ' 次失败</span>' +
+        '<button class="btn btn-sm btn-danger" data-name="' + esc(s.name) + '" data-action="mark-dead">\u6807\u8bb0\u4e3a\u6b7b\u94fe</button></div>';
+    }).join("");
+  }
+  html += '<div style="margin:12px 0 4px;color:var(--muted);font-size:12px">\u2705 正常：' + (reachVerified.length + reachUnverified.length) + '（已验证 ' + reachVerified.length + '，未验证 ' + reachUnverified.length + '）。</div>';
+  resultsEl.innerHTML = html;
+  statusEl.textContent = "基于数据库最近一次 cron 检查结果（每 6 小时自动更新）。需要最新数据请点【批量检查】。";
+  LAST_HEALTH_SCAN = { html: html, time: new Date().toLocaleString(), summary: "死链 " + unreachEnabled.length + "，异常 " + reachWithFails.length + "，正常 " + (reachVerified.length + reachUnverified.length) };
+}
 /**
  * 共享的健康扫描逻辑（链接健康 tab 和站点管理 tab 共用）
  * @param {object} opts
