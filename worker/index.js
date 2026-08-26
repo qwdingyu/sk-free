@@ -677,6 +677,7 @@ function renderHealthFromSites() {
     html += '<button class="btn btn-sm btn-primary" onclick="healthBatchRestoreDead()">\u2705 恢复选中</button>';
     html += '<button class="btn btn-sm" onclick="healthBatchRecheckDead()">\u200d\u200d🔍 重新复查选中</button>';
     html += '<button class="btn btn-sm btn-danger" onclick="healthRestoreAllDead()">\u2705 恢复全部</button>';
+    html += '<button class="btn btn-sm" onclick="healthClearDeadSelection()">\u2716 取消选择</button>';
     html += '<span id="healthDeadCount" style="color:var(--muted);font-size:12px">已选 0 个</span>';
     html += '</div>';
     html += '<table ' + tblStyle + '><thead><tr>';
@@ -702,6 +703,7 @@ function renderHealthFromSites() {
     html += '<div style="display:flex;align-items:center;gap:8px;margin:12px 0 8px;flex-wrap:wrap">';
     html += '<strong style="color:var(--coral)">\u26a0 可用但连续失败（' + reachWithFails.length + '）</strong>';
     html += '<button class="btn btn-sm btn-danger" onclick="healthBatchMarkDead()">\u2716 标记选中为死链</button>';
+    html += '<button class="btn btn-sm" onclick="healthClearFailSelection()">\u2716 取消选择</button>';
     html += '<span id="healthFailCount" style="color:var(--muted);font-size:12px">已选 0 个</span>';
     html += '</div>';
     html += '<table ' + tblStyle + '><thead><tr>';
@@ -740,6 +742,12 @@ function healthToggleDeadSelectAll(cb) {
   });
   document.getElementById("healthDeadCount").textContent = "已选 " + HEALTH_DEAD_SELECTED.size + " 个";
 }
+function healthClearDeadSelection() {
+  HEALTH_DEAD_SELECTED.clear();
+  document.getElementById("healthDeadSelectAll").checked = false;
+  document.querySelectorAll('#healthResults table:first-child tbody input[type="checkbox"]').forEach(function(el) { el.checked = false; });
+  document.getElementById("healthDeadCount").textContent = "已选 0 个";
+}
 async function healthBatchRecheckDead() {
   if (HEALTH_DEAD_SELECTED.size === 0) { toast("请先选择要复查的站点", "info"); return; }
   var urls = SITES.filter(function(s) { return HEALTH_DEAD_SELECTED.has(s.name); }).map(function(s) { return s.url; }).filter(Boolean);
@@ -775,6 +783,12 @@ function healthToggleFailSelectAll(cb) {
     if (cb.checked) HEALTH_FAIL_SELECTED.add(name); else HEALTH_FAIL_SELECTED.delete(name);
   });
   document.getElementById("healthFailCount").textContent = "已选 " + HEALTH_FAIL_SELECTED.size + " 个";
+}
+function healthClearFailSelection() {
+  HEALTH_FAIL_SELECTED.clear();
+  document.getElementById("healthFailSelectAll").checked = false;
+  document.querySelectorAll('#healthResults table:nth-of-type(2) tbody input[type="checkbox"]').forEach(function(el) { el.checked = false; });
+  document.getElementById("healthFailCount").textContent = "已选 0 个";
 }
 async function healthBatchMarkDead() {
   if (HEALTH_FAIL_SELECTED.size === 0) { toast("请先选择要标记的站点", "info"); return; }
