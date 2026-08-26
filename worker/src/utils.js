@@ -52,15 +52,45 @@ export function html(content) {
 // ─── 认证 ─────────────────────────────────────────────────────────────────────
 
 /**
+ * 恒定时间字符串比较（防时序攻击）
+ * 用 XOR 累积：循环次数只取决于长度，不取决于内容，无法按耗时逐字符探测。
+ * 不用 crypto.subtle.timingSafeEqual：Cloudflare Workers 支持它，但 Node 的
+ * WebCrypto 没有该方法，本地测试直接崩，跨环境实现不可测。
+ * 长度不同的输入拆到"固定循环量"分支并拒绝，抹平长度探测。
+ * @param {string} a — 待比较字符串
+ * @param {string} b — 待比较字符串
+ * @returns {boolean}
+ */
+function timingSafeEqualStr(a, b) {
+  const enc = new TextEncoder();
+  const bufA = enc.encode(a);
+  const bufB = enc.encode(b);
+  if (bufA.length !== bufB.length) {
+    // 做一次固定工作量再拒绝，让"长度不同"的耗时接近"同长但内容不同"
+    let sink = 0;
+    for (let i = 0; i < 32; i++) sink ^= i;
+    return false;
+  }
+  let diff = 0;
+  for (let i = 0; i < bufA.length; i++) diff |= bufA[i] ^ bufB[i];
+  return diff === 0;
+}
+
+/**
  * 校验管理员认证 Token
+ * M1：原先 `token !== env.ADMIN_TOKEN` 是普通字符串比较，按字符逐位、遇差即停，
+ * 攻击者可借响应耗时逐字符探测 Token。改用恒定时间比较；同时 Bearer 解析
+ * 容忍大小写与多余空格（原来只精确匹配 "Bearer "）。
  * @param {Request} request — Fetch Request
  * @param {object} env — Worker 环境变量（含 ADMIN_TOKEN）
  * @returns {Response|null} 认证失败返回 Response，成功返回 null
  */
 export function requireAuth(request, env) {
-  const authHeader = request.headers.get("Authorization");
-  const token = authHeader?.replace("Bearer ", "");
-  if (!token || token !== env.ADMIN_TOKEN) {
+  const authHeader = request.headers.get("Authorization") || "";
+  const match = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
+  const presented = match ? match[1].trim() : "";
+  const expected = env.ADMIN_TOKEN || "";
+  if (!presented || !expected || !timingSafeEqualStr(presented, expected)) {
     return json({ ok: false, error: "未授权，请先登录" }, 401, request);
   }
   return null; // 认证通过

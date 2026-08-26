@@ -3,8 +3,8 @@
 // 用户提交站点 → 存入 submissions 表 → 管理员审核（批准/驳回）
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { dbAll, dbGet, dbRun } from "./db.js";
-import { json as jsonResponse, parseJsonBody, validateUrlProtocol } from "./utils.js";
+import { dbAll, dbGet, dbRun, dbBatch } from "./db.js";
+import { json as jsonResponse, parseJsonBody, validateUrlProtocol, parseSiteUrl } from "./utils.js";
 
 // 提交速率限制配置
 const SUBMIT_RATE_LIMIT = 5;               // 每 IP 每天最多 5 次
@@ -137,6 +137,76 @@ export async function handleAdminGetSubmissions(db) {
   }));
 
   return { ok: true, submissions, total };
+}
+
+/**
+ * 原子批准提交：建站 + 标记已批准在同一 db.batch 内完成。
+ *
+ * 为什么需要它（M6）：原来的批准流程是前端两次独立请求——
+ *   POST /api/admin/sites 建站 → POST /api/admin/sites/batch 标记批准。
+ * 两步之间任何失败（网络中断、第二步抛错）都会留下"站点已建但 submission
+ * 仍为 pending"的半完成状态；重试时第一步会 409 冲突（站点已存在），
+ * 管理员无法继续批准，只能手工处理。
+ * 这里把 INSERT INTO sites + UPDATE submissions 放进同一个 batch，
+ * D1 batch 原子执行，要么都成功要么都不生效。
+ *
+ * 字段处理与 handleAdminCreateSite 保持一致：URL 经 parseSiteUrl 剥离推广
+ * 参数并规范化；tags/notes 容错解析（非法 JSON 当空数组）。
+ *
+ * @param {object} db — D1 数据库实例
+ * @param {string} id — 提交 ID
+ * @returns {Promise<object>} { ok, action, id } 或 { ok: false, error }
+ */
+export async function handleAdminApproveSubmission(db, id) {
+  const sub = await dbGet(
+    db,
+    "SELECT * FROM submissions WHERE id = ? AND status = 'pending'",
+    [id]
+  );
+  if (!sub) return { ok: false, error: "提交不存在或已处理" };
+
+  // 与 handleAdminCreateSite 一致：名称唯一性检查（同名校点已存在则拒绝）
+  const existing = await dbGet(db, "SELECT name FROM sites WHERE name = ?", [sub.site_name]);
+  if (existing) {
+    return { ok: false, error: `站点 "${sub.site_name}" 已存在` };
+  }
+
+  // URL 规范化 + 剥离推广参数（与 create/import 流程一致）
+  const { originalUrl, cleanUrl, ref } = parseSiteUrl(sub.site_url);
+  const parseJsonArr = (raw) => {
+    try {
+      const v = JSON.parse(raw);
+      return Array.isArray(v) ? v : [];
+    } catch {
+      return [];
+    }
+  };
+  const tags = parseJsonArr(sub.site_tags);
+  const notes = parseJsonArr(sub.site_notes);
+
+  await dbBatch(db, [
+    db
+      .prepare(
+        `INSERT INTO sites (name, url, original_url, ref, tags, summary, checkin, models, rate, register, notes, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+      )
+      .bind(
+        sub.site_name,
+        cleanUrl,
+        originalUrl && originalUrl !== cleanUrl ? originalUrl : "",
+        ref || "",
+        JSON.stringify(tags),
+        sub.site_summary || "",
+        sub.site_checkin || "",
+        sub.site_models || "",
+        "", // submissions 表无 rate 字段，按空处理
+        sub.site_register || "",
+        JSON.stringify(notes)
+      ),
+    db.prepare("UPDATE submissions SET status = 'approved' WHERE id = ?").bind(id),
+  ]);
+
+  return { ok: true, action: "approved", id };
 }
 
 /**

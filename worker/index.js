@@ -16,7 +16,7 @@ import {
   handleAdminBatch, handleAdminExport, handleAdminImportSites
 } from "./src/sites.js";
 import { handleGetVotes, handleVote } from "./src/votes.js";
-import { handleSubmitSite, handleAdminGetSubmissions, handleAdminSubmissionAction } from "./src/submissions.js";
+import { handleSubmitSite, handleAdminGetSubmissions, handleAdminSubmissionAction, handleAdminApproveSubmission } from "./src/submissions.js";
 import { getDeadUrls, addDeadUrl, removeDeadUrl, batchDeadUrls } from "./src/deadurls.js";
 import { checkUrlHealth, checkBatchHealth, HEALTH_BATCH_SIZE } from "./src/health.js";
 import { handleSubmitFeedback, handleGetFeedbacks, handleFeedbackAction } from "./src/feedbacks.js";
@@ -598,12 +598,14 @@ async function loadSubmissions() {
   } catch (e) { toast(e.message, "error"); }
 }
 async function approveSubmission(id) {
+  // M6：改单次原子请求（建站 + 标记批准在服务端同一 batch 完成）。
+  // 原来先 POST /api/admin/sites 再标记批准，两步之间失败会留下
+  // "站点已建但提交仍 pending"的半完成状态，重试还会 409 卡死。
+  // 注意：这里不能写反引号模板字符串或美元花括号插值——本段 JS 本身嵌在
+  // getAdminHTML() 的模板字面量里，反引号会提前终止外层模板、插值会被
+  // 服务端求值。必须用字符串拼接。
   try {
-    const data = await api("/api/admin/submissions");
-    const sub = (data.submissions || []).find((s) => s.id === id);
-    if (!sub) { toast("提交不存在", "error"); return; }
-    await api("/api/admin/sites", { method: "POST", body: JSON.stringify(sub.site) });
-    await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "approve_submission", id }) });
+    await api("/api/admin/submissions/" + encodeURIComponent(id) + "/approve", { method: "POST" });
     toast("已批准并添加站点", "success"); await loadSubmissions(); await loadSites();
   } catch (e) { toast(e.message, "error"); }
 }
@@ -911,6 +913,16 @@ export default {
         if (path === "/api/admin/submissions" && request.method === "GET") {
           const result = await handleAdminGetSubmissions(db);
           return json(result, 200, request);
+        }
+        // POST /api/admin/submissions/:id/approve — 原子批准（建站+标记，M6）
+        // 取代原来前端"先建站再标记批准"的两步流程（中间失败会留半完成状态）
+        const approveMatch = path.match(/^\/api\/admin\/submissions\/([^/]+)\/approve$/);
+        if (approveMatch && request.method === "POST") {
+          const result = await handleAdminApproveSubmission(db, decodeURIComponent(approveMatch[1]));
+          const status = !result.ok
+            ? (result.error === "提交不存在或已处理" ? 404 : 409)
+            : 201;
+          return json(result, status, request);
         }
         // PUT /api/admin/sites/:name
         const putMatch = path.match(/^\/api\/admin\/sites\/(.+)$/);
