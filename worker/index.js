@@ -666,37 +666,61 @@ function renderHealthFromSites() {
   var reachVerified = SITES.filter(function(s) { return !s.dead && s.healthFailCount === 0 && s.verifiedAt; });
   var reachUnverified = SITES.filter(function(s) { return !s.dead && s.healthFailCount === 0 && !s.verifiedAt; });
   var html = "";
-  // ── 死链区：批量恢复 ──────────────────────────────────────────────────
+  // 通用表格样式
+  var tblStyle = 'style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px"';
+  var thStyle = 'style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--line);font-weight:700;background:var(--surface-soft);font-size:12px;white-space:nowrap"';
+  var tdStyle = 'style="padding:6px 10px;border-bottom:1px solid var(--line);vertical-align:middle"';
+  // ── 死链表 ────────────────────────────────────────────────────────────
   if (unreachEnabled.length > 0) {
     html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">';
     html += '<strong style="color:var(--coral)">\u2716 已标记为死链（' + unreachEnabled.length + '）</strong>';
     html += '<button class="btn btn-sm btn-primary" onclick="healthBatchRestoreDead()">\u2705 恢复选中</button>';
+    html += '<button class="btn btn-sm" onclick="healthBatchRecheckDead()">\u200d\u200d🔍 重新复查选中</button>';
     html += '<button class="btn btn-sm btn-danger" onclick="healthRestoreAllDead()">\u2705 恢复全部</button>';
     html += '<span id="healthDeadCount" style="color:var(--muted);font-size:12px">已选 0 个</span>';
     html += '</div>';
+    html += '<table ' + tblStyle + '><thead><tr>';
+    html += '<th ' + thStyle + ' style="width:30px"><input type="checkbox" id="healthDeadSelectAll" onchange="healthToggleDeadSelectAll(this)"></th>';
+    html += '<th ' + thStyle + '>站点名称</th>';
+    html += '<th ' + thStyle + '>验证时间</th>';
+    html += '<th ' + thStyle + ' style="width:180px">操作</th>';
+    html += '</tr></thead><tbody>';
     html += unreachEnabled.map(function(s) {
-      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)">' +
-        '<input type="checkbox" data-name="' + esc(s.name) + '" onchange="healthToggleDeadSelect(this)">' +
-        '<span style="flex:1;word-break:break-all"><a href="' + esc(s.url) + '" target="_blank">' + esc(s.name) + '</a></span>' +
-        '<span style="color:var(--muted);font-size:11px">' + (s.verifiedAt ? "\u2705 验证于 " + fmtTime(s.verifiedAt) : '\u25cb 未验证') + '</span>' +
-        '<button class="btn btn-sm btn-primary" data-name="' + esc(s.name) + '" data-action="restore-dead">\u6062\u590d\u4e3a\u53ef\u7528</button></div>';
+      return '<tr>' +
+        '<td ' + tdStyle + '><input type="checkbox" data-name="' + esc(s.name) + '" onchange="healthToggleDeadSelect(this)"></td>' +
+        '<td ' + tdStyle + '><a href="' + esc(s.url) + '" target="_blank">' + esc(s.name) + '</a></td>' +
+        '<td ' + tdStyle + ' style="color:var(--muted);font-size:11px">' + (s.verifiedAt ? "\u2705 " + fmtTime(s.verifiedAt) : '\u25cb 未验证') + '</td>' +
+        '<td ' + tdStyle + '>' +
+        '<button class="btn btn-sm btn-primary" data-name="' + esc(s.name) + '" data-action="restore-dead" style="margin-right:4px">\u6062\u590d\u4e3a\u53ef\u7528</button>' +
+        '<button class="btn btn-sm" data-name="' + esc(s.name) + '" data-action="recheck-dead">\u200d\u200d🔍 复查</button></td>' +
+        '</tr>';
     }).join("");
+    html += '</tbody></table>';
   }
-  // ── 异常区：可批量标记死链 ────────────────────────────────────────────
+  // ── 异常表：可批量标记死链 ────────────────────────────────────────────
   if (reachWithFails.length > 0) {
     html += '<div style="display:flex;align-items:center;gap:8px;margin:12px 0 8px;flex-wrap:wrap">';
     html += '<strong style="color:var(--coral)">\u26a0 可用但连续失败（' + reachWithFails.length + '）</strong>';
     html += '<button class="btn btn-sm btn-danger" onclick="healthBatchMarkDead()">\u2716 标记选中为死链</button>';
     html += '<span id="healthFailCount" style="color:var(--muted);font-size:12px">已选 0 个</span>';
     html += '</div>';
+    html += '<table ' + tblStyle + '><thead><tr>';
+    html += '<th ' + thStyle + ' style="width:30px"><input type="checkbox" id="healthFailSelectAll" onchange="healthToggleFailSelectAll(this)"></th>';
+    html += '<th ' + thStyle + '>站点名称</th>';
+    html += '<th ' + thStyle + '>失败次数</th>';
+    html += '<th ' + thStyle + ' style="width:130px">操作</th>';
+    html += '</tr></thead><tbody>';
     html += reachWithFails.map(function(s) {
-      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)">' +
-        '<input type="checkbox" data-name="' + esc(s.name) + '" onchange="healthToggleFailSelect(this)">' +
-        '<span style="flex:1;word-break:break-all"><a href="' + esc(s.url) + '" target="_blank">' + esc(s.name) + '</a></span>' +
-        '<span style="color:var(--coral);white-space:nowrap">\u26a0 ' + s.healthFailCount + ' 次失败</span>' +
-        '<button class="btn btn-sm btn-danger" data-name="' + esc(s.name) + '" data-action="mark-dead">\u6807\u8bb0\u4e3a\u6b7b\u94fe</button></div>';
+      return '<tr>' +
+        '<td ' + tdStyle + '><input type="checkbox" data-name="' + esc(s.name) + '" onchange="healthToggleFailSelect(this)"></td>' +
+        '<td ' + tdStyle + '><a href="' + esc(s.url) + '" target="_blank">' + esc(s.name) + '</a></td>' +
+        '<td ' + tdStyle + ' style="color:var(--coral);font-size:11px">\u26a0 ' + s.healthFailCount + ' 次</td>' +
+        '<td ' + tdStyle + '><button class="btn btn-sm btn-danger" data-name="' + esc(s.name) + '" data-action="mark-dead">\u6807\u8bb0\u4e3a\u6b7b\u94fe</button></td>' +
+        '</tr>';
     }).join("");
+    html += '</tbody></table>';
   }
+  // ── 正常区 ────────────────────────────────────────────────────────────
   html += '<div style="margin:12px 0 4px;color:var(--muted);font-size:12px">\u2705 正常：' + (reachVerified.length + reachUnverified.length) + '（已验证 ' + reachVerified.length + '，未验证 ' + reachUnverified.length + '）。</div>';
   resultsEl.innerHTML = html;
   statusEl.textContent = "基于数据库最近一次 cron 检查结果（每 6 小时自动更新）。需要最新数据请点【批量检查】。";
@@ -706,6 +730,26 @@ function healthToggleDeadSelect(cb) {
   if (cb.checked) HEALTH_DEAD_SELECTED.add(cb.getAttribute("data-name"));
   else HEALTH_DEAD_SELECTED.delete(cb.getAttribute("data-name"));
   document.getElementById("healthDeadCount").textContent = "已选 " + HEALTH_DEAD_SELECTED.size + " 个";
+  document.getElementById("healthDeadSelectAll").checked = HEALTH_DEAD_SELECTED.size === SITES.filter(function(s) { return s.dead; }).length;
+}
+function healthToggleDeadSelectAll(cb) {
+  document.querySelectorAll('#healthResults table:first-child tbody input[type="checkbox"]').forEach(function(el) {
+    el.checked = cb.checked;
+    var name = el.getAttribute("data-name");
+    if (cb.checked) HEALTH_DEAD_SELECTED.add(name); else HEALTH_DEAD_SELECTED.delete(name);
+  });
+  document.getElementById("healthDeadCount").textContent = "已选 " + HEALTH_DEAD_SELECTED.size + " 个";
+}
+async function healthBatchRecheckDead() {
+  if (HEALTH_DEAD_SELECTED.size === 0) { toast("请先选择要复查的站点", "info"); return; }
+  var urls = SITES.filter(function(s) { return HEALTH_DEAD_SELECTED.has(s.name); }).map(function(s) { return s.url; }).filter(Boolean);
+  if (urls.length === 0) { toast("选中的站点没有可检查的 URL", "error"); return; }
+  try { var data = await api("/api/admin/check-batch", { method: "POST", body: JSON.stringify({ urls: urls }) }); var alive = data.results.filter(function(r) { return r.ok; }).length; var dead = data.results.filter(function(r) { return !r.ok; }).length; toast("复查完成：" + alive + " 可达，" + dead + " 不可达", dead > 0 ? "info" : "success"); await loadSites(); renderHealthFromSites(); } catch (e) { toast("复查失败: " + e.message, "error"); }
+}
+async function healthRecheckSingleDead(name) {
+  var s = SITES.find(function(s) { return s.name === name; });
+  if (!s || !s.url) { toast("站点无 URL", "error"); return; }
+  try { var data = await api("/api/admin/check-batch", { method: "POST", body: JSON.stringify({ urls: [s.url] }) }); var r = data.results[0]; toast("\u200d\u200d🔍 " + name + "：" + (r.ok ? "可达" : "不可达"), r.ok ? "success" : "error"); await loadSites(); renderHealthFromSites(); } catch (e) { toast("复查失败: " + e.message, "error"); }
 }
 async function healthBatchRestoreDead() {
   if (HEALTH_DEAD_SELECTED.size === 0) { toast("请先选择要恢复的站点", "info"); return; }
@@ -721,6 +765,15 @@ async function healthRestoreAllDead() {
 function healthToggleFailSelect(cb) {
   if (cb.checked) HEALTH_FAIL_SELECTED.add(cb.getAttribute("data-name"));
   else HEALTH_FAIL_SELECTED.delete(cb.getAttribute("data-name"));
+  document.getElementById("healthFailCount").textContent = "已选 " + HEALTH_FAIL_SELECTED.size + " 个";
+  document.getElementById("healthFailSelectAll").checked = HEALTH_FAIL_SELECTED.size === SITES.filter(function(s) { return !s.dead && s.healthFailCount > 0; }).length;
+}
+function healthToggleFailSelectAll(cb) {
+  document.querySelectorAll('#healthResults table:nth-of-type(2) tbody input[type="checkbox"]').forEach(function(el) {
+    el.checked = cb.checked;
+    var name = el.getAttribute("data-name");
+    if (cb.checked) HEALTH_FAIL_SELECTED.add(name); else HEALTH_FAIL_SELECTED.delete(name);
+  });
   document.getElementById("healthFailCount").textContent = "已选 " + HEALTH_FAIL_SELECTED.size + " 个";
 }
 async function healthBatchMarkDead() {
@@ -959,6 +1012,7 @@ document.addEventListener("click", function(e) {
     case "reject-submission":  rejectSubmission(id); break;
     case "restore-dead":     setDeadByName(name, false); break;
     case "mark-dead":        setDeadByName(name, true); break;
+    case "recheck-dead":     healthRecheckSingleDead(name); break;
     case "fb-action":         feedbackAction(el.getAttribute("data-fb-id"), el.getAttribute("data-fb-action")); break;
   }
 });
