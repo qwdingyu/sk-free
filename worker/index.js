@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ── 模块导入 ──────────────────────────────────────────────────────────────────
-import { getDb, dbAll, dbBatch } from "./src/db.js";
+import { getDb, dbAll, dbGet, dbBatch } from "./src/db.js";
 import { DEFAULT_SCHEMA, getSchema, saveSchema } from "./src/schema.js";
 import {
   corsHeaders, json, html, requireAuth,
@@ -412,7 +412,27 @@ async function saveSite() {
   const originalName = document.getElementById("editOriginalName").value;
   const tags = document.getElementById("editTags").value.split(",").map((t) => t.trim()).filter(Boolean);
   const notes = document.getElementById("editNotes").value.split("\\n").map((t) => t.trim()).filter(Boolean);
-  const body = { name: document.getElementById("editName").value.trim(), url: document.getElementById("editUrl").value.trim(), originalUrl: document.getElementById("editOriginalUrl").value.trim() || undefined, tags, summary: document.getElementById("editSummary").value.trim(), checkin: document.getElementById("editCheckin").value.trim() || undefined, models: document.getElementById("editModels").value.trim() || undefined, rate: document.getElementById("editRate").value.trim() || undefined, register: document.getElementById("editRegister").value.trim() || undefined, ref: document.getElementById("editRef").value.trim() || undefined, notes: notes.length ? notes : undefined };
+  // 空值必须发 "" 而不是 undefined。
+  // JSON.stringify 会把 undefined 的键整个丢掉，而后端更新用的是
+  //   checkin: body.checkin ?? existing.checkin
+  // 「键不存在」被解读为「不修改」—— 于是管理员把某个字段清空后点保存，
+  // 接口返回 ok、toast 显示"更新成功"，但刷新回来旧值还在，清不掉。
+  // 本地 wrangler dev + D1 实测过：清空 签到/模型/倍率/注册要求/备注 再保存，
+  // 五个字段一个都没变。发 "" 后端才会真的写空（?? 只在 null/undefined 时兜底）。
+  const val = (id) => document.getElementById(id).value.trim();
+  const body = {
+    name: val("editName"),
+    url: val("editUrl"),
+    originalUrl: val("editOriginalUrl"),
+    tags,
+    summary: val("editSummary"),
+    checkin: val("editCheckin"),
+    models: val("editModels"),
+    rate: val("editRate"),
+    register: val("editRegister"),
+    ref: val("editRef"),
+    notes,
+  };
   if (!body.name || !body.url) { toast("名称和 URL 为必填项", "error"); return; }
   try {
     if (originalName) { await api("/api/admin/sites/" + encodeURIComponent(originalName), { method: "PUT", body: JSON.stringify(body) }); toast("更新成功", "success"); }
@@ -970,55 +990,103 @@ export default {
   async scheduled(event, env, ctx) {
     const db = getDb(env);
     try {
-      const sites = await dbAll(db, "SELECT id, name, url FROM sites WHERE enabled = 1 AND url != ''");
-      if (sites.length === 0) return;
-
-      let checked = 0, alive = 0;
-      // 批次大小与 health.js 的 HEALTH_BATCH_SIZE 一致（=20）。
-      // 不能再用 45：checkUrlHealth 加了 HEAD→GET fallback 后，
-      // 每个失败 URL 最坏消耗 2 个 fetch，45 个 URL 里只要 5 个 HEAD 失败
-      // 就是 45+5+D1 > 50 subreq，整个 cron 直接 1101 挂掉，
-      // 结果是 verified_at 一次都写不进去 —— 鲜度永远显示"未验证"。
+      // ── 每次 cron 只检查一个"预算安全"的切片，绝不遍历全表 ──────────────────
+      //
+      // 50 个 subrequest 的上限是**每次调用**的，不是每批次的。原来的写法是
+      //   for (i = 0; i < sites.length; i += 20)
+      // 把全表分批跑完 —— 批次只限制并发，不限制单次调用的总量。
+      // 实测（stub fetch 计数，忠实复刻本循环，最坏情况即所有 HEAD 都失败、
+      // 每个 URL 消耗 2 个 fetch）：
+      //   18 站 → 38 subreq ✅    22 站 → 47 ✅    23 站 → 49 ✅
+      //   24 站 → 51 ❌           30 站 → 63 ❌    40 站 → 83 ❌
+      // 也就是说站点数一过 23，cron 就会 1101 整体失败，verified_at 一次都写
+      // 不进去，前端鲜度永远显示"未验证" —— 正是之前已经踩过的那个坑，
+      // 只是当时的触发条件是批次太大，这次的触发条件是站点变多。
+      // 线上现在 18 个站，离 23 只剩 5 个的余量，属于随时会炸。
+      //
+      // 切片怎么选：
+      //   前一半额度给"从未验证过的"（verified_at IS NULL），其中优先检查
+      //   历史检查次数最少的（health_fail_count 小），保证同组内轮转；
+      //   剩下的额度给"验证时间最老的"。
+      //   一半一半是为了防饿死：如果只按"从未验证优先"，一旦长期失效的站点
+      //   攒到 20 个以上，它们会永久占满整个切片，健康站点再也不会被复验，
+      //   所有人的鲜度一起烂掉。
       const BATCH = HEALTH_BATCH_SIZE;
-      for (let i = 0; i < sites.length; i += BATCH) {
-        const batch = sites.slice(i, i + BATCH);
-        // fallback 预算：先给每个 URL 留 1 个 HEAD，剩余额度才允许 GET 复核
-        const fallbackQuota = Math.max(0, 44 - batch.length);
-        const deadline = Date.now() + 25000;
-        const results = await Promise.all(
-          batch.map(async (site, idx) => {
-            const r = await checkUrlHealth(site.url, undefined, {
-              allowFallback: idx < fallbackQuota,
-              deadline,
-            });
-            return { ...site, ...r };
-          })
-        );
+      // Math.max(1, …)：万一有人把 HEALTH_BATCH_SIZE 调成 1，floor(1/2)=0 会让
+      // "从未验证"这一组永远拿不到额度，新站点的鲜度永远写不进去。
+      const HALF = Math.max(1, Math.floor(BATCH / 2));
 
-        const stmts = results.map((r) =>
-          r.ok
-            ? // 成功：更新验证时间并把失败计数清零
-              db
-                .prepare(
-                  "UPDATE sites SET verified_at = datetime('now'), verified_by = 'healthcheck', health_fail_count = 0 WHERE id = ?"
-                )
-                .bind(r.id)
-            : // 失败：只累计计数，不动 enabled、不写 dead_urls。
-              // 连续失败到多少次算"确认失效"由管理员看着计数决定。
-              db
-                .prepare(
-                  "UPDATE sites SET health_fail_count = health_fail_count + 1 WHERE id = ?"
-                )
-                .bind(r.id)
-        );
-        if (stmts.length > 0) {
-          await dbBatch(db, stmts);
-        }
-        checked += results.length;
-        alive += results.filter((r) => r.ok).length;
+      const never = await dbAll(
+        db,
+        `SELECT id, name, url FROM sites
+          WHERE enabled = 1 AND url != '' AND verified_at IS NULL
+          ORDER BY health_fail_count ASC, id ASC
+          LIMIT ?`,
+        [HALF]
+      );
+      const stale = await dbAll(
+        db,
+        `SELECT id, name, url FROM sites
+          WHERE enabled = 1 AND url != '' AND verified_at IS NOT NULL
+          ORDER BY verified_at ASC
+          LIMIT ?`,
+        [BATCH - never.length]
+      );
+      const batch = [...never, ...stale];
+      if (batch.length === 0) return;
+
+      // fallback 预算：每个 URL 先占 1 个 HEAD，剩余额度才允许 GET 复核。
+      // 上面用了 2 次 SELECT，下面还有 1 次 dbBatch，共 3 个 subrequest，
+      // 所以留给 fetch 的额度是 50-3=47；BATCH=20 时最坏 40 个 fetch，安全。
+      const FETCH_BUDGET_HERE = 47;
+      const fallbackQuota = Math.max(0, FETCH_BUDGET_HERE - batch.length);
+      const deadline = Date.now() + 25000;
+      const results = await Promise.all(
+        batch.map(async (site, idx) => {
+          const r = await checkUrlHealth(site.url, undefined, {
+            allowFallback: idx < fallbackQuota,
+            deadline,
+          });
+          return { ...site, ...r };
+        })
+      );
+
+      const stmts = results.map((r) =>
+        r.ok
+          ? // 成功：更新验证时间并把失败计数清零
+            db
+              .prepare(
+                "UPDATE sites SET verified_at = datetime('now'), verified_by = 'healthcheck', health_fail_count = 0 WHERE id = ?"
+              )
+              .bind(r.id)
+          : // 失败：只累计计数，不动 enabled、不写 dead_urls。
+            // 连续失败到多少次算"确认失效"由管理员看着计数决定。
+            db
+              .prepare(
+                "UPDATE sites SET health_fail_count = health_fail_count + 1 WHERE id = ?"
+              )
+              .bind(r.id)
+      );
+      if (stmts.length > 0) {
+        await dbBatch(db, stmts);
       }
-      // Cron 执行日志（Cloudflare Dashboard 可查看）
-      console.log(`[cron] health check: ${checked} checked, ${alive} alive, ${checked - alive} dead`);
+      const checked = results.length;
+      const alive = results.filter((r) => r.ok).length;
+
+      // Cron 执行日志（Cloudflare Dashboard 可查看）。
+      // 打出"本次检查 / 待检总数"，这样站点变多、单次覆盖不全时能立刻看出来，
+      // 而不是等到用户发现鲜度不对。cron 每 6 小时一次 = 每天 4 轮，
+      // 每轮最多 BATCH 个，全量扫完一遍需要 ceil(总数 / BATCH) 轮。
+      const totalRow = await dbGet(
+        db,
+        "SELECT COUNT(*) AS n FROM sites WHERE enabled = 1 AND url != ''"
+      );
+      const total = totalRow?.n ?? checked;
+      const rounds = Math.ceil(total / BATCH);
+      console.log(
+        `[cron] health check: ${checked}/${total} checked, ${alive} alive, ${checked - alive} dead` +
+          (rounds > 1 ? `（全量扫完需 ${rounds} 轮，约 ${rounds * 6} 小时）` : "")
+      );
     } catch (e) {
       console.error("[cron] health check failed:", e.message);
     }
