@@ -735,7 +735,7 @@ function healthToggleDeadSelect(cb) {
   document.getElementById("healthDeadSelectAll").checked = HEALTH_DEAD_SELECTED.size === SITES.filter(function(s) { return s.dead; }).length;
 }
 function healthToggleDeadSelectAll(cb) {
-  document.querySelectorAll('#healthResults table:first-child tbody input[type="checkbox"]').forEach(function(el) {
+  document.querySelectorAll('#healthResults table:first-of-type tbody input[type="checkbox"]').forEach(function(el) {
     el.checked = cb.checked;
     var name = el.getAttribute("data-name");
     if (cb.checked) HEALTH_DEAD_SELECTED.add(name); else HEALTH_DEAD_SELECTED.delete(name);
@@ -745,7 +745,7 @@ function healthToggleDeadSelectAll(cb) {
 function healthClearDeadSelection() {
   HEALTH_DEAD_SELECTED.clear();
   document.getElementById("healthDeadSelectAll").checked = false;
-  document.querySelectorAll('#healthResults table:first-child tbody input[type="checkbox"]').forEach(function(el) { el.checked = false; });
+  document.querySelectorAll('#healthResults table:first-of-type tbody input[type="checkbox"]').forEach(function(el) { el.checked = false; });
   document.getElementById("healthDeadCount").textContent = "已选 0 个";
 }
 async function healthBatchRecheckDead() {
