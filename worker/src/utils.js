@@ -129,7 +129,81 @@ export async function parseJsonBody(request) {
 // ─── URL 工具 ─────────────────────────────────────────────────────────────────
 
 /**
- * URL 协议校验：仅接受 http/https
+ * 判断 IPv4 是否属于私有/保留/回环/链路本地等不可外联网段（SSRF 防护）
+ * 覆盖：0.0.0.0/8、10/8、127/8、169.254/16、172.16/12、192.168/16、
+ *       100.64/10（CGNAT）、192.0.0.0/24、198.18/15、192.88.99/24、224+（组播）
+ * @param {string} ip — IPv4 字符串
+ * @returns {boolean} true = 不允许外联
+ */
+function isPrivateIPv4(ip) {
+  const m = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!m) return false;
+  const [a, b, c] = [m[1], m[2], m[3]].map(Number);
+  if ([a, b, c, Number(m[4])].some((n) => n > 255)) return false;
+  if (a === 0) return true;                            // 0.0.0.0/8
+  if (a === 10) return true;                           // 10.0.0.0/8
+  if (a === 127) return true;                          // 127.0.0.0/8 回环
+  if (a === 169 && b === 254) return true;             // 169.254.0.0/16 链路本地（云元数据在此段）
+  if (a === 172 && b >= 16 && b <= 31) return true;    // 172.16.0.0/12
+  if (a === 192 && b === 168) return true;             // 192.168.0.0/16
+  if (a === 100 && b >= 64 && b <= 127) return true;   // 100.64.0.0/10 CGNAT
+  if (a === 192 && b === 0 && c === 0) return true;    // 192.0.0.0/24
+  if (a === 198 && (b === 18 || b === 19)) return true; // 198.18.0.0/15 基准测试
+  if (a === 192 && b === 88 && c === 99) return true;  // 192.88.99.0/24
+  if (a >= 224) return true;                           // 224+ 组播/保留
+  return false;
+}
+
+/**
+ * IPv4-mapped IPv6（::ffff:x.x.x.x）的尾段判定。
+ * Node 的 URL 会把 ::ffff:127.0.0.1 规范化为 ::ffff:7f00:1（十六进制），
+ * 所以这里同时支持点分与十六进制两种形态。
+ * @param {string} tail — "::ffff:" 之后的剩余部分
+ * @returns {boolean} true = 不允许外联
+ */
+function isMappedIPv4(tail) {
+  if (tail.includes(".")) return isPrivateIPv4(tail);
+  const parts = tail.split(":");
+  let n;
+  // 用乘法而不是 <<：JS 的 << 是 32 位有符号运算，0xc0a8 << 16 会变成负数，
+  // 被下面的 n < 0 误判为"非 IPv4 映射"而放行（实测 ::ffff:192.168.1.1 漏网）。
+  if (parts.length === 2) n = parseInt(parts[0], 16) * 0x10000 + parseInt(parts[1], 16);
+  else if (parts.length === 1) n = parseInt(parts[0], 16);
+  else return false;
+  if (!Number.isFinite(n) || n < 0 || n > 0xffffffff) return false;
+  return isPrivateIPv4(
+    [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join(".")
+  );
+}
+
+/**
+ * 判断 hostname 是否指向不可外联的目标（SSRF 防护）
+ * 覆盖：localhost、裸 IPv4 私有段、IPv6 回环/链路本地/ULA/IPv4 映射。
+ * 局限：无法在应用层预判"域名最终解析到哪"（DNS rebinding 需配合网络层
+ * 防护，如 Cloudflare 的 egress 过滤），这里挡的是直接写 IP/本机名的常见面。
+ * @param {string} hostname — URL 的 hostname（无端口、可能带 [] 的 IPv6）
+ * @returns {boolean} true = 不允许外联
+ */
+function isPrivateHost(hostname) {
+  let h = (hostname || "").toLowerCase().replace(/\.$/, ""); // 去 FQDN 尾点
+  if (!h) return true;
+  if (h === "localhost" || h === "0.0.0.0") return true;
+
+  // IPv6（可能带方括号）
+  if (h.includes(":")) {
+    const v6 = h.replace(/^\[|\]$/g, "");
+    if (v6 === "::1") return true;                       // 回环
+    if (v6.startsWith("::ffff:")) return isMappedIPv4(v6.slice(7)); // IPv4 映射
+    if (/^fe[89ab]/.test(v6)) return true;               // fe80::/10 链路本地
+    if (/^fc|^fd/.test(v6)) return true;                 // fc00::/7 ULA
+    return false;
+  }
+  return isPrivateIPv4(h);
+}
+
+/**
+ * URL 协议与目标校验：仅接受 http/https 且不允许内网/保留地址（SSRF 防护）
+ * create/update/submissions/import/check 全部走这里。
  * @param {string} url — 待校验 URL
  * @returns {{ ok: boolean, error?: string }}
  */
@@ -139,6 +213,12 @@ export function validateUrlProtocol(url) {
     const u = new URL(url);
     if (!["http:", "https:"].includes(u.protocol)) {
       return { ok: false, error: `不支持的协议: ${u.protocol}，仅支持 http/https` };
+    }
+    // M3 修复：此前只查 scheme，http://169.254.169.254（云元数据）、
+    // http://127.0.0.1、http://192.168.x.x 等可入库并被 cron 每 6 小时访问，
+    // 构成盲 SSRF。host 层一并拦截。
+    if (isPrivateHost(u.hostname)) {
+      return { ok: false, error: `不允许的内网/保留地址: ${u.hostname}` };
     }
     return { ok: true };
   } catch {

@@ -1083,7 +1083,11 @@ export default {
       return json({ ok: false, error: "Not Found" }, 404, request);
 
     } catch (e) {
-      return json({ ok: false, error: "Internal error: " + e.message }, 500, request);
+      // M2 修复：此前把 e.message 原样回传（"Internal error: <细节>"），
+      // SQL/堆栈/路径等内部结构可被攻击者侦察。生产环境返回固定文案，
+      // 细节只进日志。
+      console.error("Unhandled error:", e && e.stack ? e.stack : e);
+      return json({ ok: false, error: "服务器内部错误，请稍后重试" }, 500, request);
     }
   },
 
