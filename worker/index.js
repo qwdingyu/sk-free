@@ -200,11 +200,11 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
       <span id="healthStatus" style="color:var(--muted);font-size:13px"></span>
     </div>
     <div id="healthResults"></div>
-    <h4 style="margin:16px 0 8px">死链接名单 <span id="deadCount" style="color:var(--muted);font-size:13px"></span></h4>
+    <h4 style="margin:16px 0 8px">死链站点名单 <span id="deadCount" style="color:var(--muted);font-size:13px"></span></h4>
     <div class="batch-bar" id="deadBatchBar">
       <span>已选 <span class="count" id="deadBatchCount">0</span> 项</span>
-      <button class="btn btn-sm btn-danger" onclick="batchRemoveDead()">🗑️ 批量移除</button>
-      <button class="btn btn-sm btn-danger" onclick="clearAllDeadUrls()">🧹 一键清除全部</button>
+      <button class="btn btn-sm btn-primary" onclick="batchRestoreDead()">✅ 批量恢复</button>
+      <button class="btn btn-sm btn-danger" onclick="restoreAllDeadUrls()">🧹 一键恢复全部</button>
       <button class="btn btn-sm" onclick="clearDeadSelection()">取消选择</button>
     </div>
     <div id="deadUrlsList"></div>
@@ -405,7 +405,7 @@ function renderTable() {
     const tags = (s.tags || []).map((t) => '<span class="tag">' + esc(t) + '</span>').join("");
     const checked = SELECTED.has(s.name) ? "checked" : "";
     const toggleChecked = s.enabled !== false ? "checked" : "";
-    const deadBadge = s.dead ? '<span class="tag" style="background:var(--coral);color:#fff" title="该站点 URL 在死链接黑名单中">死链</span>' : '';
+    const deadBadge = s.dead ? '<span class="tag" style="background:var(--coral);color:#fff" title="已标记为死链（不可用）">死链</span>' : '';
     const origUrlHtml = s.originalUrl && s.originalUrl !== s.url ? '<span class="orig-url" title="' + esc(s.originalUrl) + '">原: ' + esc(s.originalUrl.slice(0, 40)) + (s.originalUrl.length > 40 ? '...' : '') + '</span>' : '';
     return '<tr>' +
       '<td><input type="checkbox" ' + checked + ' data-name="' + esc(s.name) + '" data-action="toggle-select"></td>' +
@@ -613,45 +613,50 @@ async function rejectSubmission(id) {
   if (!confirm("确认驳回此提交？")) return;
   try { await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "reject_submission", id }) }); toast("已驳回", "success"); await loadSubmissions(); } catch (e) { toast(e.message, "error"); }
 }
-let DEAD_SELECTED = new Set();
-let ALL_DEAD_URLS = []; // 全部死链 URL 缓存（供"一键清除全部"使用）
-async function loadDeadUrls() {
+// 恢复死链 = 启用站点（走 /api/admin/sites/batch 的 enable，写人工验证时间）
+// 这是"可用/死链"二元模型的唯一状态入口：健康扫描对账报告里的
+// "标记为死链"/"恢复为可用"按钮都走这里，站点表的"启用"开关也走这里。
+async function setDeadByName(name, isDead) {
   try {
-    const data = await api("/api/admin/dead-urls");
-    const list = document.getElementById("deadUrlsList");
-    const countEl = document.getElementById("deadCount");
-    const urls = Object.keys(data.deadUrls || {});
-    ALL_DEAD_URLS = urls;
-    DEAD_SELECTED.clear(); updateDeadBatchBar();
-    countEl.textContent = urls.length > 0 ? ("(" + urls.length + " 个)") : "(空)";
-    if (urls.length === 0) { list.innerHTML = '<div style="color:var(--muted);padding:12px">暂无死链接</div>'; return; }
-    list.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:2px solid var(--line);font-size:13px;font-weight:700"><input type="checkbox" id="deadSelectAll" data-action="toggle-dead-select-all"><span style="width:30px;text-align:center">全选</span><span style="flex:1">URL</span><span style="width:120px">原因</span><span style="width:60px">操作</span></div>' + urls.map(url => {
-      const info = data.deadUrls[url]; const time = fmtTime(info.addedAt); const reason = info.error || info.reason || "";
-      return '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--line);font-size:13px"><input type="checkbox" data-url="' + esc(url) + '" data-action="toggle-dead-select"><span style="width:30px;text-align:center;color:var(--muted);font-size:11px">●</span><span style="flex:1;word-break:break-all;color:var(--coral)">' + esc(url) + '</span><span style="width:120px;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + esc(reason) + '">' + esc(reason) + ' ' + time + '</span><button class="btn btn-sm btn-danger" data-url="' + esc(url) + '" data-action="remove-dead">移除</button></div>';
-    }).join("");
-  } catch (e) { toast("加载死链接失败: " + e.message, "error"); }
+    const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: isDead ? "disable" : "enable", names: [name] }) });
+    toast(isDead ? "已标记为死链：" + name : "已恢复为可用：" + name, "success");
+    await loadSites();
+  } catch (e) { toast(e.message, "error"); }
 }
-function toggleDeadSelect(url, checked) { if (checked) DEAD_SELECTED.add(url); else DEAD_SELECTED.delete(url); updateDeadBatchBar(); }
-function toggleDeadSelectAll(checked) { document.querySelectorAll('#deadUrlsList input[data-action="toggle-dead-select"]').forEach((cb) => { cb.checked = checked; const url = cb.getAttribute("data-url"); if (checked) DEAD_SELECTED.add(url); else DEAD_SELECTED.delete(url); }); updateDeadBatchBar(); }
+/**
+ * 共享的健康扫描逻辑（链接健康 tab 和站点管理 tab 共用） '</span></span><span style="width:150px;color:var(--muted);font-size:11px">' + deadFreshness(s) + '</span><button class="btn btn-sm btn-primary" data-name="' + esc(s.name) + '" data-action="restore-dead">恢复</button></div>';
+  }).join("");
+}
+function toggleDeadSelect(name, checked) { if (checked) DEAD_SELECTED.add(name); else DEAD_SELECTED.delete(name); updateDeadBatchBar(); }
+function toggleDeadSelectAll(checked) { document.querySelectorAll('#deadUrlsList input[data-action="toggle-dead-select"]').forEach((cb) => { cb.checked = checked; const name = cb.getAttribute("data-name"); if (checked) DEAD_SELECTED.add(name); else DEAD_SELECTED.delete(name); }); updateDeadBatchBar(); }
 function clearDeadSelection() { DEAD_SELECTED.clear(); document.getElementById("deadSelectAll").checked = false; document.querySelectorAll('#deadUrlsList input[data-action="toggle-dead-select"]').forEach((cb) => cb.checked = false); updateDeadBatchBar(); }
 function updateDeadBatchBar() { const bar = document.getElementById("deadBatchBar"); const count = DEAD_SELECTED.size; document.getElementById("deadBatchCount").textContent = count; bar.classList.toggle("active", count > 0); }
-async function batchRemoveDead() {
-  if (DEAD_SELECTED.size === 0) return;
-  if (!confirm("确认移除选中的 " + DEAD_SELECTED.size + " 个死链接？")) return;
-  try { const data = await api("/api/admin/dead-urls/batch", { method: "POST", body: JSON.stringify({ urls: [...DEAD_SELECTED] }) }); toast("已移除 " + data.changed + " 个死链接", "success"); DEAD_SELECTED.clear(); await loadDeadUrls(); await loadSites(); } catch (e) { toast(e.message, "error"); }
-}
-async function removeDeadUrl(url) {
-  try { await api("/api/admin/dead-urls", { method: "POST", body: JSON.stringify({ url, action: "remove" }) }); toast("已移除"); await loadDeadUrls(); await loadSites(); } catch (e) { toast(e.message, "error"); }
-}
-// 一键清除全部死链接：批量移除黑名单，联动恢复所有被禁用的站点
-async function clearAllDeadUrls() {
-  if (ALL_DEAD_URLS.length === 0) { toast("当前没有死链接", "info"); return; }
-  if (!confirm("确认清除全部 " + ALL_DEAD_URLS.length + " 个死链接？\\n相关站点将自动恢复启用状态。")) return;
+// 恢复死链 = 启用站点（走 /api/admin/sites/batch 的 enable，写人工验证时间）
+async function setDeadByName(name, isDead) {
   try {
-    const data = await api("/api/admin/dead-urls/batch", { method: "POST", body: JSON.stringify({ urls: ALL_DEAD_URLS }) });
-    toast("已清除 " + data.changed + " 个死链接，相关站点已恢复", "success");
-    DEAD_SELECTED.clear(); ALL_DEAD_URLS = [];
-    await loadDeadUrls(); await loadSites();
+    const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: isDead ? "disable" : "enable", names: [name] }) });
+    toast(isDead ? "已标记为死链：" + name : "已恢复为可用：" + name, "success");
+    await loadSites(); loadDeadUrls();
+  } catch (e) { toast(e.message, "error"); }
+}
+async function batchRestoreDead() {
+  if (DEAD_SELECTED.size === 0) return;
+  try { const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "enable", names: [...DEAD_SELECTED] }) }); toast("已恢复 " + data.affected + " 个站点为可用", "success"); DEAD_SELECTED.clear(); await loadSites(); loadDeadUrls(); } catch (e) { toast(e.message, "error"); }
+}
+async function restoreDeadUrl(name) {
+  await setDeadByName(name, false);
+}
+// 一键恢复全部死链
+async function restoreAllDeadUrls() {
+  const dead = SITES.filter((s) => s.dead);
+  if (dead.length === 0) { toast("当前没有死链站点", "info"); return; }
+  if (!confirm("确认恢复全部 " + dead.length + " 个死链站点为可用？")) return;
+  try {
+    const names = dead.map((s) => s.name);
+    const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "enable", names }) });
+    toast("已恢复 " + data.affected + " 个站点为可用", "success");
+    DEAD_SELECTED.clear();
+    await loadSites(); loadDeadUrls();
   } catch (e) { toast(e.message, "error"); }
 }
 /**
@@ -697,15 +702,44 @@ async function batchCheckUrls() {
   try {
     await runHealthScan({
       onProgress: (msg) => { statusEl.textContent = msg; },
-      onResult: ({ alive, dead, allNewDead, allResults }) => {
-        var statusMsg = "检查完成：共 " + allResults.length + " 个，" + alive + " 个正常，" + dead + " 个不可达";
-        if (allNewDead.length > 0) statusMsg += "（发现 " + allNewDead.length + " 个疑似死链，请在下方确认）";
-        statusEl.textContent = statusMsg;
-        // 渲染详细结果列表
-        const deadList = allResults.filter(r => !r.ok); const aliveList = allResults.filter(r => r.ok); let html = "";
-        if (deadList.length > 0) { html += '<div style="margin-bottom:12px"><strong style="color:var(--coral)">❌ 不可达 (' + deadList.length + ')</strong></div>'; html += deadList.map(r => '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)"><span style="flex:1;word-break:break-all">' + esc(r.url) + '</span><span style="color:var(--coral);white-space:nowrap">' + esc(r.error || ("HTTP " + r.status)) + '</span></div>').join(""); }
-        if (aliveList.length > 0) { html += '<div style="margin:12px 0 8px"><strong style="color:var(--teal)">✅ 正常 (' + aliveList.length + ')</strong></div>'; html += aliveList.map(r => '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)"><span style="flex:1;word-break:break-all">' + esc(r.url) + '</span><span style="color:var(--teal);white-space:nowrap">HTTP ' + r.status + '</span></div>').join(""); }
-        resultsEl.innerHTML = html; loadDeadUrls(); loadSites();
+      onResult: ({ alive, dead, allResults }) => {
+        statusEl.textContent = "扫描完成：共 " + allResults.length + " 个 URL，" + alive + " 可达，" + dead + " 不可达（仅记录证据，不自动改状态）";
+        // 对账报告：扫描结果 × 站点当前可用性
+        var byUrl = {};
+        SITES.forEach(function(s) { byUrl[s.url] = s; });
+        var unreachEnabled = [];  // 不可达 + 当前启用 → 需要标记死链
+        var unreachDisabled = []; // 不可达 + 当前禁用 → 已在死链
+        var reachDisabled = [];   // 可达 + 当前禁用 → 可能已恢复
+        var reachEnabled = [];    // 可达 + 当前启用 → 正常
+        allResults.forEach(function(r) {
+          var s = byUrl[r.url];
+          var isEnabled = s ? s.enabled !== false : true;
+          if (r.ok) { if (isEnabled) reachEnabled.push(r); else reachDisabled.push(r); }
+          else { if (isEnabled) unreachEnabled.push(r); else unreachDisabled.push(r); }
+        });
+        var html = "";
+        if (unreachEnabled.length > 0) {
+          html += '<div style="margin-bottom:10px"><strong style="color:var(--coral)">\u26a1 \u4e0d\u53ef\u8fbe\u4f46\u5f53\u524d\u53ef\u7528\uff08\u5efa\u8bae\u6807\u8bb0\u4e3a\u6b7b\u94fe\uff09(' + unreachEnabled.length + ')</strong></div>';
+          html += unreachEnabled.map(function(r) {
+            var s = byUrl[r.url];
+            return '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)">' +
+              '<span style="flex:1;word-break:break-all"><a href="' + esc(r.url) + '" target="_blank">' + esc(s.name) + '</a> <span style="color:var(--muted)">' + esc(r.url) + '</span></span>' +
+              '<span style="color:var(--coral);white-space:nowrap">' + esc(r.error || ("HTTP " + r.status)) + '</span>' +
+              '<button class="btn btn-sm btn-danger" data-name="' + esc(s.name) + '" data-action="mark-dead">\u6807\u8bb0\u4e3a\u6b7b\u94fe</button></div>';
+          }).join("");
+        }
+        if (reachDisabled.length > 0) {
+          html += '<div style="margin:12px 0 10px"><strong style="color:var(--teal)">\ud83d\udd04 \u5df2\u53ef\u8fbe\u4f46\u5f53\u524d\u4e3a\u6b7b\u94fe\uff08\u5efa\u8bae\u6062\u590d\u4e3a\u53ef\u7528\uff09(' + reachDisabled.length + ')</strong></div>';
+          html += reachDisabled.map(function(r) {
+            var s = byUrl[r.url];
+            return '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)">' +
+              '<span style="flex:1;word-break:break-all"><a href="' + esc(r.url) + '" target="_blank">' + esc(s.name) + '</a> <span style="color:var(--muted)">' + esc(r.url) + '</span></span>' +
+              '<span style="color:var(--teal);white-space:nowrap">HTTP ' + r.status + '</span>' +
+              '<button class="btn btn-sm btn-primary" data-name="' + esc(s.name) + '" data-action="restore-dead">\u6062\u590d\u4e3a\u53ef\u7528</button></div>';
+          }).join("");
+        }
+        html += '<div style="margin:12px 0 4px;color:var(--muted);font-size:12px">\u5df2\u4e00\u81f4\uff08\u65e0\u9700\u64cd\u4f5c\uff09\uff1a\u4e0d\u53ef\u8fbe\u4e14\u5df2\u6807\u8bb0\u6b7b\u94fe ' + unreachDisabled.length + ' \u4e2a\uff1b\u53ef\u8fbe\u4e14\u53ef\u7528 ' + reachEnabled.length + ' \u4e2a\u3002</div>';
+        resultsEl.innerHTML = html; loadSites().then(loadDeadUrls);
       },
     });
   } catch (e) { statusEl.textContent = "检查失败: " + e.message; }
@@ -714,16 +748,27 @@ async function batchCheckUrls() {
 async function sitesCleanupDeadLinks() {
   var statusEl = document.getElementById("sitesCleanStatus");
   if (SITES.length === 0) { toast("请先加载站点列表", "error"); return; }
-  if (!confirm("将检查全部 " + SITES.length + " 个站点的 URL 可达性，不可达的将显示在结果中供确认。确认继续？")) return;
+  if (!confirm("将检查全部 " + SITES.length + " 个站点的 URL 可达性，结果支持一键标记/恢复。确认继续？")) return;
   statusEl.textContent = "正在检查中...";
   try {
     await runHealthScan({
       onProgress: (msg) => { statusEl.textContent = msg; },
-      onResult: ({ alive, dead, allNewDead }) => {
+      onResult: ({ alive, dead, allResults }) => {
+        var byUrl = {};
+        SITES.forEach(function(s) { byUrl[s.url] = s; });
+        var unreachEnabled = 0, reachDisabled = 0;
+        allResults.forEach(function(r) {
+          var s = byUrl[r.url];
+          var isEnabled = s ? s.enabled !== false : true;
+          if (r.ok) { if (!isEnabled) reachDisabled++; }
+          else { if (isEnabled) unreachEnabled++; }
+        });
         var msg = "检查完成：" + alive + " 正常，" + dead + " 不可达";
-        if (allNewDead.length > 0) msg += "（发现 " + allNewDead.length + " 个疑似死链，请手动确认）";
+        if (unreachEnabled > 0) msg += "（" + unreachEnabled + " 个待标记死链）";
+        if (reachDisabled > 0) msg += "（" + reachDisabled + " 个待恢复）";
+        if (unreachEnabled > 0 || reachDisabled > 0) msg += "，请切换到链接健康标签页查看详情及操作。";
         statusEl.textContent = msg;
-        toast(msg, allNewDead.length > 0 ? "info" : "success");
+        toast(msg, (unreachEnabled > 0 || reachDisabled > 0) ? "info" : "success");
         loadSites();
       },
     });
@@ -818,7 +863,8 @@ document.addEventListener("click", function(e) {
     case "delete-site":      deleteSite(name); break;
     case "approve-submission": approveSubmission(id); break;
     case "reject-submission":  rejectSubmission(id); break;
-    case "remove-dead":       removeDeadUrl(el.getAttribute("data-url")); break;
+    case "restore-dead":     restoreDeadUrl(name); break;
+    case "mark-dead":        setDeadByName(name, true); break;
     case "toggle-dead-select-all": toggleDeadSelectAll(el.checked); break;
     case "fb-action":         feedbackAction(el.getAttribute("data-fb-id"), el.getAttribute("data-fb-action")); break;
   }
@@ -828,7 +874,7 @@ document.addEventListener("change", function(e) {
   var action = el.getAttribute("data-action"); var name = el.getAttribute("data-name") || "";
   if (action === "toggle-select") toggleSelect(name, el.checked);
   if (action === "toggle-enable") toggleEnable(name, el.checked);
-  if (action === "toggle-dead-select") toggleDeadSelect(el.getAttribute("data-url"), el.checked);
+  if (action === "toggle-dead-select") toggleDeadSelect(el.getAttribute("data-name"), el.checked);
 });
 </script>
 </body>

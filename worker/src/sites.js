@@ -319,12 +319,9 @@ export async function handleAdminCreateSite(db, request, kv) {
   const tags = Array.isArray(body.tags) ? body.tags : [];
   const notes = Array.isArray(body.notes) ? body.notes : [];
 
-  // 联动：URL 已在死链接黑名单中 → 新建站点默认禁用（保持用户端/管理端状态一致）
-  let enabled = body.enabled !== false ? 1 : 0;
-  if (cleanUrl) {
-    const deadRow = await dbGet(db, "SELECT url FROM dead_urls WHERE url = ?", [cleanUrl]);
-    if (deadRow) enabled = 0;
-  }
+  // 可用性现在是单一 enabled 轴（决定层），不再联动 dead_urls 黑名单。
+  // 新建站点默认启用，除非显式禁用 —— 死链与否由命中决定，不由编辑时的黑名单状态。
+  const enabled = body.enabled !== false ? 1 : 0;
 
   // 结构化字段校验（与更新路径同一套规则）
   const structCheck = validateStructuredFields(body);

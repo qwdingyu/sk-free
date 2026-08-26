@@ -293,6 +293,7 @@ console.log("\n12. 提交批准（结构化字段默认值）");
 // dead_urls.url 存的是调用方原样传的字符串。两边形式不一致时，
 // "移除死链 → 恢复站点启用"这条联动会静默失效，而 UI 文案承诺了它会生效。
 // 实测过：不带尾斜杠移除 → enabled 仍是 0；带尾斜杠 → 恢复为 1。
+// 注意：公开 API 现在返回所有站点（含停用，dead:true），死链站点不再消失。
 console.log("\n11. 死链接移除与站点启用联动");
 {
   const DN = "死链联动站";
@@ -306,12 +307,18 @@ console.log("\n11. 死链接移除与站点启用联动");
     await admin("/api/admin/dead-urls/batch", "POST", { action: "add", urls: [form] });
     await admin(`/api/admin/sites/batch`, "POST", { action: "disable", names: [DN] });
     const before = await getSite(DN);
-    check(`${label}：先确认站点已停用`, before, undefined); // 停用后不在公开列表里
+    check(`${label}：停用后仍可见，标记为死链`, before?.dead, true);
     const rm = await admin("/api/admin/dead-urls/batch", "POST", { action: "remove", urls: [form] });
     check(`${label}：批量移除 → 200`, rm.status, 200);
     const after = await getSite(DN);
-    check(`${label}：站点自动恢复启用（重新出现在公开列表）`, after?.name, DN);
+    check(`${label}：移除后不再标记死链`, after?.dead, false);
   }
+  // 回归：URL 在黑名单中也不应自动禁用新建站点（死链与否由 enabled 决定层掌控）
+  await admin("/api/admin/dead-urls/batch", "POST", { action: "add", urls: ["https://blocklisted.example.com"] });
+  await admin("/api/admin/sites", "POST", { name: "黑名单URL站点", url: "https://blocklisted.example.com", tags: [] });
+  check("URL 在黑名单中 → 新建站点默认启用（不自动禁用）", (await getSite("黑名单URL站点"))?.dead, false);
+  await admin(`/api/admin/sites/${enc("黑名单URL站点")}`, "DELETE");
+  await admin("/api/admin/dead-urls/batch", "POST", { action: "remove", urls: ["https://blocklisted.example.com"] });
   await admin(`/api/admin/sites/${enc(DN)}`, "DELETE");
 }
 
