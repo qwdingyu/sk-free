@@ -809,6 +809,7 @@ async function runHealthScan({ onProgress, onResult }) {
   if (allUrls.length === 0) { onProgress("没有可检查的站点"); return; }
   const allResults = [];
   const allNewDead = [];
+  let allRestored = 0;
   let i = 0;
   let batchIdx = 0;
   while (i < allUrls.length) {
@@ -817,6 +818,7 @@ async function runHealthScan({ onProgress, onResult }) {
     onProgress("正在检查... 批次 " + batchIdx + "/" + totalBatches + "（" + Math.min(i + BATCH_SIZE, allUrls.length) + "/" + allUrls.length + "）");
     const data = await api("/api/admin/check-batch", { method: "POST", body: JSON.stringify({ urls: allUrls.slice(i, i + BATCH_SIZE) }) });
     allResults.push(...data.results);
+    if (data.restored) allRestored += data.restored;
     if (data.newDeadUrls && data.newDeadUrls.length > 0) allNewDead.push(...data.newDeadUrls);
     // 服务端截断了 = 前后端常量漂移，按服务端的上限收紧并继续
     if (data.maxBatch && data.maxBatch < BATCH_SIZE) {
@@ -828,7 +830,7 @@ async function runHealthScan({ onProgress, onResult }) {
   }
   const alive = allResults.filter(r => r.ok).length;
   const dead = allResults.filter(r => !r.ok).length;
-  onResult({ alive, dead, allNewDead, allResults });
+  onResult({ alive, dead, allNewDead, allResults, allRestored });
 }
 
 async function batchCheckUrls() {
@@ -837,8 +839,8 @@ async function batchCheckUrls() {
   try {
     await runHealthScan({
       onProgress: (msg) => { statusEl.textContent = msg; },
-      onResult: ({ alive, dead, allResults }) => {
-        statusEl.textContent = "扫描完成：共 " + allResults.length + " 个 URL，" + alive + " 可达，" + dead + " 不可达（仅记录证据，不自动改状态）";
+      onResult: ({ alive, dead, allResults, allRestored }) => {
+        statusEl.textContent = "扫描完成：共 " + allResults.length + " 个 URL，" + alive + " 可达，" + dead + " 不可达（仅记录证据，不自动改状态）" + (allRestored ? "，自动恢复 " + allRestored + " 个站点" : "");
         // 对账报告：扫描结果 × 站点当前可用性
         var byUrl = {};
         SITES.forEach(function(s) { byUrl[s.url] = s; });
@@ -890,7 +892,7 @@ async function sitesCleanupDeadLinks() {
   try {
     await runHealthScan({
       onProgress: (msg) => { statusEl.textContent = msg; },
-      onResult: ({ alive, dead, allResults }) => {
+      onResult: ({ alive, dead, allResults, allRestored }) => {
         var byUrl = {};
         SITES.forEach(function(s) { byUrl[s.url] = s; });
         var unreachEnabled = [], reachDisabled = [];
@@ -924,7 +926,7 @@ async function sitesCleanupDeadLinks() {
         }
         html += '<div style="margin:12px 0 4px;color:var(--muted);font-size:12px">\u5df2\u4e00\u81f4\uff08\u65e0\u9700\u64cd\u4f5c\uff09\uff1a\u4e0d\u53ef\u8fbe\u4e14\u5df2\u6807\u8bb0\u6b7b\u94fe ' + (allResults.length - unreachEnabled.length - reachDisabled.length) + ' \u4e2a\uff1b\u53ef\u8fbe\u4e14\u53ef\u7528 0 \u4e2a\u3002</div>';
         LAST_HEALTH_SCAN = { html: html, time: new Date().toLocaleString(), summary: alive + " 可达，" + dead + " 不可达" };
-        var msg = "检查完成：" + alive + " 正常，" + dead + " 不可达";
+        var msg = "检查完成：" + alive + " 正常，" + dead + " 不可达" + (allRestored ? "，自动恢复 " + allRestored + " 个站点" : "");
         if (unreachEnabled.length > 0) msg += "（" + unreachEnabled.length + " 个待标记死链）";
         if (reachDisabled.length > 0) msg += "（" + reachDisabled.length + " 个待恢复）";
         if (unreachEnabled.length > 0 || reachDisabled.length > 0) msg += "，请切换到链接健康标签页查看详情及操作。";
@@ -1188,7 +1190,7 @@ export default {
           return json({ ok: true, url: checkUrl, ...result }, 200, request);
         }
         // POST /api/admin/check-batch — 批量检查 URL 健康状态
-        // body: { urls: string[] } — 必传，由前端分页调用（每批 ≤45）
+        // 自动恢复已可达的死链站点（证据确凿：探测成功 = 站点活回来了）
         if (path === "/api/admin/check-batch" && request.method === "POST") {
           const parsed = await parseJsonBody(request);
           if (!parsed.ok) return parsed.response;
@@ -1196,8 +1198,21 @@ export default {
           if (!Array.isArray(urls) || urls.length === 0) {
             return json({ ok: false, error: "需要 urls 数组" }, 400, request);
           }
-          // 超时 8 秒：1.5 秒太短导致大量合法站点误判为死链
           const result = await checkBatchHealth(db, urls, 8000);
+          // 自动恢复：对探测成功但当前已停用的站点，恢复为可用
+          // 安全前提：探测是实时进行的，不是历史数据；站点确实可达
+          // 且自动恢复是可逆的（管理员可随时再次停用）
+          var okUrls = result.results.filter(function(r) { return r.ok; }).map(function(r) { return r.url; });
+          if (okUrls.length > 0) {
+            // 单次查询找出所有"已停用但可达"的站点
+            var placeholders = okUrls.map(function() { return "?"; }).join(",");
+            var toRestore = await dbAll(db, "SELECT name FROM sites WHERE url IN (" + placeholders + ") AND enabled = 0", okUrls);
+            if (toRestore.length > 0) {
+              var namePh = toRestore.map(function() { return "?"; }).join(",");
+              await dbRun(db, "UPDATE sites SET enabled = 1, health_fail_count = 0, verified_at = datetime('now'), verified_by = 'healthcheck' WHERE name IN (" + namePh + ")", toRestore.map(function(r) { return r.name; }));
+              result.restored = toRestore.length;
+            }
+          }
           return json(result, 200, request);
         }
 
