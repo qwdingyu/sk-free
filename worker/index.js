@@ -870,7 +870,9 @@ async function batchCheckUrls() {
           }).join("");
         }
         html += '<div style="margin:12px 0 4px;color:var(--muted);font-size:12px">\u5df2\u4e00\u81f4\uff08\u65e0\u9700\u64cd\u4f5c\uff09\uff1a\u4e0d\u53ef\u8fbe\u4e14\u5df2\u6807\u8bb0\u6b7b\u94fe ' + unreachDisabled.length + ' \u4e2a\uff1b\u53ef\u8fbe\u4e14\u53ef\u7528 ' + reachEnabled.length + ' \u4e2a\u3002</div>';
-        resultsEl.innerHTML = html; loadSites().then(loadDeadUrls);
+        // 静默刷新 SITES（站点表开关/徽章保持最新）；不调 renderHealthFromSites，
+        // 否则 DB 状态视图会立刻覆盖掉刚生成的扫描对账报告
+        resultsEl.innerHTML = html; loadSites();
       },
     });
   } catch (e) { statusEl.textContent = "检查失败: " + e.message; }

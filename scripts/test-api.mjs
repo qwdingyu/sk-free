@@ -312,6 +312,10 @@ console.log("\n11. 死链接移除与站点启用联动");
     check(`${label}：批量移除 → 200`, rm.status, 200);
     const after = await getSite(DN);
     check(`${label}：移除后不再标记死链`, after?.dead, false);
+    // 遗留恢复路径也是决定层入口，必须与 batch enable 同款：
+    // 写人工验证戳 + 清零失败计数（否则出现"已启用但 fail_count=3"的证据断层）
+    check(`${label}：遗留恢复路径写入人工验证戳`, after?.verifiedBy, "manual");
+    check(`${label}：恢复时清零连续失败计数`, after?.healthFailCount, 0);
   }
   // 回归：URL 在黑名单中也不应自动禁用新建站点（死链与否由 enabled 决定层掌控）
   await admin("/api/admin/dead-urls/batch", "POST", { action: "add", urls: ["https://blocklisted.example.com"] });

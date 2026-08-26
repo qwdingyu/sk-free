@@ -68,11 +68,16 @@ export async function addDeadUrl(db, url, info = {}) {
 export async function removeDeadUrl(db, url) {
   // batch：删黑名单 + 恢复站点状态是一组语义。分两次往返既多耗一个 subrequest，
   // 也可能只成功一半（黑名单删了但站点还停用着）。
+  // 恢复 = 决定层变更，必须与 /api/admin/sites/batch enable 同款：
+  // 写人工验证戳 + 清零连续失败计数。否则会出现"已启用但 fail_count 还是 3、
+  // verified_at 还停在半年前"的证据断层（闭环审计发现的缺口）。
   const results = await dbBatch(db, [
     db.prepare("DELETE FROM dead_urls WHERE " + URL_MATCH).bind(url),
     // 联动：恢复 URL 匹配站点的启用状态（死链接移除说明站点已恢复）
     db
-      .prepare("UPDATE sites SET enabled = 1, updated_at = datetime('now') WHERE " + URL_MATCH + " AND enabled = 0")
+      .prepare(
+        "UPDATE sites SET enabled = 1, verified_at = datetime('now'), verified_by = 'manual', health_fail_count = 0, updated_at = datetime('now') WHERE " + URL_MATCH + " AND enabled = 0"
+      )
       .bind(url),
   ]);
   return results?.[0]?.meta?.changes || 0;
@@ -107,10 +112,13 @@ export async function batchDeadUrls(db, urls, action = "remove") {
             .bind(url, now)
         )
       // remove：DELETE + 恢复站点，两条一组（batch 内原子）
+      // 恢复语义与单条 removeDeadUrl 一致：人工验证戳 + 清零失败计数
       : urls.flatMap((url) => [
           db.prepare("DELETE FROM dead_urls WHERE " + URL_MATCH).bind(url),
           db
-            .prepare("UPDATE sites SET enabled = 1, updated_at = datetime('now') WHERE " + URL_MATCH + " AND enabled = 0")
+            .prepare(
+              "UPDATE sites SET enabled = 1, verified_at = datetime('now'), verified_by = 'manual', health_fail_count = 0, updated_at = datetime('now') WHERE " + URL_MATCH + " AND enabled = 0"
+            )
             .bind(url),
         ]);
 
