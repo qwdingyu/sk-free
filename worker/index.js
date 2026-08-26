@@ -165,6 +165,7 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
     </div>
     <div class="batch-bar" id="batchBar">
       <span>已选 <span class="count" id="batchCount">0</span> 项</span>
+      <button class="btn btn-sm" onclick="batchRecheck()">🔍 重新复查</button>
       <button class="btn btn-sm" onclick="batchTag()">🏷️ 批量打标签</button>
       <button class="btn btn-sm" onclick="batchEnable()">✅ 批量启用</button>
       <button class="btn btn-sm" onclick="batchDisable()">⛔ 批量停用</button>
@@ -563,6 +564,24 @@ async function batchDisable() {
   if (SELECTED.size === 0) return;
   if (!confirm("确认停用选中的 " + SELECTED.size + " 个站点？")) return;
   try { const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "disable", names: [...SELECTED] }) }); toast("已停用 " + data.affected + " 个站点", "success"); SELECTED.clear(); await loadSites(); } catch (e) { toast(e.message, "error"); }
+}
+// 对选中的站点重新做健康检查（只查选中的，不查全部）
+async function batchRecheck() {
+  if (SELECTED.size === 0) { toast("请先选择要复查的站点", "info"); return; }
+  var selectedSites = SITES.filter(function(s) { return SELECTED.has(s.name); });
+  var urls = selectedSites.map(function(s) { return s.url; }).filter(Boolean);
+  if (urls.length === 0) { toast("选中的站点没有可检查的 URL", "error"); return; }
+  var statusEl = document.getElementById("sitesCleanStatus");
+  statusEl.textContent = "正在复查 " + urls.length + " 个站点...";
+  try {
+    var data = await api("/api/admin/check-batch", { method: "POST", body: JSON.stringify({ urls: urls }) });
+    var alive = data.results.filter(function(r) { return r.ok; }).length;
+    var dead = data.results.filter(function(r) { return !r.ok; }).length;
+    statusEl.textContent = "复查完成：" + alive + " 可达，" + dead + " 不可达";
+    toast("复查完成：" + alive + " 可达，" + dead + " 不可达", dead > 0 ? "info" : "success");
+    // 更新健康 tab 数据
+    await loadSites(); renderHealthFromSites();
+  } catch (e) { statusEl.textContent = "复查失败: " + e.message; toast("复查失败: " + e.message, "error"); }
 }
 function switchTab(tab) {
   // 用 data-tab 属性匹配，不依赖 DOM 顺序
