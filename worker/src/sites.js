@@ -594,6 +594,7 @@ export async function handleAdminBatch(db, request) {
       db.prepare(`DELETE FROM sites WHERE name IN (${placeholders})`).bind(...names),
       db.prepare(`DELETE FROM votes WHERE site_name IN (${placeholders})`).bind(...names),
       db.prepare(`DELETE FROM feedbacks WHERE site_name IN (${placeholders})`).bind(...names),
+      db.prepare(`DELETE FROM site_history WHERE site_name IN (${placeholders})`).bind(...names),
     ];
     if (doomed.length > 0) {
       const urlPlaceholders = doomed.map(() => "?").join(",");

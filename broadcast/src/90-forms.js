@@ -87,14 +87,6 @@ function openFeedbackModal(siteName) {
 
   if (!modal) return;
 
-  // 检查是否已反馈过（所有类型）
-  const personalFeedbacks = loadPersonalFeedbacks();
-  const hasAnyFeedback = Object.keys(personalFeedbacks).some((k) => k.startsWith(siteName + ":"));
-  if (hasAnyFeedback) {
-    toast("您已反馈过该站点，感谢您的关注！", "info");
-    return;
-  }
-
   // 重置表单
   nameEl.textContent = "站点：" + siteName;
   contentEl.value = "";
@@ -145,6 +137,13 @@ function initFeedbackForm() {
 
     if (!type) { toast("请选择反馈类型", "error"); return; }
     if (content.length < 2) { toast("反馈内容至少需要 2 个字符", "error"); return; }
+
+    // 与 quickFeedback 一致的 per-type 重复检测：同一站点同一类型只允许一次
+    const personalFeedbacks = loadPersonalFeedbacks();
+    if (personalFeedbacks[`${siteName}:${type}`]) {
+      toast("您已反馈过该类型，感谢！", "info");
+      return;
+    }
 
     confirmBtn.disabled = true;
     confirmBtn.textContent = "提交中...";

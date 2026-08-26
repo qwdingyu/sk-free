@@ -60,6 +60,8 @@ function relativeTime(isoStr) {
   const ts = parseUtc(isoStr);
   if (Number.isNaN(ts)) return "";
   const diff = Date.now() - ts;
+  // 允许 60 秒时钟偏差，超过此范围仍显示"刚刚"（比显示负数时间好）
+  if (diff < -60000) return "刚刚";
   if (diff < 0) return "刚刚";
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "刚刚";

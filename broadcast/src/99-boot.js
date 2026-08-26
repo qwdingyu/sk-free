@@ -136,6 +136,12 @@ function renderFilters() {
     { key: "tool", label: "工具" }
   ], state.filterKind, (vals) => { state.filterKind = vals; syncToUrl(false); applyFilterChange(); }));
 
+  // 能力标签（生图/限免 — 由站点 tags 决定，与 filterCapability 状态联动）
+  filterPanel.appendChild(makeFilterGroup("能力", [
+    { key: "生图", label: "生图" },
+    { key: "限免", label: "限免" }
+  ], state.filterCapability, (vals) => { state.filterCapability = vals; syncToUrl(false); applyFilterChange(); }));
+
   // 门槛
   filterPanel.appendChild(makeFilterGroup("门槛", [
     { key: "GitHub", label: "GitHub" },
@@ -294,7 +300,7 @@ function makeFilterGroup(label, options, selected, onChange) {
 }
 
 function hasActiveFilters() {
-  return state.activePreset || state.activeTag || state.query
+  return state.activePreset || state.query
     || state.filterTier.length || state.filterCapability.length
     || state.filterKind.length || state.filterThreshold.length
     || state.hideStale;
@@ -302,7 +308,6 @@ function hasActiveFilters() {
 
 function clearAllFilters() {
   state.activePreset = "";
-  state.activeTag = "";
   state.query = "";
   state.filterTier = [];
   state.filterCapability = [];
@@ -349,9 +354,6 @@ async function init() {
     const data = await loadSites();
     state.metadata = data.metadata || {};
     state.sites = (data.sites || []).filter((s) => s.enabled !== false);
-
-    // 投票数据已内嵌在 sites API 中
-    await loadVotes();
 
     render();
     loadNotice();

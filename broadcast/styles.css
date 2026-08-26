@@ -899,22 +899,6 @@ h1 {
   color: var(--muted);
 }
 
-.freshness-fresh {
-  background: var(--teal-soft);
-  color: var(--teal-ink);
-}
-
-.freshness-ok {
-  background: var(--amber-soft);
-  color: var(--amber);
-}
-
-.freshness-stale,
-.freshness-unknown {
-  background: var(--surface-soft);
-  color: var(--muted);
-}
-
 /* ═══════ 实体类型徽章 ═══════ */
 /* 18 条数据里混了 API 中转站 / TG 机器人 / 号池 / 域名工具四种实体，
    不标出来用户会拿机器人当 API 站去接。api_site 是默认值，不显示。 */
@@ -1052,7 +1036,6 @@ h1 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
   height: 26px;
   min-width: 44px;
   min-height: 44px;

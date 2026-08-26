@@ -8,11 +8,8 @@ const VOTE_STORAGE_KEY = "sk-free-votes";
 const THEME_CHOICES = ["light", "dark", "system"];
 
 // ── 标签与筛选 ────────────────────────────────────────────────────────────────
-// PRIORITY_TAGS: 筛选按钮固定顺序（"全部" 始终在首位）
 // 生图/限免 命中率 ≥ 33%，判别力足够，保留为标签
 // 签到/DC系/半DC/非DC 已迁移至结构化字段（quota_period/needs_proxy），不再用标签筛选
-const PRIORITY_TAGS = ["全部", "生图", "限免"];
-
 const TAG_CLASS = {
   "生图": "image",
   "限免": "free"

@@ -14,11 +14,8 @@ const VOTE_STORAGE_KEY = "sk-free-votes";
 const THEME_CHOICES = ["light", "dark", "system"];
 
 // ── 标签与筛选 ────────────────────────────────────────────────────────────────
-// PRIORITY_TAGS: 筛选按钮固定顺序（"全部" 始终在首位）
 // 生图/限免 命中率 ≥ 33%，判别力足够，保留为标签
 // 签到/DC系/半DC/非DC 已迁移至结构化字段（quota_period/needs_proxy），不再用标签筛选
-const PRIORITY_TAGS = ["全部", "生图", "限免"];
-
 const TAG_CLASS = {
   "生图": "image",
   "限免": "free"
@@ -64,7 +61,6 @@ const state = {
   sites: [],          // 全量站点数据（从 API 获取）
   metadata: {},       // { total, enabled, dead, updatedAt }
   activePreset: "",   // 当前快捷视图名称（空 = 全部）
-  activeTag: "",      // 当前标签筛选（空 = 全部）
   query: "",          // 搜索关键词
   sortBy: "fresh",    // 当前排序字段
   viewMode: "table",  // "table" | "card"
@@ -108,6 +104,7 @@ function syncFromUrl() {
   if (p.has("tier"))  state.filterTier = p.get("tier").split(",").filter(Boolean);
   if (p.has("cap"))   state.filterCapability = p.get("cap").split(",").filter(Boolean);
   if (p.has("kind"))  state.filterKind = p.get("kind").split(",").filter(Boolean);
+  if (p.has("th"))    state.filterThreshold = p.get("th").split(",").filter(Boolean);
   if (p.has("fresh")) state.hideStale = p.get("fresh") === "7";
 }
 
@@ -121,6 +118,7 @@ function syncToUrl(push) {
   if (state.filterTier.length)    p.set("tier", state.filterTier.join(","));
   if (state.filterCapability.length) p.set("cap", state.filterCapability.join(","));
   if (state.filterKind.length)    p.set("kind", state.filterKind.join(","));
+  if (state.filterThreshold.length) p.set("th", state.filterThreshold.join(","));
   if (state.hideStale)            p.set("fresh", "7");
   const qs = p.toString();
   const url = qs ? `?${qs}` : location.pathname;
@@ -198,6 +196,8 @@ function relativeTime(isoStr) {
   const ts = parseUtc(isoStr);
   if (Number.isNaN(ts)) return "";
   const diff = Date.now() - ts;
+  // 允许 60 秒时钟偏差，超过此范围仍显示"刚刚"（比显示负数时间好）
+  if (diff < -60000) return "刚刚";
   if (diff < 0) return "刚刚";
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "刚刚";
@@ -318,18 +318,6 @@ async function loadNotice() {
   } catch {
     els.noticeBand.hidden = true;
   }
-}
-
-/**
- * 加载投票数据
- * 设计：投票数据已内嵌在 sites API 的每条记录中
- * 此函数保留仅为向后兼容，实际不再需要单独请求
- * 站点的 votes 字段直接从 site.votes 读取
- */
-async function loadVotes() {
-  // 投票数据已包含在 sites API 响应中（site.votes.up/down）
-  // 不再需要单独请求 /api/votes
-  // 保留此函数签名以兼容 init() 调用
 }
 
 
@@ -573,12 +561,7 @@ function matchesFilters(site) {
     if (preset && preset.match && !preset.match(site)) return false;
   }
 
-  // 2. 标签筛选（来自标签 chips）
-  if (state.activeTag) {
-    if (!(site.tags || []).includes(state.activeTag)) return false;
-  }
-
-  // 3. 搜索关键词
+  // 2. 搜索关键词
   if (state.query) {
     const q = state.query.toLowerCase();
     const haystack = [
@@ -588,29 +571,29 @@ function matchesFilters(site) {
     if (!haystack.includes(q)) return false;
   }
 
-  // 4. 额度档位（组内 OR）
+  // 3. 额度档位（组内 OR）
   if (state.filterTier.length) {
     if (!state.filterTier.includes(site.quotaTier || "none")) return false;
   }
 
-  // 5. 能力标签（组内 OR）
+  // 4. 能力标签（组内 OR）
   if (state.filterCapability.length) {
     const siteCaps = (site.tags || []);
     if (!state.filterCapability.some((c) => siteCaps.includes(c))) return false;
   }
 
-  // 6. 类型（组内 OR）
+  // 5. 类型（组内 OR）
   if (state.filterKind.length) {
     if (!state.filterKind.includes(site.kind || "api_site")) return false;
   }
 
-  // 7. 门槛（组内 OR）
+  // 6. 门槛（组内 OR）
   if (state.filterThreshold.length) {
     const thresholds = parseThreshold(site.register);
     if (!state.filterThreshold.some((t) => thresholds.includes(t))) return false;
   }
 
-  // 8. 隐藏 7 天未验证
+  // 7. 隐藏 7 天未验证
   if (state.hideStale) {
     if (!site.verifiedAt) return false;
     const ts = parseUtc(site.verifiedAt);
@@ -697,15 +680,12 @@ function aliveMatchCount() {
  */
 function computeStats() {
   const all = state.sites;
-  const enabled = all.filter((s) => !s.dead);
+  const alive = all.filter((s) => !s.dead);
   return {
     total: all.length,
-    enabled: enabled.length,
     dead: all.filter((s) => s.dead).length,
-    daily: enabled.filter((s) => s.quotaPeriod === "daily" && s.quotaMin > 0).length,
-    highTier: enabled.filter((s) => s.quotaTier === "high").length,
-    imageGen: enabled.filter((s) => (s.tags || []).includes("生图")).length,
-    noProxy: enabled.filter((s) => s.needsProxy === 0).length
+    daily: alive.filter((s) => s.quotaPeriod === "daily" && s.quotaMin > 0).length,
+    highTier: alive.filter((s) => s.quotaTier === "high").length,
   };
 }
 
@@ -1317,14 +1297,6 @@ function openFeedbackModal(siteName) {
 
   if (!modal) return;
 
-  // 检查是否已反馈过（所有类型）
-  const personalFeedbacks = loadPersonalFeedbacks();
-  const hasAnyFeedback = Object.keys(personalFeedbacks).some((k) => k.startsWith(siteName + ":"));
-  if (hasAnyFeedback) {
-    toast("您已反馈过该站点，感谢您的关注！", "info");
-    return;
-  }
-
   // 重置表单
   nameEl.textContent = "站点：" + siteName;
   contentEl.value = "";
@@ -1375,6 +1347,13 @@ function initFeedbackForm() {
 
     if (!type) { toast("请选择反馈类型", "error"); return; }
     if (content.length < 2) { toast("反馈内容至少需要 2 个字符", "error"); return; }
+
+    // 与 quickFeedback 一致的 per-type 重复检测：同一站点同一类型只允许一次
+    const personalFeedbacks = loadPersonalFeedbacks();
+    if (personalFeedbacks[`${siteName}:${type}`]) {
+      toast("您已反馈过该类型，感谢！", "info");
+      return;
+    }
 
     confirmBtn.disabled = true;
     confirmBtn.textContent = "提交中...";
@@ -1596,6 +1575,12 @@ function renderFilters() {
     { key: "tool", label: "工具" }
   ], state.filterKind, (vals) => { state.filterKind = vals; syncToUrl(false); applyFilterChange(); }));
 
+  // 能力标签（生图/限免 — 由站点 tags 决定，与 filterCapability 状态联动）
+  filterPanel.appendChild(makeFilterGroup("能力", [
+    { key: "生图", label: "生图" },
+    { key: "限免", label: "限免" }
+  ], state.filterCapability, (vals) => { state.filterCapability = vals; syncToUrl(false); applyFilterChange(); }));
+
   // 门槛
   filterPanel.appendChild(makeFilterGroup("门槛", [
     { key: "GitHub", label: "GitHub" },
@@ -1754,7 +1739,7 @@ function makeFilterGroup(label, options, selected, onChange) {
 }
 
 function hasActiveFilters() {
-  return state.activePreset || state.activeTag || state.query
+  return state.activePreset || state.query
     || state.filterTier.length || state.filterCapability.length
     || state.filterKind.length || state.filterThreshold.length
     || state.hideStale;
@@ -1762,7 +1747,6 @@ function hasActiveFilters() {
 
 function clearAllFilters() {
   state.activePreset = "";
-  state.activeTag = "";
   state.query = "";
   state.filterTier = [];
   state.filterCapability = [];
@@ -1809,9 +1793,6 @@ async function init() {
     const data = await loadSites();
     state.metadata = data.metadata || {};
     state.sites = (data.sites || []).filter((s) => s.enabled !== false);
-
-    // 投票数据已内嵌在 sites API 中
-    await loadVotes();
 
     render();
     loadNotice();

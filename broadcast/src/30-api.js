@@ -28,15 +28,3 @@ async function loadNotice() {
     els.noticeBand.hidden = true;
   }
 }
-
-/**
- * 加载投票数据
- * 设计：投票数据已内嵌在 sites API 的每条记录中
- * 此函数保留仅为向后兼容，实际不再需要单独请求
- * 站点的 votes 字段直接从 site.votes 读取
- */
-async function loadVotes() {
-  // 投票数据已包含在 sites API 响应中（site.votes.up/down）
-  // 不再需要单独请求 /api/votes
-  // 保留此函数签名以兼容 init() 调用
-}

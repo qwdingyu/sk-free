@@ -32,12 +32,7 @@ function matchesFilters(site) {
     if (preset && preset.match && !preset.match(site)) return false;
   }
 
-  // 2. 标签筛选（来自标签 chips）
-  if (state.activeTag) {
-    if (!(site.tags || []).includes(state.activeTag)) return false;
-  }
-
-  // 3. 搜索关键词
+  // 2. 搜索关键词
   if (state.query) {
     const q = state.query.toLowerCase();
     const haystack = [
@@ -47,29 +42,29 @@ function matchesFilters(site) {
     if (!haystack.includes(q)) return false;
   }
 
-  // 4. 额度档位（组内 OR）
+  // 3. 额度档位（组内 OR）
   if (state.filterTier.length) {
     if (!state.filterTier.includes(site.quotaTier || "none")) return false;
   }
 
-  // 5. 能力标签（组内 OR）
+  // 4. 能力标签（组内 OR）
   if (state.filterCapability.length) {
     const siteCaps = (site.tags || []);
     if (!state.filterCapability.some((c) => siteCaps.includes(c))) return false;
   }
 
-  // 6. 类型（组内 OR）
+  // 5. 类型（组内 OR）
   if (state.filterKind.length) {
     if (!state.filterKind.includes(site.kind || "api_site")) return false;
   }
 
-  // 7. 门槛（组内 OR）
+  // 6. 门槛（组内 OR）
   if (state.filterThreshold.length) {
     const thresholds = parseThreshold(site.register);
     if (!state.filterThreshold.some((t) => thresholds.includes(t))) return false;
   }
 
-  // 8. 隐藏 7 天未验证
+  // 7. 隐藏 7 天未验证
   if (state.hideStale) {
     if (!site.verifiedAt) return false;
     const ts = parseUtc(site.verifiedAt);
@@ -156,14 +151,11 @@ function aliveMatchCount() {
  */
 function computeStats() {
   const all = state.sites;
-  const enabled = all.filter((s) => !s.dead);
+  const alive = all.filter((s) => !s.dead);
   return {
     total: all.length,
-    enabled: enabled.length,
     dead: all.filter((s) => s.dead).length,
-    daily: enabled.filter((s) => s.quotaPeriod === "daily" && s.quotaMin > 0).length,
-    highTier: enabled.filter((s) => s.quotaTier === "high").length,
-    imageGen: enabled.filter((s) => (s.tags || []).includes("生图")).length,
-    noProxy: enabled.filter((s) => s.needsProxy === 0).length
+    daily: alive.filter((s) => s.quotaPeriod === "daily" && s.quotaMin > 0).length,
+    highTier: alive.filter((s) => s.quotaTier === "high").length,
   };
 }

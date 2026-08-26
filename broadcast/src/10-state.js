@@ -5,7 +5,6 @@ const state = {
   sites: [],          // 全量站点数据（从 API 获取）
   metadata: {},       // { total, enabled, dead, updatedAt }
   activePreset: "",   // 当前快捷视图名称（空 = 全部）
-  activeTag: "",      // 当前标签筛选（空 = 全部）
   query: "",          // 搜索关键词
   sortBy: "fresh",    // 当前排序字段
   viewMode: "table",  // "table" | "card"
@@ -49,6 +48,7 @@ function syncFromUrl() {
   if (p.has("tier"))  state.filterTier = p.get("tier").split(",").filter(Boolean);
   if (p.has("cap"))   state.filterCapability = p.get("cap").split(",").filter(Boolean);
   if (p.has("kind"))  state.filterKind = p.get("kind").split(",").filter(Boolean);
+  if (p.has("th"))    state.filterThreshold = p.get("th").split(",").filter(Boolean);
   if (p.has("fresh")) state.hideStale = p.get("fresh") === "7";
 }
 
@@ -62,6 +62,7 @@ function syncToUrl(push) {
   if (state.filterTier.length)    p.set("tier", state.filterTier.join(","));
   if (state.filterCapability.length) p.set("cap", state.filterCapability.join(","));
   if (state.filterKind.length)    p.set("kind", state.filterKind.join(","));
+  if (state.filterThreshold.length) p.set("th", state.filterThreshold.join(","));
   if (state.hideStale)            p.set("fresh", "7");
   const qs = p.toString();
   const url = qs ? `?${qs}` : location.pathname;
