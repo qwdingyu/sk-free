@@ -4,7 +4,7 @@
 // Rebuild: node scripts/build-html.js
 export const broadcastHtml = `<!doctype html>
 <html lang="zh-CN">
-    <!-- build:49e240989744 -->
+    <!-- build:827695d81676 -->
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -1317,6 +1317,17 @@ h1 {
 
   h1 {
     font-size: 2rem;
+    white-space: normal;
+  }
+
+  .hero-title-row {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .cta-button {
+    padding: 8px 14px;
+    font-size: 0.82rem;
   }
 
   .intro {
@@ -1354,22 +1365,38 @@ h1 {
     min-height: 160px;
   }
 
-  /* ── 表格视图移动端：隐藏社区列 + 紧凑间距 ──────────────────────────────── */
+  /* ── 表格视图移动端：隐藏低优先级列 + 紧凑间距 ────────────────────────── */
   .site-table th.col-community,
   .site-table td.col-community { display: none; }
+  .site-table th.col-cap,
+  .site-table td.col-cap { display: none; }
+  .site-table th.col-threshold,
+  .site-table td.col-threshold { display: none; }
   .site-table th,
-  .site-table td { padding: 8px 6px; font-size: 0.82rem; }
-  .col-name    { min-width: 140px; }
-  .col-quota   { min-width: 110px; }
-  .col-action  { min-width: 120px; }
-  .btn-visit { padding: 4px 8px; font-size: 0.75rem; }
-  .btn-detail { padding: 4px 6px; font-size: 0.75rem; }
+  .site-table td { padding: 6px 4px; font-size: 0.78rem; white-space: normal; }
+  .col-name    { min-width: 110px; }
+  .col-quota   { min-width: 90px; }
+  .col-fresh   { min-width: 70px; }
+  .col-action  { min-width: 100px; }
+  .btn-visit { padding: 3px 6px; font-size: 0.72rem; }
+  .btn-detail { padding: 3px 5px; font-size: 0.72rem; }
+  .btn-still-works,
+  .btn-reported-dead { padding: 3px 5px; font-size: 0.72rem; }
+  .site-name { max-width: 100px; }
+  .quota-main { font-size: 0.78rem; }
+  .tier-badge { font-size: 0.65rem; padding: 1px 4px; }
+  .calls-est { display: none; }
+  .fresh-label { font-size: 0.72rem; }
 }
 
 @media (max-width: 380px) {
   h1 {
     font-size: 1.95rem;
   }
+
+  /* 极窄屏：隐藏表格行内的一键反馈按钮（👍/👎），保留访问和详情 */
+  .site-table .btn-still-works,
+  .site-table .btn-reported-dead { display: none; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════

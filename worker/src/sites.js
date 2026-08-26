@@ -201,14 +201,14 @@ async function getLatestHistoryMap(db) {
 
 /**
  * 获取所有站点（管理端，含禁用站点）+ 投票数据
+ * dead 统一由 sites.enabled 派生，不再依赖 dead_urls 表。
  * @param {object} db — D1 数据库实例
  * @returns {Promise<object>} { ok, sites, metadata }
  */
 export async function handleGetSites(db) {
-  const [sites, votes, deadUrlRows, historyMap] = await Promise.all([
+  const [sites, votes, historyMap] = await Promise.all([
     dbAll(db, "SELECT * FROM sites ORDER BY sort_order ASC, name ASC"),
     dbAll(db, "SELECT site_name, up_count, down_count FROM votes"),
-    dbAll(db, "SELECT url FROM dead_urls"),
     getLatestHistoryMap(db),
   ]);
 
@@ -216,14 +216,13 @@ export async function handleGetSites(db) {
   for (const v of votes) {
     voteMap[v.site_name] = { up: v.up_count, down: v.down_count };
   }
-  const deadUrlSet = new Set(deadUrlRows.map((r) => r.url));
 
   return {
     ok: true,
     sites: sites.map((s) => ({
       ...formatSiteRow(s),
       votes: voteMap[s.name] || { up: 0, down: 0 },
-      dead: deadUrlSet.has(s.url),
+      dead: s.enabled !== 1,
       history: historyMap.get(s.name) || null,
     })),
     metadata: {
@@ -237,16 +236,17 @@ export async function handleGetSites(db) {
 
 /**
  * 获取已启用站点（公开 API，前端渲染用）
+ * 可用性 = 单一轴（决定层）：dead 由 sites.enabled 派生，不再依赖 dead_urls 表。
+ * 新鲜度 = 正交轴（证据层）：verified_at / verified_by 显示最近一次验证时间。
+ * 死链站点仍可见（前端折叠在"已失效"组），透明度优先。
  * @param {object} db — D1 数据库实例
- * @returns {Promise<object>} { ok, sites }
+ * @returns {Promise<object>} { ok, sites, metadata }
  */
 export async function handleGetEnabledSites(db) {
-  // 查询启用站点 + 死链接黑名单 + 投票数据 + 变更历史（并行查询）
-  // 死链标记为 dead:true，由前端决定展示策略（折叠/降饱和），不直接过滤
-  const [sites, votes, deadUrlRows, historyMap] = await Promise.all([
-    dbAll(db, "SELECT * FROM sites WHERE enabled = 1 ORDER BY sort_order ASC, name ASC"),
+  // 查询所有站点（不筛选 enabled=1 — 前端已分组展示死链）
+  const [sites, votes, historyMap] = await Promise.all([
+    dbAll(db, "SELECT * FROM sites ORDER BY sort_order ASC, name ASC"),
     dbAll(db, "SELECT site_name, up_count, down_count FROM votes"),
-    dbAll(db, "SELECT url FROM dead_urls"),
     getLatestHistoryMap(db),
   ]);
 
@@ -254,23 +254,19 @@ export async function handleGetEnabledSites(db) {
   for (const v of votes) {
     voteMap[v.site_name] = { up: v.up_count, down: v.down_count };
   }
-  const deadUrlSet = new Set(deadUrlRows.map((r) => r.url));
-
-  const enabledCount = sites.length;
-  const deadCount = sites.filter((s) => deadUrlSet.has(s.url)).length;
 
   return {
     ok: true,
     sites: sites.map((s) => ({
       ...formatSiteRow(s),
       votes: voteMap[s.name] || { up: 0, down: 0 },
-      dead: deadUrlSet.has(s.url),
+      dead: s.enabled !== 1,
       history: historyMap.get(s.name) || null,
     })),
     metadata: {
-      total: enabledCount,
-      enabled: enabledCount - deadCount,
-      dead: deadCount,
+      total: sites.length,
+      enabled: sites.filter((s) => s.enabled === 1).length,
+      dead: sites.filter((s) => s.enabled !== 1).length,
       updatedAt: new Date().toISOString(),
     },
   };
@@ -470,6 +466,14 @@ export async function handleAdminUpdateSite(db, request, siteName) {
     }
   }
 
+  // 检测 enabled 是否真的发生了翻转（决定层操作 → 标记人工验证时间）
+  const enabledFlip = has("enabled") && body.enabled !== (existing.enabled === 1);
+  if (enabledFlip) {
+    const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+    updated.verifiedAt = now;
+    updated.verifiedBy = "manual";
+  }
+
   const isRename = siteName !== updated.name;
   const jsonTags = JSON.stringify(updated.tags);
   const jsonNotes = updated.notes ? JSON.stringify(updated.notes) : "[]";
@@ -480,6 +484,7 @@ export async function handleAdminUpdateSite(db, request, siteName) {
   // 旧的 DELETE+INSERT 每次改名都换掉 id，且必须在 INSERT 里逐列重写——
   // 0003 加了 13 个新列之后，漏写就会静默清空 slug/quota_*/verified_*，
   // 实测：改名后 quota_tier=NULL、slug=NULL、sort_order=0。UPDATE 天然没有这个问题。
+  // health_fail_count 在启用时归零，禁用时保留原值（CASE WHEN enabledInt = 1）
   const updateSites = db
     .prepare(
       `UPDATE sites SET
@@ -488,7 +493,9 @@ export async function handleAdminUpdateSite(db, request, siteName) {
         sort_order = ?,
         slug = ?, kind = ?, quota_min = ?, quota_max = ?, quota_unit = ?,
         quota_period = ?, quota_calls_est = ?, quota_tier = ?, quota_raw = ?,
-        needs_proxy = ?, verified_at = ?, verified_by = ?,
+        needs_proxy = ?,
+        health_fail_count = CASE WHEN ? = 1 THEN 0 ELSE health_fail_count END,
+        verified_at = ?, verified_by = ?,
         updated_at = datetime('now')
        WHERE name = ?`
     )
@@ -502,6 +509,7 @@ export async function handleAdminUpdateSite(db, request, siteName) {
       strOrNull(updated.quotaUnit), strOrNull(updated.quotaPeriod),
       intOrNull(updated.quotaCallsEst), strOrNull(updated.quotaTier),
       strOrNull(updated.quotaRaw), boolIntOrNull(updated.needsProxy),
+      enabledInt,  // CASE WHEN 的判断条件
       strOrNull(updated.verifiedAt), strOrNull(updated.verifiedBy),
       siteName
     );
@@ -607,13 +615,17 @@ export async function handleAdminBatch(db, request) {
   } else if (action === "enable" || action === "disable") {
     const enableVal = action === "enable" ? 1 : 0;
     const placeholders = names.map(() => "?").join(",");
+    // 启用/禁用 = 决定层操作，同步写入 manual 验证时间（标记为人工判定）
     const result = await dbRun(
       db,
-      `UPDATE sites SET enabled = ?, updated_at = datetime('now') WHERE name IN (${placeholders})`,
-      [enableVal, ...names]
+      `UPDATE sites SET enabled = ?, verified_at = datetime('now'), verified_by = 'manual',
+        health_fail_count = CASE WHEN ? = 1 THEN 0 ELSE health_fail_count END,
+        updated_at = datetime('now')
+       WHERE name IN (${placeholders})`,
+      [enableVal, enableVal, ...names]
     );
     affected = result.meta?.changes || 0;
-    // 联动：批量启用站点时，从死链接表移除对应 URL（启用 = 认为可达）
+    // 向后兼容：清理 dead_urls 中的对应记录（表已不再权威，但保持数据一致）
     if (action === "enable") {
       const rows = await dbAll(db, `SELECT url FROM sites WHERE name IN (${placeholders}) AND url != ''`, names);
       const urls = rows.map((r) => r.url);
