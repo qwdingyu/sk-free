@@ -66,7 +66,10 @@ const SITES = [
   makeSite({ name: "中额度站", slug: "s2", quotaMin: 100, quotaMax: 100, quotaUnit: "credit", quotaPeriod: "daily", quotaCallsEst: 60, quotaTier: "mid" }),
   makeSite({ name: "未知额度站", slug: "s3", quotaRaw: "绑定账号即免费" }),
   makeSite({ name: "死链站A", slug: "s4", dead: true, quotaTier: "high", quotaMin: 9, quotaUnit: "usd", quotaPeriod: "daily" }),
-  makeSite({ name: "死链站B", slug: "s5", dead: true }),
+  // 回归锚点：enabled 用后端真实形状（布尔 false）。99-boot 曾有
+  // filter(s => s.enabled !== false) 把这行整条丢弃，「已失效 (2)」会变 (1)，
+  // 下面的分组断言即失败——锁定"公开页不得裁剪后端全量数据"。
+  makeSite({ name: "死链站B", slug: "s5", dead: true, enabled: false }),
 ];
 
 async function boot(sites) {

@@ -4,7 +4,7 @@
 // Rebuild: node scripts/build-html.js
 export const broadcastHtml = `<!doctype html>
 <html lang="zh-CN">
-    <!-- build:827695d81676 -->
+    <!-- build:ecb6742f4b36 -->
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -4379,7 +4379,12 @@ async function init() {
   try {
     const data = await loadSites();
     state.metadata = data.metadata || {};
-    state.sites = (data.sites || []).filter((s) => s.enabled !== false);
+    // 后端契约：/api/sites 返回全量站点（含停用），dead := enabled!==1。
+    // 此处曾有 filter(s => s.enabled !== false)，会把死链整行丢弃——
+    // 导致「已失效」折叠组永不出现、摘要条的收录/已失效计数失真
+    // （真实数据下显示 37/0 而非 68/31）。展示策略归 60-filter 的
+    // showDead 开关与 70-view 的分组，这里不做数据裁剪。
+    state.sites = data.sites || [];
 
     render();
     loadNotice();
