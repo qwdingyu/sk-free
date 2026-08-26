@@ -788,11 +788,16 @@ export async function handleAdminImportSites(db, request) {
       continue;
     }
 
-    // 新站点
+    // 新站点（结构化字段与 handleAdminCreateSite 一致：导入 JSON 可能来自旧版
+    // 导出——不含结构化字段——此时用默认值，确保前端不显示"额度未知"）
     statements.push(
       db.prepare(
-        `INSERT INTO sites (name, url, original_url, ref, tags, summary, checkin, models, rate, register, notes, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+        `INSERT INTO sites (name, url, original_url, ref, tags, summary, checkin, models, rate, register, notes,
+                            slug, kind, quota_min, quota_max, quota_unit, quota_period, quota_calls_est, quota_tier, quota_raw, needs_proxy,
+                            created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                 datetime('now'), datetime('now'))`
       ).bind(
           item.name,
           cleanUrl,
@@ -804,7 +809,18 @@ export async function handleAdminImportSites(db, request) {
           item.models || "",
           item.rate || "",
           item.register || "",
-          JSON.stringify(item.notes || [])
+          JSON.stringify(item.notes || []),
+          // 结构化字段：导入数据可能不含这些 key，用 ?? 兜底
+          strOrNull(item.slug),
+          strOrNull(item.kind) ?? "api_site",
+          numOrNull(item.quotaMin),
+          numOrNull(item.quotaMax),
+          strOrNull(item.quotaUnit),
+          strOrNull(item.quotaPeriod) ?? "none",
+          intOrNull(item.quotaCallsEst),
+          strOrNull(item.quotaTier) ?? "none",
+          strOrNull(item.quotaRaw) ?? strOrNull(item.checkin),
+          boolIntOrNull(item.needsProxy)
       )
     );
     existingCleanUrls.set(cleanUrl, item.name);

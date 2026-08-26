@@ -187,8 +187,12 @@ export async function handleAdminApproveSubmission(db, id) {
   await dbBatch(db, [
     db
       .prepare(
-        `INSERT INTO sites (name, url, original_url, ref, tags, summary, checkin, models, rate, register, notes, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+        `INSERT INTO sites (name, url, original_url, ref, tags, summary, checkin, models, rate, register, notes,
+                            slug, kind, quota_min, quota_max, quota_unit, quota_period, quota_calls_est, quota_tier, quota_raw, needs_proxy,
+                            created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                 datetime('now'), datetime('now'))`
       )
       .bind(
         sub.site_name,
@@ -201,7 +205,16 @@ export async function handleAdminApproveSubmission(db, id) {
         sub.site_models || "",
         "", // submissions 表无 rate 字段，按空处理
         sub.site_register || "",
-        JSON.stringify(notes)
+        JSON.stringify(notes),
+        // 结构化字段：提交表单不含这些，用默认值确保前端不显示"额度未知"
+        null, // slug
+        "api_site", // kind
+        null, null, null, // quota_min, quota_max, quota_unit
+        "none", // quota_period
+        null, // quota_calls_est
+        "none", // quota_tier
+        sub.site_checkin || null, // quota_raw 用 checkin 兜底
+        null  // needs_proxy
       ),
     db.prepare("UPDATE submissions SET status = 'approved' WHERE id = ?").bind(id),
   ]);
