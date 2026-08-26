@@ -193,6 +193,75 @@ console.log("\n7. 新增表单要清空上一次残留的结构化字段");
   check("slug 已清空", idOf("editSlug").value, "");
 }
 
+console.log("\n8. 扫描对账报告：多选 + 批量操作 + 原位更新");
+{
+  // 真实事故回归：旧版报告每行只有单行按钮（N 条要点 N 次），且点一次
+  // setDeadByName → renderHealthFromSites 会用 DB 视图覆盖整份报告，
+  // 剩余待处理行全部丢失。本组锁定：全选/多选/批量/处理后原位移除。
+  const SITES_SEED = [
+    { name: "坏站A", url: "https://bad-a.example.com/", tags: [], summary: "", enabled: true, dead: false, healthFailCount: 0, verifiedAt: null, verifiedBy: null, votes: { up: 0, down: 0 }, notes: [] },
+    { name: "坏站B", url: "https://bad-b.example.com/", tags: [], summary: "", enabled: true, dead: false, healthFailCount: 0, verifiedAt: null, verifiedBy: null, votes: { up: 0, down: 0 }, notes: [] },
+    { name: "好站C", url: "https://good-c.example.com/", tags: [], summary: "", enabled: false, dead: true, healthFailCount: 0, verifiedAt: null, verifiedBy: null, votes: { up: 0, down: 0 }, notes: [] },
+  ];
+  state.sites = SITES_SEED;
+  // 路由化 fetch stub：check-batch 返回探测结果，sites/batch 记录并回显 affected
+  win.fetch = async (url, opts = {}) => {
+    const u = String(url);
+    sent.push({ url: u, method: opts.method || "GET", body: opts.body ? JSON.parse(opts.body) : null });
+    if (u.includes("/api/admin/check-batch")) {
+      return { ok: true, status: 200, json: async () => ({
+        ok: true, total: 3, alive: 1, dead: 2, maxBatch: 20, truncated: false,
+        results: [
+          { url: "https://bad-a.example.com/", ok: false, status: 521, method: "GET" },
+          { url: "https://bad-b.example.com/", ok: false, status: 0, error: "timeout", method: "HEAD" },
+          { url: "https://good-c.example.com/", ok: true, status: 200, method: "HEAD" },
+        ],
+      }) };
+    }
+    if (u.includes("/api/admin/sites/batch")) {
+      const body = JSON.parse(opts.body || "{}");
+      return { ok: true, status: 200, json: async () => ({ ok: true, action: body.action, affected: (body.names || []).length }) };
+    }
+    return { ok: true, status: 200, json: async () => ({ ok: true, sites: state.sites, submissions: [], deadUrls: [], feedbacks: [], total: 0 }), text: async () => "{}" };
+  };
+  win.confirm = () => true; // jsdom 默认返回 falsy 会中断"标记死链"
+  await win.loadSites();
+  sent.length = 0;
+  await win.batchCheckUrls();
+  await new Promise((r) => setTimeout(r, 60));
+
+  const markBody = idOf("scanMarkBody");
+  const restoreBody = idOf("scanRestoreBody");
+  check("报告渲染出『不可达但可用』区", markBody?.querySelectorAll("tr").length, 2);
+  check("报告渲染出『可达但死链』区", restoreBody?.querySelectorAll("tr").length, 1);
+  check("批量按钮存在（标记）", !!doc.querySelector("#scanMarkSection button"), true);
+  check("批量按钮存在（恢复）", !!doc.querySelector("#scanRestoreSection button"), true);
+  check("初始计数为 0", idOf("scanMarkCount").textContent, "已选 0 个");
+
+  // 全选标记区 → 计数联动
+  const markAll = doc.querySelector('#scanMarkSection input[data-scan-all]');
+  markAll.checked = true;
+  win.scanToggleAll(markAll);
+  check("全选后计数联动", idOf("scanMarkCount").textContent, "已选 2 个");
+
+  // 批量标记为死链 → 请求体正确 + 行被原位移除 + 报告不被覆盖
+  await win.scanBatchMark();
+  await new Promise((r) => setTimeout(r, 60));
+  const batchCalls = sent.filter((s) => s.url.includes("/api/admin/sites/batch"));
+  check("批量请求发出", batchCalls.length, 1);
+  check("批量 action=disable 且带上两个勾选站", [batchCalls[0]?.body?.action, batchCalls[0]?.body?.names], ["disable", ["坏站A", "坏站B"]]);
+  check("已处理行从报告原位移除", markBody.querySelectorAll("tr").length, 0);
+  check("标记区替换为完成提示", doc.getElementById("scanMarkSection").textContent.includes("处理完毕"), true);
+  check("另一区不受影响（报告未被覆盖）", restoreBody.querySelectorAll("tr").length, 1);
+
+  // 单行恢复 → 走同一原位逻辑
+  await win.scanOne(restoreBody.querySelector("button"), false);
+  await new Promise((r) => setTimeout(r, 60));
+  const restoreCalls = sent.filter((s) => s.url.includes("/api/admin/sites/batch") && s.body?.action === "enable");
+  check("单行恢复请求体正确", restoreCalls[0]?.body?.names, ["好站C"]);
+  check("恢复区也清空并提示完成", doc.getElementById("scanRestoreSection").textContent.includes("处理完毕"), true);
+}
+
 console.log(`\n${"─".repeat(60)}`);
 if (failures.length === 0) {
   console.log(`✅ test-admin-form: ${passed} 项断言全部通过`);

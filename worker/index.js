@@ -835,10 +835,12 @@ async function batchCheckUrls() {
       onProgress: (msg) => { statusEl.textContent = msg; },
       onResult: ({ alive, dead, allResults }) => {
         statusEl.textContent = "扫描完成：共 " + allResults.length + " 个 URL，" + alive + " 可达，" + dead + " 不可达（仅记录证据，不自动改状态）";
-        // 对账报告：扫描结果 × 站点当前可用性
+        // 对账报告：扫描结果 × 站点当前可用性。
+        // 交互模式与下方 renderHealthFromSites 一致：表格 + 全选 + 行选 + 批量按钮，
+        // 且所有操作都是"原位更新"（移除已处理行），报告在清账完成前常驻不被覆盖。
         var byUrl = {};
         SITES.forEach(function(s) { byUrl[s.url] = s; });
-        var unreachEnabled = [];  // 不可达 + 当前启用 → 需要标记死链
+        var unreachEnabled = [];  // 不可达 + 当前启用 → 建议标记死链
         var unreachDisabled = []; // 不可达 + 当前禁用 → 已在死链
         var reachDisabled = [];   // 可达 + 当前禁用 → 可能已恢复
         var reachEnabled = [];    // 可达 + 当前启用 → 正常
@@ -848,34 +850,112 @@ async function batchCheckUrls() {
           if (r.ok) { if (isEnabled) reachEnabled.push(r); else reachDisabled.push(r); }
           else { if (isEnabled) unreachEnabled.push(r); else unreachDisabled.push(r); }
         });
+        var tblStyle = 'style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px"';
+        var thStyle = 'style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--line);font-weight:700;background:var(--surface-soft);font-size:12px;white-space:nowrap"';
+        var tdStyle = 'style="padding:6px 10px;border-bottom:1px solid var(--line);vertical-align:middle"';
+        function section(id, title, color, rows, batchBtn, evidence) {
+          if (rows.length === 0) return "";
+          var h = '<div id="' + id + 'Section">';
+          h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">';
+          h += '<strong style="color:' + color + '">' + title + '(' + rows.length + ')</strong>';
+          // 内联 handler 一律不带字符串参数：本段 JS 嵌在服务端模板字面量里，
+          // 三层转义（模板→JS源→HTML属性）会把 \' 变成非法代码。
+          // 参数改走 data-* 属性，handler 内部自取——与 HEALTH_* 系列同一纪律。
+          h += '<label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px"><input type="checkbox" data-scan-all="' + id + '" onchange="scanToggleAll(this)"> 全选</label>';
+          h += batchBtn;
+          h += '<span id="' + id + 'Count" style="color:var(--muted);font-size:12px">已选 0 个</span>';
+          h += '</div>';
+          h += '<table ' + tblStyle + '><tbody id="' + id + 'Body">';
+          h += rows.map(function(r) {
+            var s = byUrl[r.url];
+            return '<tr data-name="' + esc(s.name) + '">' +
+              '<td ' + tdStyle + ' style="width:30px"><input type="checkbox" data-name="' + esc(s.name) + '" data-body="' + id + 'Body" onchange="scanCkChanged(this)"></td>' +
+              '<td ' + tdStyle + '><a href="' + esc(r.url) + '" target="_blank">' + esc(s.name) + '</a> <span style="color:var(--muted);font-size:11px">' + esc(r.url) + '</span></td>' +
+              '<td ' + tdStyle + ' style="white-space:nowrap;color:' + color + ';font-size:12px">' + evidence(r) + '</td>' +
+              '<td ' + tdStyle + ' style="width:120px">' +
+              '<button class="btn btn-sm ' + (id === "scanMark" ? "btn-danger" : "btn-primary") + '" onclick="scanOne(this,' + (id === "scanMark" ? "true" : "false") + ')">' + (id === "scanMark" ? "\u6807\u8bb0\u4e3a\u6b7b\u94fe" : "\u6062\u590d\u4e3a\u53ef\u7528") + '</button></td>' +
+              '</tr>';
+          }).join("");
+          h += '</tbody></table></div>';
+          return h;
+        }
         var html = "";
-        if (unreachEnabled.length > 0) {
-          html += '<div style="margin-bottom:10px"><strong style="color:var(--coral)">\u26a1 \u4e0d\u53ef\u8fbe\u4f46\u5f53\u524d\u53ef\u7528\uff08\u5efa\u8bae\u6807\u8bb0\u4e3a\u6b7b\u94fe\uff09(' + unreachEnabled.length + ')</strong></div>';
-          html += unreachEnabled.map(function(r) {
-            var s = byUrl[r.url];
-            return '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)">' +
-              '<span style="flex:1;word-break:break-all"><a href="' + esc(r.url) + '" target="_blank">' + esc(s.name) + '</a> <span style="color:var(--muted)">' + esc(r.url) + '</span></span>' +
-              '<span style="color:var(--coral);white-space:nowrap">' + esc(r.error || ("HTTP " + r.status)) + '</span>' +
-              '<button class="btn btn-sm btn-danger" data-name="' + esc(s.name) + '" data-action="mark-dead">\u6807\u8bb0\u4e3a\u6b7b\u94fe</button></div>';
-          }).join("");
-        }
-        if (reachDisabled.length > 0) {
-          html += '<div style="margin:12px 0 10px"><strong style="color:var(--teal)">\ud83d\udd04 \u5df2\u53ef\u8fbe\u4f46\u5f53\u524d\u4e3a\u6b7b\u94fe\uff08\u5efa\u8bae\u6062\u590d\u4e3a\u53ef\u7528\uff09(' + reachDisabled.length + ')</strong></div>';
-          html += reachDisabled.map(function(r) {
-            var s = byUrl[r.url];
-            return '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)">' +
-              '<span style="flex:1;word-break:break-all"><a href="' + esc(r.url) + '" target="_blank">' + esc(s.name) + '</a> <span style="color:var(--muted)">' + esc(r.url) + '</span></span>' +
-              '<span style="color:var(--teal);white-space:nowrap">HTTP ' + r.status + '</span>' +
-              '<button class="btn btn-sm btn-primary" data-name="' + esc(s.name) + '" data-action="restore-dead">\u6062\u590d\u4e3a\u53ef\u7528</button></div>';
-          }).join("");
-        }
-        html += '<div style="margin:12px 0 4px;color:var(--muted);font-size:12px">\u5df2\u4e00\u81f4\uff08\u65e0\u9700\u64cd\u4f5c\uff09\uff1a\u4e0d\u53ef\u8fbe\u4e14\u5df2\u6807\u8bb0\u6b7b\u94fe ' + unreachDisabled.length + ' \u4e2a\uff1b\u53ef\u8fbe\u4e14\u53ef\u7528 ' + reachEnabled.length + ' \u4e2a\u3002</div>';
-        // 静默刷新 SITES（站点表开关/徽章保持最新）；不调 renderHealthFromSites，
+        html += section("scanMark", "\u26a1 \u4e0d\u53ef\u8fbe\u4f46\u5f53\u524d\u53ef\u7528\uff08\u5efa\u8bae\u6807\u8bb0\u4e3a\u6b7b\u94fe\uff09", "var(--coral)", unreachEnabled,
+          '<button class="btn btn-sm btn-danger" onclick="scanBatchMark()">\u2716 \u6807\u8bb0\u9009\u4e2d\u4e3a\u6b7b\u94fe</button>',
+          function(r) { return esc(r.error || ("HTTP " + r.status)); });
+        html += section("scanRestore", "\ud83d\udd04 \u5df2\u53ef\u8fbe\u4f46\u5f53\u524d\u4e3a\u6b7b\u94fe\uff08\u5efa\u8bae\u6062\u590d\u4e3a\u53ef\u7528\uff09", "var(--teal)", reachDisabled,
+          '<button class="btn btn-sm btn-primary" onclick="scanBatchRestore()">\u2714 \u6062\u590d\u9009\u4e2d\u4e3a\u53ef\u7528</button>',
+          function(r) { return "HTTP " + r.status; });
+        html += '<div style="margin:12px 0 4px;color:var(--muted);font-size:12px">\u5df2\u4e00\u81f4\uff08\u65e0\u9700\u64cd\u4f5c\uff09\uff1a\u4e0d\u53ef\u8fbe\u4e14\u5df2\u6807\u8bb0\u6b7b\u94fe ' + unreachDisabled.length + ' \u4e2a\uff1b\u53ef\u8fbe\u4e14\u53ef\u7528 ' + reachEnabled.length + ' \u4e2a\u3002\u52fe\u9009\u540e\u70b9\u6279\u91cf\u6309\u94ae\uff0c\u5904\u7406\u8fc7\u7684\u884c\u4f1a\u4ece\u5217\u8868\u79fb\u9664\u3002</div>';
+        // 静默刷新 SITES（站点表开关/徽章保持最新）；绝不调 renderHealthFromSites，
         // 否则 DB 状态视图会立刻覆盖掉刚生成的扫描对账报告
         resultsEl.innerHTML = html; loadSites();
       },
     });
   } catch (e) { statusEl.textContent = "检查失败: " + e.message; }
+}
+// ── 扫描对账报告的原位操作 ────────────────────────────────────────────────
+// 与 DB 视图（HEALTH_*_SELECTED 那套）刻意分开：这里不用全局选择集，
+// 直接以 DOM 勾选状态为准，天然避免"报告重渲染后残留旧选中"的脏状态。
+function scanCheckedNames(bodyId) {
+  // 注意：bodyId 指向的就是 <tbody> 本身，不要再往里找一层 tbody
+  return Array.prototype.map.call(
+    document.querySelectorAll("#" + bodyId + " input[type=checkbox]:checked"),
+    function(cb) { return cb.getAttribute("data-name"); }
+  );
+}
+function scanCountEl(bodyId) {
+  return document.getElementById(bodyId === "scanMarkBody" ? "scanMarkCount" : "scanRestoreCount");
+}
+function scanSectionId(bodyId) { return bodyId === "scanMarkBody" ? "scanMarkSection" : "scanRestoreSection"; }
+function scanUpdateCount(bodyId) {
+  var el = scanCountEl(bodyId);
+  if (el) el.textContent = "已选 " + scanCheckedNames(bodyId).length + " 个";
+  var all = document.querySelector("#" + scanSectionId(bodyId) + " input[data-scan-all]");
+  if (all) {
+    var boxes = document.querySelectorAll("#" + bodyId + " input[type=checkbox]");
+    all.checked = boxes.length > 0 && boxes.length === scanCheckedNames(bodyId).length;
+  }
+}
+function scanCkChanged(cb) { scanUpdateCount(cb.getAttribute("data-body")); }
+function scanToggleAll(cb) {
+  var bodyId = cb.getAttribute("data-scan-all") + "Body";
+  document.querySelectorAll("#" + bodyId + " input[type=checkbox]").forEach(function(b) { b.checked = cb.checked; });
+  scanUpdateCount(bodyId);
+}
+// 从报告中移除已处理的行；组空则整节替换为完成提示
+function scanRemoveRows(bodyId, names) {
+  var done = new Set(names);
+  var body = document.getElementById(bodyId);
+  if (!body) return;
+  Array.prototype.slice.call(body.querySelectorAll("tr")).forEach(function(tr) {
+    if (done.has(tr.getAttribute("data-name"))) tr.remove();
+  });
+  var section = document.getElementById(scanSectionId(bodyId));
+  if (section && body.querySelectorAll("tr").length === 0) {
+    section.innerHTML = '<div style="margin:12px 0;color:var(--muted);font-size:12px">\u2714 \u672c\u7ec4\u5df2\u5168\u90e8\u5904\u7406\u5b8c\u6bd5</div>';
+  } else {
+    scanUpdateCount(bodyId);
+  }
+}
+// 核心：调批量接口 + 原位移除 + 静默刷新（绝不重渲染整个视图）
+async function scanApply(names, action, bodyId) {
+  if (!names || names.length === 0) { toast("请先勾选站点", "info"); return; }
+  if (action === "disable" && !confirm("确认将选中的 " + names.length + " 个站点标记为死链？")) return;
+  try {
+    var data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: action, names: names }) });
+    toast((action === "disable" ? "已标记 " : "已恢复 ") + data.affected + " 个站点", "success");
+    scanRemoveRows(bodyId, names);
+    await loadSites();
+  } catch (e) { toast(e.message, "error"); }
+}
+function scanBatchMark() { scanApply(scanCheckedNames("scanMarkBody"), "disable", "scanMarkBody"); }
+function scanBatchRestore() { scanApply(scanCheckedNames("scanRestoreBody"), "enable", "scanRestoreBody"); }
+function scanOne(btn, isDead) {
+  var tr = btn.closest("tr");
+  if (!tr) return;
+  var name = tr.getAttribute("data-name");
+  scanApply([name], isDead ? "disable" : "enable", tr.parentElement.id);
 }
 // ── 站点管理 tab 一键清理死链 ──────────────────────────────────────────────
 async function sitesCleanupDeadLinks() {
