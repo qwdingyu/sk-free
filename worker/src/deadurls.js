@@ -5,6 +5,24 @@
 
 import { dbAll, dbRun, dbBatch } from "./db.js";
 
+// ─── URL 匹配为什么不能直接用 `url = ?` ───────────────────────────────────────
+// sites.url 是经 parseSiteUrl（内部走 new URL）规范化后入库的，
+// "https://x.example.com" 会被存成 "https://x.example.com/"（末尾多一个斜杠）。
+// dead_urls.url 存的是调用方原样传进来的字符串。
+// 于是"移除死链接 → 自动恢复站点启用状态"这条联动在两边形式不一致时静默失效：
+//   实测：站点入库为 https://da.example.com/ ，
+//         用 https://da.example.com（无尾斜杠）加黑再移除 → enabled 仍是 0；
+//         用 https://da.example.com/（带尾斜杠）移除 → enabled 恢复为 1。
+// 而 UI 文案承诺的是"相关站点将自动恢复启用状态"，用户看到的是承诺没兑现，
+// 且没有任何报错。
+// 健康检查产生的死链用的是 site.url（已规范化）所以能对上；
+// 管理员手工填的 URL 往往少一个尾斜杠，就对不上了。
+//
+// 这里用 rtrim 把两侧的尾斜杠都去掉再比。sites 表只有十几行，
+// 放弃索引带来的开销可以忽略；用 SQL 而不是先查再算，是为了保持
+// "删黑名单 + 恢复站点"仍在同一个 batch 里原子完成。
+const URL_MATCH = "rtrim(url, '/') = rtrim(?, '/')";
+
 /**
  * 获取死链接列表（返回以 URL 为 key 的对象）
  * @param {object} db — D1 数据库实例
@@ -51,10 +69,10 @@ export async function removeDeadUrl(db, url) {
   // batch：删黑名单 + 恢复站点状态是一组语义。分两次往返既多耗一个 subrequest，
   // 也可能只成功一半（黑名单删了但站点还停用着）。
   const results = await dbBatch(db, [
-    db.prepare("DELETE FROM dead_urls WHERE url = ?").bind(url),
+    db.prepare("DELETE FROM dead_urls WHERE " + URL_MATCH).bind(url),
     // 联动：恢复 URL 匹配站点的启用状态（死链接移除说明站点已恢复）
     db
-      .prepare("UPDATE sites SET enabled = 1, updated_at = datetime('now') WHERE url = ? AND enabled = 0")
+      .prepare("UPDATE sites SET enabled = 1, updated_at = datetime('now') WHERE " + URL_MATCH + " AND enabled = 0")
       .bind(url),
   ]);
   return results?.[0]?.meta?.changes || 0;
@@ -90,9 +108,9 @@ export async function batchDeadUrls(db, urls, action = "remove") {
         )
       // remove：DELETE + 恢复站点，两条一组（batch 内原子）
       : urls.flatMap((url) => [
-          db.prepare("DELETE FROM dead_urls WHERE url = ?").bind(url),
+          db.prepare("DELETE FROM dead_urls WHERE " + URL_MATCH).bind(url),
           db
-            .prepare("UPDATE sites SET enabled = 1, updated_at = datetime('now') WHERE url = ? AND enabled = 0")
+            .prepare("UPDATE sites SET enabled = 1, updated_at = datetime('now') WHERE " + URL_MATCH + " AND enabled = 0")
             .bind(url),
         ]);
 

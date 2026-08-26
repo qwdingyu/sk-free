@@ -228,6 +228,33 @@ console.log("\n10. 删除");
   check("删除不存在的站点 → 404", (await admin(`/api/admin/sites/${enc("根本没有这个站")}`, "DELETE")).status, 404);
 }
 
+// ══ 11. 死链接移除 → 站点自动恢复启用（URL 尾斜杠必须容差）═══════════════════
+// sites.url 经 parseSiteUrl 规范化后带尾斜杠（https://x.com → https://x.com/），
+// dead_urls.url 存的是调用方原样传的字符串。两边形式不一致时，
+// "移除死链 → 恢复站点启用"这条联动会静默失效，而 UI 文案承诺了它会生效。
+// 实测过：不带尾斜杠移除 → enabled 仍是 0；带尾斜杠 → 恢复为 1。
+console.log("\n11. 死链接移除与站点启用联动");
+{
+  const DN = "死链联动站";
+  await admin(`/api/admin/sites/${enc(DN)}`, "DELETE");
+  await admin("/api/admin/sites", "POST", { name: DN, url: "https://deadlink.example.com", tags: [] });
+  const stored = (await getSite(DN))?.url;
+  check("站点 URL 入库时被规范化（带尾斜杠）", stored, "https://deadlink.example.com/");
+
+  for (const form of ["https://deadlink.example.com", "https://deadlink.example.com/"]) {
+    const label = form.endsWith("/") ? "带尾斜杠" : "不带尾斜杠";
+    await admin("/api/admin/dead-urls/batch", "POST", { action: "add", urls: [form] });
+    await admin(`/api/admin/sites/batch`, "POST", { action: "disable", names: [DN] });
+    const before = await getSite(DN);
+    check(`${label}：先确认站点已停用`, before, undefined); // 停用后不在公开列表里
+    const rm = await admin("/api/admin/dead-urls/batch", "POST", { action: "remove", urls: [form] });
+    check(`${label}：批量移除 → 200`, rm.status, 200);
+    const after = await getSite(DN);
+    check(`${label}：站点自动恢复启用（重新出现在公开列表）`, after?.name, DN);
+  }
+  await admin(`/api/admin/sites/${enc(DN)}`, "DELETE");
+}
+
 console.log(`\n${"─".repeat(60)}`);
 if (failures.length === 0) {
   console.log(`✅ test-api: ${passed} 项断言全部通过`);
