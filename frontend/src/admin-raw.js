@@ -598,7 +598,6 @@ async function batchCheckUrls() {
           var h = '<div id="' + id + 'Section">';
           h += '<div class="section-header">';
           h += '<strong class="title text-coral">' + title + '(' + rows.length + ')</strong>';
-          h += '<label class="text-sm text-muted" style="display:flex;align-items:center;gap:4px"><input type="checkbox" data-scan-all="' + id + '" data-action="scanToggleAll"> 全选</label>';
           h += batchBtn;
           h += '<span id="' + id + 'Count" class="count text-muted text-sm">已选 0 个</span>';
           h += '</div>';
