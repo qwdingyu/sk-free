@@ -106,7 +106,7 @@ function renderTrustedStrip() {
 
   const now = Date.now();
   const candidates = state.sites
-    .filter((s) => !s.dead && s.enabled === 1 && s.verifiedAt)
+    .filter((s) => !s.dead && s.enabled && s.verifiedAt)
     .map((s) => {
       const ts = parseUtc(s.verifiedAt);
       if (isNaN(ts)) return null;
@@ -584,3 +584,4 @@ async function init() {
 
 // ── 启动 ──────────────────────────────────────────────────────────────────────
 // init() 由 main.js 在 DOMContentLoaded 时调用，避免重复初始化
+document.addEventListener("DOMContentLoaded", init);

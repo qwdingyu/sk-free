@@ -407,7 +407,7 @@ function renderHealthFromSites() {
     html += '<button class="btn btn-sm" data-action="healthClearDeadSelection">\u2716 取消选择</button>';
     html += '<span id="healthDeadCount" class="count text-muted text-sm">已选 0 个</span>';
     html += '</div>';
-    html += '<table ' + tblClass + ' health-dead-table><thead><tr>';
+    html += '<table class="table health-dead-table"><thead><tr>';
     html += '<th class="w-check"><input type="checkbox" id="healthDeadSelectAll" data-action="healthToggleDeadSelectAll"></th>';
     html += '<th ' + thClass + '>站点名称</th>';
     html += '<th ' + thClass + '>验证时间</th>';
@@ -433,7 +433,7 @@ function renderHealthFromSites() {
     html += '<button class="btn btn-sm" data-action="healthClearFailSelection">\u2716 取消选择</button>';
     html += '<span id="healthFailCount" class="count text-muted text-sm">已选 0 个</span>';
     html += '</div>';
-    html += '<table ' + tblClass + ' health-fail-table><thead><tr>';
+    html += '<table class="table health-fail-table"><thead><tr>';
     html += '<th class="w-check"><input type="checkbox" id="healthFailSelectAll" data-action="healthToggleFailSelectAll"></th>';
     html += '<th ' + thClass + '>站点名称</th>';
     html += '<th ' + thClass + '>失败次数</th>';
@@ -602,7 +602,12 @@ async function batchCheckUrls() {
           h += batchBtn;
           h += '<span id="' + id + 'Count" class="count text-muted text-sm">已选 0 个</span>';
           h += '</div>';
-          h += '<table ' + tblClass + '><tbody id="' + id + 'Body">';
+          h += '<table class="table"><thead><tr>';
+          h += '<th class="w-check"><input type="checkbox" data-scan-all="' + id + '" data-action="scanToggleAll"></th>';
+          h += '<th class="text-sm text-muted font-semibold">站点名称</th>';
+          h += '<th class="text-sm text-muted font-semibold">状态</th>';
+          h += '<th class="text-sm text-muted font-semibold w-action">操作</th>';
+          h += '</tr></thead><tbody id="' + id + 'Body">';
           h += rows.map(function(r) {
             var s = byUrl[r.url];
             return '<tr data-name="' + esc(s.name) + '">' +
