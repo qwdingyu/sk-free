@@ -44,7 +44,7 @@ tr{transition:background var(--transition-fast)}
 .toolbar{display:flex;gap:var(--space-3);flex-wrap:wrap;align-items:center;margin-bottom:var(--space-4)}
 .toolbar input[type="search"]{flex:1;min-width:200px;padding:8px 12px;border:1px solid var(--line);border-radius:var(--radius);font-size:13px;background:var(--surface);color:var(--ink);transition:border-color var(--transition-fast),box-shadow var(--transition-fast)}
 .toolbar input[type="search"]:focus{border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft)}
-.table-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);max-height:62vh;overflow-y:auto;position:relative;scroll-behavior:smooth;scroll-padding-top:48px;will-change:transform;contain:strict}
+.table-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);max-height:62vh;overflow-y:auto;position:relative;scroll-behavior:smooth;scroll-padding-top:48px}
 .table-wrap .batch-bar{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--line);border-radius:var(--radius) var(--radius) 0 0;margin-bottom:0;backdrop-filter:blur(8px)}
 .table-wrap table{scroll-margin-top:48px}
 table{width:100%;border-collapse:collapse;font-size:13px}
@@ -263,7 +263,5 @@ body.modal-open{overflow:hidden;touch-action:none}
   max-height: 62vh;
   overflow-y: auto;
   position: relative;
-  will-change: transform;
-  contain: strict;
 }
 
