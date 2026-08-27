@@ -1214,7 +1214,7 @@ h1 {
   .col-fresh   { min-width: 70px; }
   .col-action  { min-width: 100px; }
   .btn-visit {
-    padding: 4px 10px;
+    padding: 4px 14px;
     font-size: 0.78rem;
     white-space: nowrap;
   }
@@ -1384,6 +1384,7 @@ h1 {
   align-items: center;
   gap: 6px;
   justify-content: flex-end;
+  white-space: nowrap;
 }
 
 .dim {
