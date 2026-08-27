@@ -86,7 +86,8 @@ export default {
 
         // GET /api/admin/sites
         if (path === "/api/admin/sites" && request.method === "GET") {
-          return handleAdminListSites(db, request);
+          const result = await handleAdminListSites(db, request);
+          return json(result, 200, request);
         }
         // POST /api/admin/sites
         if (path === "/api/admin/sites" && request.method === "POST") {

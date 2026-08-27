@@ -108,22 +108,40 @@ function renderPagination(meta) {
   if (!el || !meta) return;
   const { total, page, limit, totalPages } = meta;
   if (totalPages <= 1) { el.innerHTML = ""; return; }
+
   const pages = [];
   const add = (p, label, active, disabled) => {
     pages.push('<button class="page-btn' + (active ? ' active' : '') + '" ' + (disabled ? 'disabled' : 'onclick="goToPage(' + p + ')"') + '>' + esc(label) + '</button>');
   };
+
   add(page - 1, "‹", false, page <= 1);
+
   let start = Math.max(1, page - 2);
   let end = Math.min(totalPages, page + 2);
   if (start > 1) { add(1, "1", false, false); if (start > 2) pages.push('<span class="page-ellipsis">...</span>'); }
   for (let i = start; i <= end; i++) add(i, String(i), i === page, false);
   if (end < totalPages) { if (end < totalPages - 1) pages.push('<span class="page-ellipsis">...</span>'); add(totalPages, String(totalPages), false, false); }
+
   add(page + 1, "›", false, page >= totalPages);
-  el.innerHTML = '<div class="pagination">' + pages.join("") + '<span class="page-info">第 ' + page + '/' + totalPages + ' 页，共 ' + total + ' 条</span></div>';
+
+  const sizeOptions = [10, 20, 50, 100].map(function(n) {
+    return '<option value="' + n + '"' + (n === limit ? ' selected' : '') + '>' + n + ' 条/页</option>';
+  }).join("");
+
+  el.innerHTML = '<div class="pagination-bar">' +
+    '<span class="page-info">共 ' + total + ' 条，第 ' + page + '/' + totalPages + ' 页</span>' +
+    '<div class="pagination">' + pages.join("") + '</div>' +
+    '<select class="page-size-select" onchange="changePageSize(this.value)">' + sizeOptions + '</select>' +
+    '</div>';
 }
 function goToPage(p) {
   SITE_PAGE = p;
-  window.scrollTo(0, 0);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  loadSites();
+}
+function changePageSize(n) {
+  SITE_LIMIT = parseInt(n, 10);
+  SITE_PAGE = 1;
   loadSites();
 }
 function filterTable() {
@@ -1120,5 +1138,5 @@ Object.assign(window, {
   batchDelete, batchDeleteDisabled, clearSelection, switchTab, batchCheckUrls, closeModal, saveSite,
   closeImportModal, doImport, confirmResolve, loadSchema, exportSchema,
   importSchema, saveSchema, toggleSelectAll, filterTable, loadFeedbacks,
-  batchFeedbackAction, clearFeedbackSelection, goToPage,
+  batchFeedbackAction, clearFeedbackSelection, goToPage, changePageSize,
 });
