@@ -68,7 +68,7 @@ function renderTable() {
   tbody.innerHTML = filtered.map((s) => {
     const tags = (s.tags || []).map((t) => '<span class="tag">' + esc(t) + '</span>').join("");
     const checked = SELECTED.has(s.name) ? "checked" : "";
-    const toggleChecked = s.enabled === 1 ? "checked" : "";
+    const toggleChecked = s.enabled ? "checked" : "";
     const deadBadge = s.dead ? '<span class="badge badge-danger" title="已标记为死链（不可用）">死链</span>' : '';
     const knownDeadBadge = DEAD_URLS.has(s.url.replace(/[/]+$/, "")) ? '<span class="badge badge-warning" title="dead_urls 中有历史记录">已知死链</span>' : '';
     const origUrlHtml = s.originalUrl && s.originalUrl !== s.url ? '<span class="orig-url" title="' + esc(s.originalUrl) + '">原: ' + esc(s.originalUrl.slice(0, 40)) + (s.originalUrl.length > 40 ? '...' : '') + '</span>' : '';
