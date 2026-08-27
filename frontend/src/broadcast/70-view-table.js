@@ -152,7 +152,7 @@ function makeTableRow(site) {
 
   // ── 操作列 ──────────────────────────────────────────────────────────────────
   const actionHtml = `<div class="cell-action">
-    <a href="${esc(site.url)}" target="_blank" rel="noopener" class="btn-visit" aria-label="访问 ${esc(site.name)}">访问 →</a>
+    <a href="${esc(site.url)}" target="_blank" rel="noopener" class="btn-visit" aria-label="访问 ${esc(site.name)}"${site.dead ? ' title="该站已被报死链"' : ''}>访问 →</a>
     <button class="btn-detail" data-site="${esc(site.name)}" aria-label="查看详情">⋯</button>
     <button class="btn-still-works" data-site="${esc(site.name)}" aria-label="标记还能用">👍</button>
     <button class="btn-reported-dead" data-site="${esc(site.name)}" aria-label="标记已失效">👎</button>

@@ -31,8 +31,11 @@ function doLogin() {
 }
 function doLogout() { TOKEN = ""; localStorage.removeItem("sk-free-admin-token"); document.getElementById("loginView").style.display = "block"; document.getElementById("mainView").style.display = "none"; }
 document.getElementById("tokenInput").addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
+let _loadSitesSeq = 0;
 async function loadSites() {
+  const seq = ++_loadSitesSeq;
   const data = await api("/api/admin/sites");
+  if (seq !== _loadSitesSeq) return; // 已被更新的请求取代
   SITES = data.sites || [];
   document.getElementById("siteCount").textContent = SITES.length + " 个站点";
   buildTagFilter();
@@ -65,12 +68,12 @@ function renderTable() {
   tbody.innerHTML = filtered.map((s) => {
     const tags = (s.tags || []).map((t) => '<span class="tag">' + esc(t) + '</span>').join("");
     const checked = SELECTED.has(s.name) ? "checked" : "";
-    const toggleChecked = s.enabled !== false ? "checked" : "";
+    const toggleChecked = s.enabled === 1 ? "checked" : "";
     const deadBadge = s.dead ? '<span class="badge badge-danger" title="已标记为死链（不可用）">死链</span>' : '';
     const knownDeadBadge = DEAD_URLS.has(s.url.replace(/[/]+$/, "")) ? '<span class="badge badge-warning" title="dead_urls 中有历史记录">已知死链</span>' : '';
     const origUrlHtml = s.originalUrl && s.originalUrl !== s.url ? '<span class="orig-url" title="' + esc(s.originalUrl) + '">原: ' + esc(s.originalUrl.slice(0, 40)) + (s.originalUrl.length > 40 ? '...' : '') + '</span>' : '';
     return '<tr>' +
-      '<td><input type="checkbox" ' + checked + ' data-name="' + esc(s.name) + '" data-action="toggle-select"></td>' +
+      '<td class="w-check"><input type="checkbox" ' + checked + ' data-name="' + esc(s.name) + '" data-action="toggle-select"></td>' +
       '<td><label class="toggle"><input type="checkbox" ' + toggleChecked + ' data-name="' + esc(s.name) + '" data-action="toggle-enable"><span class="slider"></span></label></td>' +
       '<td class="name"><a href="' + esc(s.url) + '" target="_blank" title="' + esc(s.url) + '">' + esc(s.name) + '</a>' + deadBadge + knownDeadBadge + origUrlHtml + '</td>' +
       '<td class="health">' + healthBadge(s) + '</td>' +
@@ -80,7 +83,7 @@ function renderTable() {
       '<td>' + esc(s.models || "") + '</td>' +
       '<td>' + esc(s.rate || "") + '</td>' +
       '<td class="summary" title="' + esc(s.summary || "") + '">' + esc(s.summary || "") + '</td>' +
-      '<td class="actions"><button class="btn btn-sm" data-name="' + esc(s.name) + '" data-action="show-edit">编辑</button> <button class="btn btn-sm btn-danger" data-name="' + esc(s.name) + '" data-action="delete-site">删除</button></td>' +
+      '<td class="w-action actions"><button class="btn btn-sm" data-name="' + esc(s.name) + '" data-action="show-edit">编辑</button> <button class="btn btn-sm btn-danger" data-name="' + esc(s.name) + '" data-action="delete-site">删除</button></td>' +
     '</tr>';
   }).join("");
 }
@@ -104,11 +107,24 @@ function toggleSelect(name, checked) { if (checked) SELECTED.add(name); else SEL
 function toggleSelectAll() {
   const checked = document.getElementById("selectAll").checked;
   // 只操作选择框（data-action="toggle-select"），绝不触碰启用开关（toggle-enable）
-  document.querySelectorAll('#sitesBody input[data-action="toggle-select"]').forEach((cb) => { cb.checked = checked; const name = cb.closest("tr").querySelector(".name a").textContent; if (checked) SELECTED.add(name); else SELECTED.delete(name); });
+  document.querySelectorAll('#sitesBody input[data-action="toggle-select"]').forEach((cb) => { 
+    cb.checked = checked; 
+    const name = cb.getAttribute("data-name"); 
+    if (checked) SELECTED.add(name); else SELECTED.delete(name); 
+  });
   updateBatchBar();
 }
 function clearSelection() { SELECTED.clear(); document.getElementById("selectAll").checked = false; document.querySelectorAll('#sitesBody input[data-action="toggle-select"]').forEach((cb) => cb.checked = false); updateBatchBar(); }
-function updateBatchBar() { const bar = document.getElementById("batchBar"); const count = SELECTED.size; document.getElementById("batchCount").textContent = count; bar.classList.toggle("active", count > 0); }
+function updateBatchBar() { 
+  const bar = document.getElementById("batchBar"); 
+  const count = SELECTED.size; 
+  document.getElementById("batchCount").textContent = count; 
+  bar.classList.toggle("active", count > 0);
+  // 同步全选框：当前页所有选择框都被选中时勾选，否则取消
+  const boxes = document.querySelectorAll('#sitesBody input[data-action="toggle-select"]');
+  const allChecked = boxes.length > 0 && [...boxes].every((cb) => cb.checked);
+  document.getElementById("selectAll").checked = allChecked;
+}
 // 结构化字段的输入框 id ↔ API 字段名。新增/编辑/保存三处共用这一张表，
 // 避免"表单加了框但保存漏了"或"保存发了但回填漏了"这种半截修改。
 const STRUCT_FIELDS = [
@@ -147,7 +163,7 @@ function showEdit(name) {
   document.getElementById("editRate").value = site.rate || "";
   document.getElementById("editRegister").value = site.register || "";
   document.getElementById("editRef").value = site.ref || "";
-  document.getElementById("editNotes").value = (site.notes || []).join("\\n");
+  document.getElementById("editNotes").value = (site.notes || []).join("\n");
   STRUCT_FIELDS.forEach(function (f) {
     const v = site[f[1]];
     document.getElementById(f[0]).value = v === null || v === undefined ? "" : String(v);
@@ -159,7 +175,7 @@ function closeModal() { document.getElementById("editModal").classList.remove("a
 async function saveSite() {
   const originalName = document.getElementById("editOriginalName").value;
   const tags = document.getElementById("editTags").value.split(",").map((t) => t.trim()).filter(Boolean);
-  const notes = document.getElementById("editNotes").value.split("\\n").map((t) => t.trim()).filter(Boolean);
+  const notes = document.getElementById("editNotes").value.split("\n").map((t) => t.trim()).filter(Boolean);
   // 空值必须发 "" 而不是 undefined。
   // JSON.stringify 会把 undefined 的键整个丢掉，而后端更新用的是
   //   checkin: body.checkin ?? existing.checkin
@@ -235,23 +251,23 @@ async function batchDelete() {
   if (!ok) return;
   var btns = document.querySelectorAll('#batchBar .btn');
   btns.forEach(function(b) { btnLoading(b, true); });
-  try { await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "delete", names: [...SELECTED] }) }); toast("批量删除完成", "success"); SELECTED.clear(); await loadSites(); } catch (e) { toast(e.message, "error"); } finally { btns.forEach(function(b) { btnLoading(b, false); }); }
+  try { await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "delete", names: [...SELECTED] }) }); toast("批量删除完成", "success"); SELECTED.clear(); updateBatchBar(); await loadSites(); renderTable(); } catch (e) { toast(e.message, "error"); } finally { btns.forEach(function(b) { btnLoading(b, false); }); }
 }
 async function batchTag() {
   if (SELECTED.size === 0) return;
   var input = document.getElementById("batchTagInput");
   var tag = input.value.trim();
   if (!tag) { toast("请输入标签名称", "error"); input.focus(); return; }
-  try { const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "add_tag", names: [...SELECTED], tag: tag }) }); toast("已为 " + data.affected + " 个站点添加标签", "success"); SELECTED.clear(); input.value = ""; await loadSites(); } catch (e) { toast(e.message, "error"); }
+  try { const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "add_tag", names: [...SELECTED], tag: tag }) }); toast("已为 " + data.affected + " 个站点添加标签", "success"); SELECTED.clear(); updateBatchBar(); input.value = ""; await loadSites(); renderTable(); } catch (e) { toast(e.message, "error"); }
 }
 async function toggleEnable(name, enabled) {
-  try { const site = SITES.find((s) => s.name === name); if (!site) return; await api("/api/admin/sites/" + encodeURIComponent(name), { method: "PUT", body: JSON.stringify({ ...site, enabled }) }); toast(enabled ? "已启用：" + name : "已停用：" + name, "success"); if (!enabled && site.url) { try { await api("/api/admin/dead-urls", { method: "POST", body: JSON.stringify({ url: site.url, action: "add", reason: "manual-marked" }) }); } catch (e) { console.warn("写入 dead_urls 失败", e); } } await loadSites(); await loadDeadUrls(); } catch (e) { toast(e.message, "error"); }
+  try { const site = SITES.find((s) => s.name === name); if (!site) return; await api("/api/admin/sites/" + encodeURIComponent(name), { method: "PUT", body: JSON.stringify({ ...site, enabled }) }); toast(enabled ? "已启用：" + name : "已停用：" + name, "success"); if (!enabled && site.url) { try { await api("/api/admin/dead-urls", { method: "POST", body: JSON.stringify({ url: site.url, action: "add", reason: "manual-marked" }) }); } catch (e) { console.warn("写入 dead_urls 失败", e); } } await loadSites(); await loadDeadUrls(); renderTable(); } catch (e) { toast(e.message, "error"); }
 }
 async function batchEnable() {
   if (SELECTED.size === 0) return;
   var btns = document.querySelectorAll('#batchBar .btn');
   btns.forEach(function(b) { btnLoading(b, true); });
-  try { const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "enable", names: [...SELECTED] }) }); toast("已启用 " + data.affected + " 个站点", "success"); SELECTED.clear(); await loadSites(); } catch (e) { toast(e.message, "error"); } finally { btns.forEach(function(b) { btnLoading(b, false); }); }
+  try { const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "enable", names: [...SELECTED] }) }); toast("已启用 " + data.affected + " 个站点", "success"); SELECTED.clear(); updateBatchBar(); await loadSites(); renderTable(); } catch (e) { toast(e.message, "error"); } finally { btns.forEach(function(b) { btnLoading(b, false); }); }
 }
 async function batchDisable() {
   if (SELECTED.size === 0) return;
@@ -267,8 +283,8 @@ async function batchDisable() {
       try { await api("/api/admin/dead-urls/batch", { method: "POST", body: JSON.stringify({ urls: deadUrls, action: "add" }) }); } catch (e) { console.warn("批量写入 dead_urls 失败", e); }
     }
     toast("已停用 " + SELECTED.size + " 个站点", "success"); 
-    SELECTED.clear(); 
-    await loadSites(); await loadDeadUrls();
+    SELECTED.clear(); updateBatchBar(); 
+    await loadSites(); await loadDeadUrls(); renderTable();
   } catch (e) { toast(e.message, "error"); } finally { btns.forEach(function(b) { btnLoading(b, false); }); }
 }
 // 对选中的站点重新做健康检查（只查选中的，不查全部）
@@ -286,7 +302,7 @@ async function batchRecheck() {
     statusEl.textContent = "复查完成：" + alive + " 可达，" + dead + " 不可达";
     toast("复查完成：" + alive + " 可达，" + dead + " 不可达", dead > 0 ? "info" : "success");
     // 更新健康 tab 数据
-    await loadSites(); renderHealthFromSites();
+    await loadSites(); renderTable(); renderHealthFromSites();
   } catch (e) { statusEl.textContent = "复查失败: " + e.message; toast("复查失败: " + e.message, "error"); }
 }
 function switchTab(tab) {
@@ -391,7 +407,7 @@ function renderHealthFromSites() {
     html += '<button class="btn btn-sm" data-action="healthClearDeadSelection">\u2716 取消选择</button>';
     html += '<span id="healthDeadCount" class="count text-muted text-sm">已选 0 个</span>';
     html += '</div>';
-    html += '<table ' + tblClass + '><thead><tr>';
+    html += '<table ' + tblClass + ' health-dead-table><thead><tr>';
     html += '<th class="w-check"><input type="checkbox" id="healthDeadSelectAll" data-action="healthToggleDeadSelectAll"></th>';
     html += '<th ' + thClass + '>站点名称</th>';
     html += '<th ' + thClass + '>验证时间</th>';
@@ -402,8 +418,8 @@ function renderHealthFromSites() {
         '<td class="w-check"><input type="checkbox" data-name="' + esc(s.name) + '" data-action="healthToggleDeadSelect"></td>' +
         '<td ' + tdClass + '><a href="' + esc(s.url) + '" target="_blank">' + esc(s.name) + '</a></td>' +
         '<td ' + tdClass + ' class="text-muted text-sm">' + (s.verifiedAt ? "\u2705 " + fmtTime(s.verifiedAt) : '\u25cb 未验证') + '</td>' +
-        '<td ' + tdClass + '>' +
-        '<button class="btn btn-sm btn-primary" data-name="' + esc(s.name) + '" data-action="restore-dead" class="mr-1">\u6062\u590d\u4e3a\u53ef\u7528</button>' +
+        '<td ' + tdClass + ' class="w-action">' +
+        '<button class="btn btn-sm btn-primary" data-name="' + esc(s.name) + '" data-action="restore-dead">\u6062\u590d\u4e3a\u53ef\u7528</button>' +
         '<button class="btn btn-sm" data-name="' + esc(s.name) + '" data-action="recheck-dead">\u200d\u200d🔍 复查</button></td>' +
         '</tr>';
     }).join("");
@@ -417,7 +433,7 @@ function renderHealthFromSites() {
     html += '<button class="btn btn-sm" data-action="healthClearFailSelection">\u2716 取消选择</button>';
     html += '<span id="healthFailCount" class="count text-muted text-sm">已选 0 个</span>';
     html += '</div>';
-    html += '<table ' + tblClass + '><thead><tr>';
+    html += '<table ' + tblClass + ' health-fail-table><thead><tr>';
     html += '<th class="w-check"><input type="checkbox" id="healthFailSelectAll" data-action="healthToggleFailSelectAll"></th>';
     html += '<th ' + thClass + '>站点名称</th>';
     html += '<th ' + thClass + '>失败次数</th>';
@@ -428,7 +444,7 @@ function renderHealthFromSites() {
         '<td class="w-check"><input type="checkbox" data-name="' + esc(s.name) + '" data-action="healthToggleFailSelect"></td>' +
         '<td ' + tdClass + '><a href="' + esc(s.url) + '" target="_blank">' + esc(s.name) + '</a></td>' +
         '<td ' + tdClass + ' class="text-coral text-sm">\u26a0 ' + s.healthFailCount + ' 次</td>' +
-        '<td ' + tdClass + '><button class="btn btn-sm btn-danger" data-name="' + esc(s.name) + '" data-action="mark-dead">\u6807\u8bb0\u4e3a\u6b7b\u94fe</button></td>' +
+        '<td ' + tdClass + ' class="w-action"><button class="btn btn-sm btn-danger" data-name="' + esc(s.name) + '" data-action="mark-dead">\u6807\u8bb0\u4e3a\u6b7b\u94fe</button></td>' +
         '</tr>';
     }).join("");
     html += '</tbody></table>';
@@ -446,7 +462,7 @@ function healthToggleDeadSelect(cb) {
   document.getElementById("healthDeadSelectAll").checked = HEALTH_DEAD_SELECTED.size === SITES.filter(function(s) { return s.dead; }).length;
 }
 function healthToggleDeadSelectAll(cb) {
-  document.querySelectorAll('#healthResults table:first-of-type tbody input[type="checkbox"]').forEach(function(el) {
+  document.querySelectorAll('#healthResults .health-dead-table tbody input[type="checkbox"]').forEach(function(el) {
     el.checked = cb.checked;
     var name = el.getAttribute("data-name");
     if (cb.checked) HEALTH_DEAD_SELECTED.add(name); else HEALTH_DEAD_SELECTED.delete(name);
@@ -456,30 +472,30 @@ function healthToggleDeadSelectAll(cb) {
 function healthClearDeadSelection() {
   HEALTH_DEAD_SELECTED.clear();
   document.getElementById("healthDeadSelectAll").checked = false;
-  document.querySelectorAll('#healthResults table:first-of-type tbody input[type="checkbox"]').forEach(function(el) { el.checked = false; });
+  document.querySelectorAll('#healthResults .health-dead-table tbody input[type="checkbox"]').forEach(function(el) { el.checked = false; });
   document.getElementById("healthDeadCount").textContent = "已选 0 个";
 }
 async function healthBatchRecheckDead() {
   if (HEALTH_DEAD_SELECTED.size === 0) { toast("请先选择要复查的站点", "info"); return; }
   var urls = SITES.filter(function(s) { return HEALTH_DEAD_SELECTED.has(s.name); }).map(function(s) { return s.url; }).filter(Boolean);
   if (urls.length === 0) { toast("选中的站点没有可检查的 URL", "error"); return; }
-  try { var data = await api("/api/admin/check-batch", { method: "POST", body: JSON.stringify({ urls: urls }) }); var alive = data.results.filter(function(r) { return r.ok; }).length; var dead = data.results.filter(function(r) { return !r.ok; }).length; toast("复查完成：" + alive + " 可达，" + dead + " 不可达", dead > 0 ? "info" : "success"); await loadSites(); renderHealthFromSites(); } catch (e) { toast("复查失败: " + e.message, "error"); }
+  try { var data = await api("/api/admin/check-batch", { method: "POST", body: JSON.stringify({ urls: urls }) }); var alive = data.results.filter(function(r) { return r.ok; }).length; var dead = data.results.filter(function(r) { return !r.ok; }).length; toast("复查完成：" + alive + " 可达，" + dead + " 不可达", dead > 0 ? "info" : "success"); await loadSites(); renderTable(); renderHealthFromSites(); } catch (e) { toast("复查失败: " + e.message, "error"); }
 }
 async function healthRecheckSingleDead(name) {
   var s = SITES.find(function(s) { return s.name === name; });
   if (!s || !s.url) { toast("站点无 URL", "error"); return; }
-  try { var data = await api("/api/admin/check-batch", { method: "POST", body: JSON.stringify({ urls: [s.url] }) }); var r = data.results[0]; toast("\u200d\u200d🔍 " + name + "：" + (r.ok ? "可达" : "不可达"), r.ok ? "success" : "error"); await loadSites(); renderHealthFromSites(); } catch (e) { toast("复查失败: " + e.message, "error"); }
+  try { var data = await api("/api/admin/check-batch", { method: "POST", body: JSON.stringify({ urls: [s.url] }) }); var r = data.results[0]; toast("\u200d\u200d🔍 " + name + "：" + (r.ok ? "可达" : "不可达"), r.ok ? "success" : "error"); await loadSites(); renderTable(); renderHealthFromSites(); } catch (e) { toast("复查失败: " + e.message, "error"); }
 }
 async function healthBatchRestoreDead() {
   if (HEALTH_DEAD_SELECTED.size === 0) { toast("请先选择要恢复的站点", "info"); return; }
-  try { await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "enable", names: [...HEALTH_DEAD_SELECTED] }) }); toast("已恢复 " + HEALTH_DEAD_SELECTED.size + " 个站点", "success"); HEALTH_DEAD_SELECTED.clear(); await loadSites(); renderHealthFromSites(); } catch (e) { toast(e.message, "error"); }
+  try { await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "enable", names: [...HEALTH_DEAD_SELECTED] }) }); toast("已恢复 " + HEALTH_DEAD_SELECTED.size + " 个站点", "success"); HEALTH_DEAD_SELECTED.clear(); await loadSites(); renderTable(); renderHealthFromSites(); } catch (e) { toast(e.message, "error"); }
 }
 async function healthRestoreAllDead() {
   var names = SITES.filter(function(s) { return s.dead; }).map(function(s) { return s.name; });
   if (names.length === 0) { toast("没有死链站点", "info"); return; }
   var ok = await showConfirm("确认恢复全部", "<p>将恢复 <strong>" + names.length + "</strong> 个死链站点为可用</p>", "", "恢复全部");
   if (!ok) return;
-  try { await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "enable", names }) }); toast("已恢复 " + names.length + " 个站点", "success"); HEALTH_DEAD_SELECTED.clear(); await loadSites(); renderHealthFromSites(); } catch (e) { toast(e.message, "error"); }
+  try { await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "enable", names }) }); toast("已恢复 " + names.length + " 个站点", "success"); HEALTH_DEAD_SELECTED.clear(); await loadSites(); renderTable(); renderHealthFromSites(); } catch (e) { toast(e.message, "error"); }
 }
 // 异常区的批量选择
 function healthToggleFailSelect(cb) {
@@ -489,7 +505,7 @@ function healthToggleFailSelect(cb) {
   document.getElementById("healthFailSelectAll").checked = HEALTH_FAIL_SELECTED.size === SITES.filter(function(s) { return !s.dead && s.healthFailCount > 0; }).length;
 }
 function healthToggleFailSelectAll(cb) {
-  document.querySelectorAll('#healthResults table:nth-of-type(2) tbody input[type="checkbox"]').forEach(function(el) {
+  document.querySelectorAll('#healthResults .health-fail-table tbody input[type="checkbox"]').forEach(function(el) {
     el.checked = cb.checked;
     var name = el.getAttribute("data-name");
     if (cb.checked) HEALTH_FAIL_SELECTED.add(name); else HEALTH_FAIL_SELECTED.delete(name);
@@ -499,7 +515,7 @@ function healthToggleFailSelectAll(cb) {
 function healthClearFailSelection() {
   HEALTH_FAIL_SELECTED.clear();
   document.getElementById("healthFailSelectAll").checked = false;
-  document.querySelectorAll('#healthResults table:nth-of-type(2) tbody input[type="checkbox"]').forEach(function(el) { el.checked = false; });
+  document.querySelectorAll('#healthResults .health-fail-table tbody input[type="checkbox"]').forEach(function(el) { el.checked = false; });
   document.getElementById("healthFailCount").textContent = "已选 0 个";
 }
 async function healthBatchMarkDead() {
@@ -513,7 +529,7 @@ async function healthBatchMarkDead() {
     }
     toast("已标记 " + HEALTH_FAIL_SELECTED.size + " 个站点为死链", "success");
     HEALTH_FAIL_SELECTED.clear();
-    await loadSites(); await loadDeadUrls(); renderHealthFromSites();
+    await loadSites(); await loadDeadUrls(); renderTable(); renderHealthFromSites();
   } catch (e) { toast(e.message, "error"); }
 }
 /**
@@ -548,7 +564,7 @@ async function runHealthScan({ onProgress, onResult }) {
   }
   const alive = allResults.filter(r => r.ok).length;
   const dead = allResults.filter(r => !r.ok).length;
-  onResult({ alive, dead, allResults });
+  Promise.resolve(onResult({ alive, dead, allResults })).catch((e) => { console.warn("onResult 回调失败", e); });
 }
 
 async function batchCheckUrls() {
@@ -807,7 +823,20 @@ function importSchema() {
   input.click();
 }
 function exportSites() {
-  fetch("/api/admin/export", { headers: { "Authorization": "Bearer " + TOKEN } }).then(function(res) { if (!res.ok) { toast("导出失败: " + res.status, "error"); return; } return res.text(); }).then(function(text) { if (!text) return; var blob = new Blob([text], { type: "application/json" }); var url = URL.createObjectURL(blob); var a = document.createElement("a"); a.href = url; a.download = "sites-export.json"; a.click(); URL.revokeObjectURL(url); toast("导出成功"); }).catch(function() { toast("网络错误", "error"); });
+  api("/api/admin/export").then(function(res) {
+    if (!res.ok) { toast("导出失败: " + res.status, "error"); return; }
+    return res.text();
+  }).then(function(text) {
+    if (!text) return;
+    var blob = new Blob([text], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "sites-export.json";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast("导出成功");
+  }).catch(function(e) { toast(e.message || "网络错误", "error"); });
 }
 let IMPORT_DATA = null;
 function showImport() { IMPORT_DATA = null; document.getElementById("importFile").value = ""; document.getElementById("importPreview").style.display = "none"; document.getElementById("importBtn").disabled = true; document.getElementById("importOverwrite").checked = false; document.getElementById("importSkipDead").checked = true; _modalOpen(); document.getElementById("importModal").classList.add("active"); }
@@ -815,7 +844,7 @@ function closeImportModal() { document.getElementById("importModal").classList.r
 function previewImport(input) {
   const file = input.files[0]; if (!file) return;
   const reader = new FileReader();
-  reader.onload = (e) => { try { const raw = JSON.parse(e.target.result); let sites = Array.isArray(raw) ? raw : (raw.sites || []); sites = sites.filter((s) => s && s.name && s.url); if (sites.length === 0) { toast("未找到有效站点数据", "error"); return; } IMPORT_DATA = sites; document.getElementById("importCount").textContent = sites.length; var deadWarnings = []; var html = sites.slice(0, 10).map((s) => { var line = "<div style='margin:2px 0'>• " + esc(s.name); if (s.url) { var deadInfo = DEAD_URLS.get(s.url.replace(/[/]+$/, "")); if (deadInfo) { var detail = "（added_at: " + fmtTime(deadInfo.added_at) + ", reason: " + esc(deadInfo.reason) + "）"; deadWarnings.push(s.name + detail); line += " <span style='color:var(--amber);font-weight:600'>⚠️ 已知死链</span>" + detail; } line += " → " + esc(s.url.slice(0, 50)) + (s.url.length > 50 ? "..." : ""); } return line + "</div>"; }).join(""); if (deadWarnings.length > 0) html += "<div style='margin-top:8px;padding:8px;background:var(--amber-soft);border-radius:var(--radius);border:1px solid var(--amber);color:var(--amber);font-weight:600'>⚠️ 已知死链（" + deadWarnings.length + " 条）：" + esc(deadWarnings.join("、")) + "</div>"; if (sites.length > 10) html += "<div style='color:var(--muted)'>... 共 " + sites.length + " 条</div>"; document.getElementById("importPreviewBox").innerHTML = html; document.getElementById("importPreview").style.display = "block"; document.getElementById("importBtn").disabled = false; } catch (err) { toast("JSON 解析失败: " + err.message, "error"); } };
+  reader.onload = (e) => { try { const raw = JSON.parse(e.target.result); let sites = Array.isArray(raw) ? raw : (raw.sites || []); sites = sites.filter((s) => s && s.name && s.url); if (sites.length === 0) { toast("未找到有效站点数据", "error"); return; } IMPORT_DATA = sites; document.getElementById("importCount").textContent = sites.length; var deadWarnings = []; sites.forEach((s) => { if (s.url) { var deadInfo = DEAD_URLS.get(s.url.replace(/[/]+$/, "")); if (deadInfo) { var detail = "（added_at: " + fmtTime(deadInfo.added_at) + ", reason: " + esc(deadInfo.reason) + "）"; deadWarnings.push(s.name + detail); } } }); var html = sites.slice(0, 10).map((s) => { var line = "<div style='margin:2px 0'>• " + esc(s.name); if (s.url) { var deadInfo2 = DEAD_URLS.get(s.url.replace(/[/]+$/, "")); if (deadInfo2) { var detail2 = "（added_at: " + fmtTime(deadInfo2.added_at) + ", reason: " + esc(deadInfo2.reason) + "）"; line += " <span style='color:var(--amber);font-weight:600'>⚠️ 已知死链</span>" + detail2; } line += " → " + esc(s.url.slice(0, 50)) + (s.url.length > 50 ? "..." : ""); } return line + "</div>"; }).join(""); if (deadWarnings.length > 0) html += "<div style='margin-top:8px;padding:8px;background:var(--amber-soft);border-radius:var(--radius);border:1px solid var(--amber);color:var(--amber);font-weight:600'>⚠️ 已知死链（" + deadWarnings.length + " 条）：" + esc(deadWarnings.join("、")) + "</div>"; if (sites.length > 10) html += "<div style='color:var(--muted)'>... 共 " + sites.length + " 条</div>"; document.getElementById("importPreviewBox").innerHTML = html; document.getElementById("importPreview").style.display = "block"; document.getElementById("importBtn").disabled = false; } catch (err) { toast("JSON 解析失败: " + err.message, "error"); } };
   reader.readAsText(file);
 }
 async function doImport() {
@@ -823,7 +852,7 @@ async function doImport() {
   const overwrite = document.getElementById("importOverwrite").checked;
   const skipDead = document.getElementById("importSkipDead").checked;
   document.getElementById("importBtn").disabled = true;
-  try { const data = await api("/api/admin/sites/import", { method: "POST", body: JSON.stringify({ sites: IMPORT_DATA, overwrite, skipDead }) }); let msg = "导入完成：新增 " + data.added + " 条"; if (data.updated) msg += "，更新 " + data.updated + " 条"; if (data.skipped) msg += "，跳过 " + data.skipped + " 条"; if (data.skippedDead) msg += "（其中已知死链 " + data.skippedDead + " 条）"; if (data.duplicates && data.duplicates.length > 0) msg += "\\n重复站点：" + data.duplicates.map((d) => d.existingName).join(", "); toast(msg, "success"); closeImportModal(); await loadSites(); } catch (e) { toast(e.message, "error"); document.getElementById("importBtn").disabled = false; }
+  try { const data = await api("/api/admin/sites/import", { method: "POST", body: JSON.stringify({ sites: IMPORT_DATA, overwrite, skipDead }) }); let msg = "导入完成：新增 " + data.added + " 条"; if (data.updated) msg += "，更新 " + data.updated + " 条"; if (data.skipped) msg += "，跳过 " + data.skipped + " 条"; if (data.skippedDead) msg += "（其中已知死链 " + data.skippedDead + " 条）"; if (data.duplicates && data.duplicates.length > 0) msg += "\n重复站点：" + data.duplicates.map((d) => d.existingName).join(", "); toast(msg, "success"); closeImportModal(); await loadSites(); } catch (e) { toast(e.message, "error"); document.getElementById("importBtn").disabled = false; }
 }
 // 按钮加载状态（防重复点击 + 视觉反馈）
 function btnLoading(btn, loading) {
@@ -874,11 +903,14 @@ function showConfirm(title, body, extraHtml, okText) {
   });
 }
 function confirmResolve(result) {
+  if (!_confirmCb) return;
   var modal = document.getElementById("confirmModal");
   modal.classList.add("closing");
   _modalClose();
   setTimeout(function() { modal.classList.remove("active", "closing"); }, 150);
-  if (_confirmCb) { var cb = _confirmCb; _confirmCb = null; cb(result); }
+  var cb = _confirmCb;
+  _confirmCb = null;
+  cb(result);
 }
 // 点击遮罩关闭
 document.getElementById("confirmModal").addEventListener("click", function(e) {
@@ -979,5 +1011,5 @@ Object.assign(window, {
   sitesCleanupDeadLinks, batchRecheck, batchTag, batchEnable, batchDisable,
   batchDelete, clearSelection, switchTab, batchCheckUrls, closeModal, saveSite,
   closeImportModal, doImport, confirmResolve, loadSchema, exportSchema,
-  importSchema, saveSchema,
+  importSchema, saveSchema, toggleSelectAll, filterTable, loadFeedbacks,
 });

@@ -15,3 +15,5 @@ wrangler.toml.bak
 # 不带尾斜杠：node_modules 可能是符号链接（git 对 symlink 不按目录匹配，
 # 只有 node_modules/ 会漏掉它，导致 status 一直显示 untracked）
 node_modules
+
+frontend/dist/

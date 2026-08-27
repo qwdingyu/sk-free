@@ -46,6 +46,53 @@ function renderSummary() {
       return item;
     })
   );
+
+  // 鲜度分布 + 图例
+  renderFreshnessBar();
+}
+
+/**
+ * 鲜度分布迷你条 + 图例（护城河信号）
+ * 用现有 freshnessLevel 计算，不新增字段/接口。
+ */
+function renderFreshnessBar() {
+  const alive = state.sites.filter((s) => !s.dead);
+  const now = Date.now();
+  let fresh24h = 0, fresh7d = 0, stale = 0, unknown = 0;
+  alive.forEach((s) => {
+    if (!s.verifiedAt) { unknown++; return; }
+    const ts = parseUtc(s.verifiedAt);
+    if (isNaN(ts)) { unknown++; return; }
+    const diff = now - ts;
+    if (diff <= FRESH_24H) fresh24h++;
+    else if (diff <= FRESH_7D) fresh7d++;
+    else stale++;
+  });
+  const total = alive.length;
+  const pct = (n) => total > 0 ? Math.round(n / total * 100) : 0;
+
+  // 复用 summaryStrip 后面的空间，追加一行鲜度条
+  let bar = document.getElementById("freshnessBar");
+  if (!bar) {
+    bar = document.createElement("div");
+    bar.id = "freshnessBar";
+    bar.className = "freshness-bar";
+    els.summaryStrip.after(bar);
+  }
+  bar.innerHTML = `
+    <div class="freshness-track" role="img" aria-label="鲜度分布：24小时内 ${fresh24h}，7天内 ${fresh7d}，陈旧 ${stale}，未验证 ${unknown}">
+      <span class="freshness-seg seg-fresh" style="flex:${fresh24h || 0.1}" title="24h 内验证：${fresh24h} 个"></span>
+      <span class="freshness-seg seg-ok" style="flex:${fresh7d || 0.1}" title="7 天内验证：${fresh7d} 个"></span>
+      <span class="freshness-seg seg-stale" style="flex:${stale || 0.1}" title="超过 7 天未验证：${stale} 个"></span>
+      <span class="freshness-seg seg-unknown" style="flex:${unknown || 0.1}" title="从未验证：${unknown} 个"></span>
+    </div>
+    <div class="freshness-legend">
+      <span><span class="dot dot-fresh"></span> 24h内：${fresh24h}（${pct(fresh24h)}%）</span>
+      <span><span class="dot dot-ok"></span> 7天内：${fresh7d}（${pct(fresh7d)}%）</span>
+      <span><span class="dot dot-stale"></span> 陈旧：${stale}（${pct(stale)}%）</span>
+      <span><span class="dot dot-unknown"></span> 未验证：${unknown}（${pct(unknown)}%）</span>
+      <span class="freshness-note">数据每 6 小时自动验证 · 死链每日标记</span>
+    </div>`;
 }
 
 /**
@@ -345,6 +392,18 @@ async function init() {
   initSubmitForm();
   initFeedbackForm();
 
+  // Hero 主 CTA：点击"查看高额度"→ 应用 high 预设并滚动到列表
+  const heroPresetBtn = document.getElementById("heroPresetBtn");
+  if (heroPresetBtn) {
+    heroPresetBtn.addEventListener("click", () => {
+      state.activePreset = "high";
+      state.query = "";
+      syncToUrl(false);
+      applyFilterChange();
+      document.getElementById("cardsArea")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
   // 首屏骨架屏：加载期间显示占位，按当前视图模式渲染对应形态
   // 表格视图用 <table> 骨架（与真实表格同构），卡片视图用 flex 行骨架。
   // 之前统一用 flex 行骨架，表格视图下首屏会先闪一排"卡片"再跳成表格，
@@ -392,6 +451,12 @@ async function init() {
     // （真实数据下显示 37/0 而非 68/31）。展示策略归 60-filter 的
     // showDead 开关与 70-view 的分组，这里不做数据裁剪。
     state.sites = data.sites || [];
+    // 后端 /api/sites 已把 votes 映射进每个 site 对象（sites.js:223/261），
+    // 但前端之前只在用户投票后才往 state.votes 写一条 —— 导致首屏社区列全显示 0。
+    // 此处把后端返回的总票数灌入 state.votes，保证首屏就有真实社区评分。
+    state.sites.forEach((s) => {
+      if (s.votes) state.votes[s.name] = { up: s.votes.up || 0, down: s.votes.down || 0 };
+    });
 
     render();
     loadNotice();

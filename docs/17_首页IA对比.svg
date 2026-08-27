@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 820" font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+  <rect width="680" height="820" fill="#f5f7f6"/>
+  <text x="340" y="34" text-anchor="middle" font-size="19" font-weight="800" fill="#17201c">首页信息架构：当前 vs 建议</text>
+  <text x="340" y="56" text-anchor="middle" font-size="12" fill="#64706a">全局视角 · 护城河 = 鲜度 + 可比性</text>
+
+  <!-- 列标题 -->
+  <text x="170" y="92" text-anchor="middle" font-size="15" font-weight="800" fill="#a83a2e">当前首页（首屏）</text>
+  <text x="510" y="92" text-anchor="middle" font-size="15" font-weight="800" fill="#07564f">建议首页（首屏）</text>
+
+  <!-- 分隔线 -->
+  <line x1="340" y1="74" x2="340" y2="800" stroke="#e0e0e0" stroke-width="1"/>
+
+  <!-- ============ 左：当前 ============ -->
+  <g>
+    <!-- Hero -->
+    <rect x="24" y="108" width="292" height="58" rx="8" fill="#ffffff" stroke="#e0e0e0"/>
+    <text x="38" y="132" font-size="12.5" font-weight="700" fill="#17201c">Hero</text>
+    <text x="38" y="150" font-size="10.5" fill="#64706a">标题 + 「提交站点」主按钮</text>
+    <text x="300" y="128" text-anchor="end" font-size="9.5" fill="#a83a2e">⚠ CTA 错位</text>
+
+    <!-- 统计条 -->
+    <rect x="24" y="178" width="292" height="46" rx="8" fill="#ffffff" stroke="#e0e0e0"/>
+    <text x="38" y="202" font-size="12.5" font-weight="700" fill="#17201c">统计条</text>
+    <text x="38" y="218" font-size="10.5" fill="#64706a">收录 / 可签到 / 高额度 / 已失效</text>
+
+    <!-- 预设 chips -->
+    <rect x="24" y="238" width="292" height="46" rx="8" fill="#ffffff" stroke="#e0e0e0"/>
+    <text x="38" y="262" font-size="12.5" font-weight="700" fill="#17201c">7 个预设 chips</text>
+    <text x="38" y="278" font-size="10.5" fill="#64706a">今天能签到 / 高额度 / 生图 …</text>
+
+    <!-- 搜索 + 高级 -->
+    <rect x="24" y="298" width="292" height="46" rx="8" fill="#ffffff" stroke="#e0e0e0"/>
+    <text x="38" y="322" font-size="12.5" font-weight="700" fill="#17201c">搜索 + 高级筛选</text>
+    <text x="38" y="338" font-size="10.5" fill="#64706a">档位/类型/能力/门槛/隐藏过期</text>
+
+    <!-- 排序+视图+清除 -->
+    <rect x="24" y="358" width="292" height="46" rx="8" fill="#fff3e0" stroke="#f0d1c9"/>
+    <text x="38" y="382" font-size="12.5" font-weight="700" fill="#835a10">排序 + 视图切换 + 清除</text>
+    <text x="300" y="378" text-anchor="end" font-size="9.5" fill="#a83a2e">⚠ 抢注意力</text>
+
+    <!-- 列表 -->
+    <rect x="24" y="418" width="292" height="120" rx="8" fill="#eef7f3" stroke="#087f78"/>
+    <text x="38" y="442" font-size="12.5" font-weight="700" fill="#07564f">站点列表（默认表格）</text>
+    <text x="38" y="462" font-size="10.5" fill="#33413b">行：名称/额度/能力/门槛/鲜度/社区</text>
+    <text x="38" y="480" font-size="10.5" fill="#33413b">鲜度圆点 + 死链沉底折叠</text>
+    <text x="38" y="500" font-size="10.5" fill="#33413b">（好，但首屏未放大）</text>
+    <text x="300" y="524" text-anchor="end" font-size="9.5" fill="#64706a">↙ 护城河在此被埋</text>
+
+    <!-- 问题小结 -->
+    <rect x="24" y="556" width="292" height="216" rx="8" fill="#fdeaea" stroke="#ef9b9b"/>
+    <text x="38" y="582" font-size="12.5" font-weight="800" fill="#a83a2e">全局缺陷</text>
+    <text x="38" y="606" font-size="10.8" fill="#5f342f">· main.js = broadcast/*.js 手工拼接，</text>
+    <text x="48" y="622" font-size="10.8" fill="#5f342f">  构建不自动拼接 → 改动会被静默吞掉</text>
+    <text x="38" y="644" font-size="10.8" fill="#5f342f">· 四个名字 / Hero 讲名词不讲收益</text>
+    <text x="38" y="666" font-size="10.8" fill="#5f342f">· 首页=数据库浏览器，无「今日可信」</text>
+    <text x="38" y="688" font-size="10.8" fill="#5f342f">· 全量重建筛选栏 → 补丁函数越拆越多</text>
+    <text x="38" y="712" font-size="10.8" fill="#5f342f">· 鲜度/可比性（护城河）没有前置</text>
+    <text x="38" y="736" font-size="10.8" font-weight="700" fill="#a83a2e">→ 每次美化都是在会漂移的代码上贴纸</text>
+  </g>
+
+  <!-- ============ 右：建议 ============ -->
+  <g>
+    <!-- Hero -->
+    <rect x="364" y="108" width="292" height="74" rx="8" fill="#e6f7f5" stroke="#087f78"/>
+    <text x="378" y="132" font-size="12.5" font-weight="700" fill="#07564f">Hero（价值主张型）</text>
+    <text x="378" y="150" font-size="10.8" fill="#17201c">「今天还有哪些 AI API 能白嫖？」</text>
+    <text x="378" y="167" font-size="10.5" fill="#33413b">每日验证·死链可见·额度可比</text>
+    <text x="378" y="183" font-size="10" fill="#64706a">主 CTA=按今天能签到 · 提交=次级</text>
+    <text x="640" y="128" text-anchor="end" font-size="9.5" fill="#0a7d54">✓ CTA 正确</text>
+
+    <!-- 今日可信速览 -->
+    <rect x="364" y="196" width="292" height="74" rx="8" fill="#ffffff" stroke="#087f78" stroke-dasharray="4 3"/>
+    <text x="378" y="220" font-size="12.5" font-weight="700" fill="#07564f">今日可信速览（新增）</text>
+    <text x="378" y="238" font-size="10.5" fill="#33413b">鲜度分布条 + 今日新增/变死链</text>
+    <text x="378" y="254" font-size="10.5" fill="#33413b">+ 鲜度图例 + 信任注脚</text>
+    <text x="640" y="216" text-anchor="end" font-size="9.5" fill="#0a7d54">✓ 护城河前置</text>
+
+    <!-- 预设 chips 主导航 -->
+    <rect x="364" y="286" width="292" height="46" rx="8" fill="#ffffff" stroke="#e0e0e0"/>
+    <text x="378" y="310" font-size="12.5" font-weight="700" fill="#17201c">预设 chips（首屏主导航）</text>
+    <text x="378" y="326" font-size="10.5" fill="#64706a">= 产品真实入口，保留并强化</text>
+
+    <!-- 搜索 + 折叠高级 -->
+    <rect x="364" y="346" width="292" height="46" rx="8" fill="#ffffff" stroke="#e0e0e0"/>
+    <text x="378" y="370" font-size="12.5" font-weight="700" fill="#17201c">搜索 + 高级筛选（默认折叠）</text>
+    <text x="378" y="386" font-size="10.5" fill="#64706a">能力已到位，只收暴露面</text>
+
+    <!-- 安静工具栏 -->
+    <rect x="364" y="406" width="292" height="46" rx="8" fill="#f0f4ee" stroke="#e0e0e0"/>
+    <text x="378" y="430" font-size="12.5" font-weight="700" fill="#33413b">安静工具栏（降对比）</text>
+    <text x="378" y="446" font-size="10.5" fill="#64706a">排序/视图/清除 与列表拉开间距</text>
+
+    <!-- 列表 -->
+    <rect x="364" y="466" width="292" height="72" rx="8" fill="#eef7f3" stroke="#087f78"/>
+    <text x="378" y="490" font-size="12.5" font-weight="700" fill="#07564f">站点列表（桌面表格/移动卡片）</text>
+    <text x="378" y="508" font-size="10.5" fill="#33413b">按视口智能默认 + 鲜度/死链保留</text>
+    <text x="378" y="526" font-size="10.5" fill="#33413b">（能力来自 Step 0 之后的稳定渲染）</text>
+
+    <!-- 工程底座 -->
+    <rect x="364" y="556" width="292" height="216" rx="8" fill="#e6f7f5" stroke="#087f78"/>
+    <text x="378" y="582" font-size="12.5" font-weight="800" fill="#07564f">工程底座（先做的 Step 0）</text>
+    <text x="378" y="606" font-size="10.8" fill="#17201c">· broadcast/*.js 改为真 ESM，main.js</text>
+    <text x="388" y="622" font-size="10.8" fill="#17201c">  只做 import 入口 → 删除拼接副本</text>
+    <text x="378" y="644" font-size="10.8" fill="#17201c">· 持久铬只建一次，仅列表区随交互重渲</text>
+    <text x="378" y="666" font-size="10.8" fill="#17201c">· 不引框架 / 不增筛选维度</text>
+    <text x="378" y="690" font-size="10.8" fill="#17201c">· 改源码→构建→生效 成唯一路径</text>
+    <text x="378" y="714" font-size="10.8" font-weight="700" fill="#07564f">→ 后续功能不再 carving 补丁函数</text>
+    <text x="378" y="738" font-size="10.8" fill="#07564f">→ 不会"悄悄不更新"</text>
+  </g>
+
+  <text x="340" y="800" text-anchor="middle" font-size="10" fill="#8fa19a">详见 docs/17_首页全局分析与最优重构方案_2026-08-27.md</text>
+</svg>

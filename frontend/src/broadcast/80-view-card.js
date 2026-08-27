@@ -133,6 +133,7 @@ function makeCard(site) {
   visitLink.rel = "noopener";
   visitLink.className = "btn-visit";
   visitLink.textContent = "访问站点 →";
+  if (site.dead) visitLink.title = "该站已被报死链";
 
   const detailBtn = document.createElement("button");
   detailBtn.type = "button";
@@ -215,7 +216,7 @@ function openDrawer(site) {
   const dl = document.createElement("dl");
   dl.className = "detail-list";
   infoItems.forEach(([label, value]) => {
-    if (!value || value === "—") return;
+    if (value === null || value === undefined || value === "—") return;
     const dt = document.createElement("dt");
     dt.textContent = label;
     const dd = document.createElement("dd");

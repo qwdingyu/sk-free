@@ -86,7 +86,7 @@ th:last-child{position:sticky;right:0;background:var(--th-bg);border-left:1px so
 .tab-panel{display:none;animation:fadeIn var(--transition-base) ease}
 .tab-panel.active{display:block}
 td.url-cell{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+td.url-cell .orig-url,.name .orig-url{display:block;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;justify-content:center;align-items:center;padding:var(--space-4)}
 .modal-overlay.active{display:flex}
 .modal{background:var(--surface);border-radius:var(--radius);padding:var(--space-5);width:min(560px,92vw);max-height:85vh;overflow-y:auto;box-shadow:var(--shadow-md);position:relative}

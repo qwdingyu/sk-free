@@ -17,6 +17,8 @@ function toast(msg, type = "info") {
   const el = document.createElement("div");
   el.className = `app-toast toast-${type}`;
   el.textContent = msg;
+  el.setAttribute("role", "status");
+  el.setAttribute("aria-live", "polite");
   document.body.appendChild(el);
 
   requestAnimationFrame(() => {
@@ -66,7 +68,7 @@ async function quickFeedback(siteName, type) {
     if (data.ok) {
       personalFeedbacks[key] = true;
       savePersonalFeedbacks(personalFeedbacks);
-      toast(type === "still_works" ? "👍 感谢确认！" : "👎 已记录失效", "success");
+      toast(type === "still_works" ? "👍 感谢确认！" : "👎 感谢已记录！", "success");
     } else {
       toast(data.error || "反馈失败", "error");
     }
