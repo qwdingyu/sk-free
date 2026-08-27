@@ -18,7 +18,7 @@
  *
  * 没装 jsdom 时会跳过并返回 0，不阻塞部署。
  */
-import { readFileSync } from "fs";
+import { readFileSync, readdirSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
@@ -73,9 +73,16 @@ const SITES = [
 ];
 
 async function boot(sites) {
-  const html = readFileSync(join(ROOT, "broadcast", "index.html"), "utf-8")
-    .replace(/<script src="\.\/app\.js" defer><\/script>/, "");
-  const appJs = readFileSync(join(ROOT, "broadcast", "app.js"), "utf-8");
+  const html = readFileSync(join(ROOT, "frontend", "index.html"), "utf-8")
+    .replace(/<script[^>]*src="[^"]*main\.js"[^>]*><\/script>/, "");
+  
+  // 拼接所有 broadcast 模块（按文件名排序），模拟旧的 build-html.js 产物
+  const broadcastDir = join(ROOT, "frontend", "src", "broadcast");
+  const modules = readdirSync(broadcastDir)
+    .filter((f) => f.endsWith(".js"))
+    .sort()
+    .map((f) => readFileSync(join(broadcastDir, f), "utf-8"))
+    .join("\n");
 
   const dom = new JSDOM(html, { runScripts: "outside-only", url: "https://free.eforge.xyz/", pretendToBeVisual: true });
   const { window } = dom;
@@ -95,8 +102,12 @@ async function boot(sites) {
     return { ok: true, json: async () => ({ ok: true, notice: null }) };
   };
   window.requestAnimationFrame = (cb) => setTimeout(cb, 0);
-  window.eval(appJs);
-  await new Promise((r) => setTimeout(r, 300));
+  window.eval(modules);
+  // 启动应用（init 是 async 的，需要等待数据加载完成）
+  if (typeof window.init === "function") {
+    await window.init();
+  }
+  await new Promise((r) => setTimeout(r, 100));
   return { window, doc: window.document, liveKeydown };
 }
 

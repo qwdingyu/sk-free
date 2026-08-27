@@ -33,7 +33,7 @@ BUILD_ID="${1:-}"
 URL="${2:-https://free.eforge.xyz/}"
 
 if [ -z "$BUILD_ID" ]; then
-  echo "🚫 verify-deploy.sh: 缺少 BUILD_ID 参数 (从 build-html.js 输出捕获内容哈希)"
+  echo "🚫 verify-deploy.sh: 缺少 BUILD_ID 参数 (从 sync-frontend-assets.mjs 输出捕获内容哈希)"
   exit 1
 fi
 
@@ -72,17 +72,34 @@ assert_html() {
 }
 
 assert_html "线上内容哈希与本地构建一致" "build:${BUILD_ID}"
-# 下面这些断言只挑 CSS 专有形态：`.drawer-overlay` 裸写会被内联 JS 里的
-# querySelector(".drawer-overlay") 满足，等于没查。
-assert_html "抽屉遮罩样式 (.drawer-overlay.open)" ".drawer-overlay.open"
-assert_html "抽屉基础定位 (position: fixed)" ".drawer-overlay {"
-assert_html "抽屉关闭按钮样式 (.drawer-close)" ".drawer-close {"
-assert_html "抽屉标题样式 (.drawer-title)" ".drawer-title {"
-assert_html "hero 标题行 (hero-title-row)" "hero-title-row"
-assert_html "统计条存在 (summary-strip)" "summary-strip"
-assert_html "反馈弹窗存在 (feedbackModal)" "feedbackModal"
-# 死链分组的展开入口（曾因 matchesFilters 过滤死链而整套不可达）
-assert_html "死链分组样式 (.dead-group)" ".dead-group {"
+assert_html "广播页面标题 (sk-free 公益站导航)" "sk-free 公益站导航"
+assert_html "广播页面主入口 (page-shell)" 'id="main-content"'
+assert_html "Vite 入口脚本 (main.js)" 'src="/_app/main.js"'
+
+# ── 管理后台页面（/admin）───────────────────────────────────────────────────────
+# 管理 HTML 与广播页是两个入口文件，必须分开拉取、分开断言。
+ADMIN_HTML=""
+for attempt in 1 2 3; do
+  ADMIN_HTML=$(curl -s --max-time 20 -H "Cache-Control: no-cache" "${URL}admin" || true)
+  if [ -n "$ADMIN_HTML" ]; then break; fi
+  [ "$attempt" -lt 3 ] && sleep 3
+done
+
+assert_admin() {
+  local name="$1"
+  local pattern="$2"
+  if echo "$ADMIN_HTML" | grep -qF "$pattern"; then
+    echo "  [OK] ${name}"
+  else
+    echo "  [FAIL] ${name} —— /admin 未找到 '${pattern}'"
+    fail=1
+  fi
+}
+
+assert_admin "管理后台登录框 (loginView)" 'id="loginView"'
+assert_admin "管理后台主视图 (mainView)" 'id="mainView"'
+assert_admin "站点表格 (sitesBody)" 'id="sitesBody"'
+assert_admin "Vite 管理脚本 (admin.js)" 'src="/_app/admin.js"'
 
 if echo "$API" | grep -q '"ok":true'; then
   echo "  [OK] /api/sites 正常返回"

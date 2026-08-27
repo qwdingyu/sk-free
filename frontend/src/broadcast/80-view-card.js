@@ -75,8 +75,12 @@ function makeCard(site) {
   `;
 
   // ── 额度（唯一的大号数字）─────────────────────────────────────────────────
+  // tier 类挂在容器上：与表格 .cell-quota 同构，档位配色由 styles.css 统一管
   const quota = document.createElement("div");
-  quota.className = "card-quota";
+  quota.className = "card-quota"
+    + (site.quotaTier === "high" ? " tier-high"
+      : site.quotaTier === "mid" ? " tier-mid"
+      : site.quotaTier === "low" ? " tier-low" : "");
   const tierLabel = { high: "⭐高额度", mid: "中额度", low: "低额度", none: "" };
   quota.innerHTML = `
     <span class="quota-main">${esc(quotaText(site))}</span>

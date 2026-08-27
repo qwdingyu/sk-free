@@ -6,17 +6,17 @@
   --ink: #17201c;
   --muted: #5e6a64;
   --strong: #33413b;
-  --fact-label: #748079;
+  --fact-label: #64706a; /* 原 #748079 白底仅 4.11；#64706a 白 5.16 / soft 底 4.64，均过 AA */
   --line: #dbe3dc;
   --teal: #087f78;
   --teal-soft: #dff5f1;
   --teal-ink: #07564f;
-  --lime: #779b28;
-  --lime-soft: #edf7d7;
   --coral: #c85445;
   --coral-soft: #ffe8e3;
+  --danger-ink: #a83a2e;
   --amber: #a66d16;
   --amber-soft: #fff1d5;
+  --amber-ink: #835a10; /* --amber 作小字仅 3.90；#835a10 白卡 6.11 / soft 底 5.47 */
   --graphite: #1b2428;
   --body-wash: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(247, 248, 244, 0.94));
   --shadow: 0 18px 45px rgba(23, 32, 28, 0.1);
@@ -61,12 +61,12 @@
   --teal: #6ee7d8;
   --teal-soft: #123f3b;
   --teal-ink: #9bf1e7;
-  --lime: #b8df5a;
-  --lime-soft: #243716;
   --coral: #ff8d7d;
   --coral-soft: #3a2422;
+  --danger-ink: #ff8d7d;
   --amber: #f0bb67;
   --amber-soft: #3a2d18;
+  --amber-ink: #f0bb67; /* 暗色下 amber 本身对比已达标 9.43 */
   --graphite: #0e1718;
   --body-wash: linear-gradient(180deg, rgba(12, 18, 18, 0.98), rgba(16, 21, 20, 0.96));
   --shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
@@ -297,7 +297,7 @@ h1 {
 .submit-field textarea:focus {
   outline: none;
   border-color: var(--teal);
-  box-shadow: 0 0 0 2px rgba(8, 127, 120, 0.15);
+  box-shadow: 0 0 0 3px var(--teal-soft);
 }
 
 .submit-field textarea {
@@ -460,7 +460,7 @@ h1 {
 .feedback-field textarea:focus {
   outline: none;
   border-color: var(--teal);
-  box-shadow: 0 0 0 2px rgba(8, 127, 120, 0.15);
+  box-shadow: 0 0 0 3px var(--teal-soft);
 }
 
 .feedback-hint {
@@ -509,53 +509,6 @@ h1 {
 .feedback-btn-confirm:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-/* 反馈成功提示 */
-.feedback-toast {
-  position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%) translateY(20px);
-  padding: 12px 24px;
-  border-radius: 8px;
-  background: var(--teal);
-  color: #fff;
-  font-size: 0.9rem;
-  font-weight: 700;
-  box-shadow: 0 8px 24px rgba(8, 127, 120, 0.35);
-  z-index: 200;
-  opacity: 0;
-  transition: all 0.35s ease;
-  pointer-events: none;
-}
-
-.feedback-toast.show {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-}
-
-/* 卡片反馈按钮 */
-.feedback-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--surface-soft);
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  margin-left: auto;
-}
-
-.feedback-trigger:hover {
-  border-color: var(--teal);
-  color: var(--teal);
-  background: var(--teal-soft);
 }
 
 .theme-switcher {
@@ -621,7 +574,9 @@ h1 {
 
   .theme-switcher .theme-button.is-active {
     background: transparent;
-    color: var(--theme-button-text);
+    /* 常态用品牌色描边：透明底也能一眼看出"当前是哪个主题"，
+       而不是三颗图标同权重分不出谁在生效 */
+    color: var(--teal);
   }
 
   .theme-switcher:hover,
@@ -662,31 +617,6 @@ h1 {
   margin-top: 18px;
 }
 
-.search-field {
-  display: grid;
-  gap: 7px;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface);
-}
-
-.search-field span {
-  color: var(--muted);
-  font-size: 0.8rem;
-  font-weight: 700;
-}
-
-.search-field input {
-  width: 100%;
-  min-width: 0;
-  border: 0;
-  outline: 0;
-  color: var(--ink);
-  background: transparent;
-  font-size: 1rem;
-}
-
 .summary-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -707,6 +637,7 @@ h1 {
 .summary-item strong {
   font-size: 1.3rem;
   line-height: 1;
+  font-variant-numeric: tabular-nums; /* 数字刷新时宽度不跳 */
 }
 
 .summary-item span {
@@ -719,28 +650,6 @@ h1 {
   flex-wrap: wrap;
   gap: 6px;
   margin: 10px 0 12px;
-}
-
-.filter-button {
-  min-height: 36px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 7px 11px;
-  background: var(--surface);
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.filter-button:hover {
-  border-color: rgba(8, 127, 120, 0.42);
-  color: var(--teal);
-}
-
-.filter-button.is-active {
-  border-color: var(--teal);
-  background: var(--teal-soft);
-  color: var(--teal-ink);
-  font-weight: 700;
 }
 
 .notice-band {
@@ -801,103 +710,11 @@ h1 {
   box-shadow: var(--card-shadow-hover);
 }
 
-.card-head {
-  display: flex;
-  align-items: start;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.card-head h2 {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  font-size: 1.1rem;
-  line-height: 1.25;
-}
-
-.summary {
-  margin: 0;
-}
-
-.summary {
-  color: var(--strong);
-  line-height: 1.55;
-}
-
-.quick-facts {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 4px;
-  margin: 0;
-}
-
-.quick-facts div {
-  display: grid;
-  grid-template-columns: 60px 1fr;
-  gap: 6px;
-  color: var(--muted);
-  font-size: 0.82rem;
-  line-height: 1.3;
-}
-
-.quick-facts dt {
-  margin: 0;
-  color: var(--fact-label);
-  font-weight: 700;
-}
-
-.quick-facts dd {
-  margin: 0;
-  color: var(--strong);
-}
-
-/* ═══════ 签到额度徽章 ═══════ */
-
-.checkin-badge {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 6px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 0.72rem;
-  font-weight: 800;
-  line-height: 1.3;
-  vertical-align: middle;
-}
-
-.checkin-high {
-  background: var(--teal-soft);
-  color: var(--teal-ink);
-}
-
-.checkin-mid {
-  background: var(--amber-soft);
-  color: var(--amber);
-}
-
-.checkin-low {
-  background: var(--surface-soft);
-  color: var(--muted);
-}
+/* ═══════ 签到额度徽章（已废弃，前端改用 tier-badge 档位徽章）═══════ */
 
 /* ═══════ 鲜度指示器 ═══════ */
 /* 这个站的核心价值是"今天还能不能用"，所以鲜度必须在卡片正面可见。
    未验证就明说未验证，不用留白假装新鲜。 */
-
-.freshness {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 0.68rem;
-  font-weight: 600;
-  line-height: 1.3;
-  white-space: nowrap;
-  background: var(--surface-soft);
-  color: var(--muted);
-}
 
 /* ═══════ 实体类型徽章 ═══════ */
 /* 18 条数据里混了 API 中转站 / TG 机器人 / 号池 / 域名工具四种实体，
@@ -920,19 +737,6 @@ h1 {
 /* 死链显示而不是隐藏：隐藏会让用户觉得"只收录了 15 个站"，
    显示"3 个已失效"传达的是"这个站在认真维护"。 */
 
-.dead-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  line-height: 1.3;
-  white-space: nowrap;
-  background: var(--coral-soft);
-  color: var(--coral);
-}
-
 .card-dead {
   filter: saturate(0.45);
   opacity: 0.72;
@@ -944,45 +748,7 @@ h1 {
   opacity: 1;
 }
 
-/* ═══════ 卡片视觉分级 ═══════ */
-
-.card-graded {
-  position: relative;
-}
-
-.card-graded::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  border-radius: 8px 8px 0 0;
-  background: var(--line);
-}
-
-.card-tier-high::before {
-  background: linear-gradient(90deg, var(--teal), var(--teal-ink));
-}
-
-.card-tier-mid::before {
-  background: linear-gradient(90deg, var(--amber), var(--amber-soft));
-}
-
-.tag-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  min-height: 30px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.tag-list-top {
-  justify-content: flex-end;
-  min-width: 0;
-}
+/* ═══════ 标签 ═══════ */
 
 .tag {
   display: inline-flex;
@@ -996,34 +762,12 @@ h1 {
   font-weight: 700;
 }
 
-.tag.checkin,
 .tag.image {
   background: var(--tag-accent-bg);
   color: var(--tag-accent-text);
 }
 
-.notes {
-  display: grid;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 0.84rem;
-  line-height: 1.45;
-}
-
-.notes p {
-  margin: 0;
-}
-
 /* ═══════ 投票按钮组 ═══════ */
-
-.card-foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: auto;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
-}
 
 .vote-bar {
   display: flex;
@@ -1106,7 +850,7 @@ h1 {
 }
 
 .sort-label {
-  color: var(--muted);
+  color: var(--fact-label);
   font-size: 0.78rem;
   font-weight: 700;
   white-space: nowrap;
@@ -1116,15 +860,21 @@ h1 {
   padding: 6px 24px 6px 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: var(--surface);
+  background-color: var(--surface); /* 只设 color，不用简写——简写会抹掉下方箭头图 */
   color: var(--ink);
   font-size: 0.84rem;
   cursor: pointer;
   appearance: none;
+  /* 箭头颜色无法用 CSS 变量（在 data URI 内），按主题分别给：
+     浅色用 muted #5e6a64，深色块见 :root[data-theme=dark] 覆写 */
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%235e6a64' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 6px center;
   background-size: 14px;
+}
+
+:root[data-theme="dark"] .sort-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%239caea7' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
 .sort-select:focus {
@@ -1132,73 +882,22 @@ h1 {
   outline-offset: 1px;
 }
 
-.visit-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1;
-  min-width: 0;
-  min-height: 30px;
-  border-radius: 5px;
-  padding: 6px 10px;
-  background: var(--visit-bg);
-  color: var(--visit-text);
-  font-weight: 700;
-  font-size: 0.85rem;
-  text-decoration: none;
-  box-shadow: 0 4px 10px rgba(23, 32, 28, 0.1);
-  transition:
-    background-color 0.18s ease,
-    box-shadow 0.18s ease,
-    transform 0.18s ease;
-}
-
-.visit-link:hover,
-.visit-link:focus-visible {
-  background: var(--visit-hover);
-  box-shadow: var(--visit-hover-shadow);
-  transform: translateY(-2px);
-  outline: none;
-}
-
-.visit-icon {
-  width: 14px;
-  height: 14px;
-  flex: 0 0 auto;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  transition: transform 0.18s ease;
-}
-
-.visit-link:hover .visit-icon,
-.visit-link:focus-visible .visit-icon {
-  transform: translateX(4px);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .site-card,
-  .visit-link,
-  .visit-icon,
   .theme-button,
   .vote-btn {
     transition: none;
   }
 
-  .vote-flash {
+  .vote-flash,
+  .skeleton-cell {
     animation: none;
   }
 
   .site-card:hover,
   .site-card:focus-within,
-  .visit-link:hover,
-  .visit-link:focus-visible,
   .theme-button:hover,
-  .theme-button:focus-visible,
-  .visit-link:hover .visit-icon,
-  .visit-link:focus-visible .visit-icon {
+  .theme-button:focus-visible {
     transform: none;
   }
 }
@@ -1300,11 +999,6 @@ h1 {
     margin: 12px 0 14px;
   }
 
-  .filter-button {
-    min-height: 32px;
-    padding: 6px 9px;
-  }
-
   .card-grid {
     grid-template-columns: 1fr;
   }
@@ -1378,6 +1072,8 @@ h1 {
   letter-spacing: 0.04em;
   color: var(--fact-label);
   z-index: 2;
+  /* 贴顶时与下方滚动行拉开层次；border-bottom 之外补一道极淡投影 */
+  box-shadow: 0 1px 0 var(--line), 0 3px 6px rgba(23, 32, 28, 0.05);
 }
 
 .site-table tbody tr:hover {
@@ -1565,19 +1261,32 @@ h1 {
   line-height: 1.5;
 }
 
+/* 档位语义统一：高=青(品牌主"推荐"色) / 中=琥珀 / 低=中性灰。
+   旧版 high=amber、mid=teal 与排序/筛选的用户心智（额度档位从高到低递减）
+   相反，且高亮了中档而非重点行。徽章文字色用 *-ink 令牌保证 AA。 */
 .tier-high .tier-badge {
-  background: var(--amber-soft);
-  color: var(--amber);
+  background: var(--teal-soft);
+  color: var(--teal-ink);
 }
 
 .tier-mid .tier-badge {
-  background: var(--teal-soft);
-  color: var(--teal);
+  background: var(--amber-soft);
+  color: var(--amber-ink);
 }
 
 .tier-low .tier-badge {
   background: var(--surface-soft);
   color: var(--muted);
+}
+
+/* 额度数字跟随档位取色：扫视时青色数字 = 可优先尝试的站。
+   low 保持 --ink 默认，避免三色齐飞反而没有焦点 */
+.tier-high .quota-main {
+  color: var(--teal-ink);
+}
+
+.tier-mid .quota-main {
+  color: var(--amber-ink);
 }
 
 /* ── 门槛标签 ───────────────────────────────────────────────────────────────── */
@@ -1719,6 +1428,10 @@ h1 {
   background: var(--surface);
 }
 
+.filter-panel[hidden] {
+  display: none !important;
+}
+
 .filter-group {
   display: flex;
   align-items: center;
@@ -1789,19 +1502,10 @@ h1 {
   gap: 4px;
 }
 
-.sort-label {
-  color: var(--fact-label);
-}
-
-.sort-select {
-  padding: 3px 8px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--ink);
-  font-size: 0.82rem;
-  cursor: pointer;
-}
+/* .sort-select 的完整定义在上方 Phase A 段（含 appearance:none 与主题化箭头）。
+   此处曾有一条同名重复规则，其 background 简写按级联覆盖了箭头 background-image，
+   同时 appearance:none 生效 → 原生和自定义箭头都没了，下拉框看不出可点。
+   已删除，避免再次误改两处。 */
 
 .view-wrap {
   display: inline-flex;
@@ -1880,7 +1584,7 @@ h1 {
   flex-shrink: 0;
 }
 
-.card-fresh .fresh-dot { width: 7px; height: 7px; }
+.card-fresh .fresh-dot { width: 8px; height: 8px; } /* 与表格视图统一 8px */
 .card-fresh .fresh-label { font-size: 0.75rem; }
 
 .card-quota {
@@ -1893,7 +1597,7 @@ h1 {
 .card-quota .quota-main {
   font-size: 1.15rem;
   font-weight: 700;
-  color: var(--teal);
+  /* 颜色不在此定：跟随上方 tier-* 规则取档位色（high=teal-ink / mid=amber-ink / 其他=ink） */
 }
 
 .card-quota .tier-badge {
@@ -2157,29 +1861,6 @@ h1 {
   100% { background-position: -200% 0; }
 }
 
-/* ═══════ 旧版提交成功提示 ═══════ */
-
-.submit-toast {
-  position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 12px 24px;
-  border-radius: 8px;
-  background: var(--teal);
-  color: #fff;
-  font-size: 0.9rem;
-  font-weight: 600;
-  box-shadow: 0 8px 24px rgba(8, 127, 120, 0.35);
-  z-index: 1000;
-  animation: toast-in 0.3s ease;
-}
-
-@keyframes toast-in {
-  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0); }
-}
-
 /* ═══════ 详情抽屉（基础样式）═══════
  *
  * 这一段此前完全缺失：JS 里 createElement 出了 .drawer-overlay / .drawer /
@@ -2285,7 +1966,10 @@ h1 {
 }
 
 .vote-score-inline.positive { color: var(--teal-ink, var(--teal)); }
-.vote-score-inline.negative { color: #b4232a; }
+/* 负票数专用墨色（--coral 主体是给徽章底色用的，直接当文字不够深：
+   浅色 #c85445 在白卡面实测仅 4.37 < AA 4.5）。
+   --danger-ink：浅 #a83a2e/白卡 6.35、soft 底 5.41；暗=coral #ff8d7d/卡面 7.35 */
+.vote-score-inline.negative { color: var(--danger-ink); }
 
 /* 死链分组：整组降饱和，明确"看得见但不该优先考虑" */
 .dead-group {
@@ -2334,6 +2018,12 @@ h1 {
     flex-shrink: 0;
     font-size: 0.78rem;
     padding: 5px 10px;
+    min-height: 36px; /* 触控目标：原约 27px，低于 44px 建议；36px 兼顾密集布局 */
+  }
+
+  .filter-chip {
+    min-height: 36px;
+    padding: 5px 12px;
   }
 
   /* 结果条紧凑 */

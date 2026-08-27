@@ -6,6 +6,14 @@ name = "sk-free-vote"
 main = "index.js"
 compatibility_date = "2026-08-24"
 
+# 静态资源配置（Vite 构建产物在 public/_app/）
+[assets]
+directory = "./public"
+binding = "ASSETS"
+html_handling = "none"
+not_found_handling = "none"
+run_worker_first = true
+
 # KV 命名空间绑定（schema.json 保留在 KV）
 [[kv_namespaces]]
 binding = "SKFREE_KV"

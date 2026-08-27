@@ -13,7 +13,7 @@
  *
  * 做法：
  *   1. 从 worker/src/sites.js 的 formatSiteRow() 提取产出字段
- *   2. 扫描 broadcast/src/*.js 里对站点对象的属性读取
+ *   2. 扫描 frontend/src/broadcast/*.js 里对站点对象的属性读取
  *   3. 读了后端不产出的字段 → 报错退出
  *
  * 配套：deploy.sh 在部署前调用
@@ -53,7 +53,7 @@ if (produced.size < 10) {
 // ── 2. 扫描前端读取的字段 ─────────────────────────────────────────────────────
 // 只认变量名明确指向站点对象的场景，避免把别的对象误判进来
 const SITE_VARS = ["site", "s", "a", "b", "row"];
-const SRC_DIR = join(ROOT, "broadcast", "src");
+const SRC_DIR = join(ROOT, "frontend", "src", "broadcast");
 const srcFiles = readdirSync(SRC_DIR).filter((f) => f.endsWith(".js")).sort();
 
 // 白名单：确实不是站点字段，或前端本地计算/DOM 属性
@@ -111,11 +111,11 @@ const typeErrors = [];
     typeErrors.push("没能从 worker/src/feedbacks.js 解析出 VALID_TYPES —— 检查器失效比没有检查更危险，请修检查器");
   }
 
-  const indexHtml = readFileSync(join(ROOT, "broadcast", "index.html"), "utf-8");
+  const indexHtml = readFileSync(join(ROOT, "frontend", "index.html"), "utf-8");
   const frontendTypes = new Set(
     [...indexHtml.matchAll(/data-fb-type="([^"]+)"/g)].map((m) => m[1])
   );
-  const formsJs = readFileSync(join(ROOT, "broadcast", "src", "90-forms.js"), "utf-8");
+  const formsJs = readFileSync(join(ROOT, "frontend", "src", "broadcast", "90-forms.js"), "utf-8");
   // sendQuickFeedback(name, "still_works") 这类写死的一键反馈类型
   for (const m of formsJs.matchAll(/["'](still_works|reported_dead)["']/g)) {
     frontendTypes.add(m[1]);
@@ -139,7 +139,7 @@ const typeErrors = [];
 console.log(`📋 后端 formatSiteRow 产出 ${produced.size} 个字段`);
 
 if (violations.length === 0 && typeErrors.length === 0) {
-  console.log(`✅ check-api-contract: broadcast/src/*.js 读取的字段全部由后端产出`);
+  console.log(`✅ check-api-contract: frontend/src/broadcast/*.js 读取的字段全部由后端产出`);
   process.exit(0);
 }
 

@@ -5,12 +5,8 @@
 # 使用方式：bash scripts/deploy.sh
 # 替代直接运行：npx wrangler deploy
 #
-# 预检查任何一步失败都会阻止部署（set -e）。共 9 步：6 步预检查 + 提醒 + 部署 + 部署后验证。
+# 预检查任何一步失败都会阻止部署（set -e）。共 8 步：6 步预检查 + 部署 + 部署后验证。
 # 检查顺序按"越便宜越靠前"排列，快速失败。
-#
-# pipefail 是必需的：第 4 步用 `node build-html.js | tee` 同时保留输出和取
-# BUILD_ID，没有 pipefail 时管道的退出码是 tee 的（永远 0），构建失败会被
-# 一路带到 wrangler deploy —— 正好是这个脚本要防的事。
 # ═══════════════════════════════════════════════════════════════════════════════
 
 set -e
@@ -24,10 +20,10 @@ echo ""
 
 # ── 1. 语法检查（最便宜，先跑）─────────────────────────────────────────────────
 echo "1️⃣  语法检查..."
-for f in "$PROJECT_DIR"/worker/index.js "$PROJECT_DIR"/worker/src/*.js "$PROJECT_DIR"/broadcast/src/*.js; do
+for f in "$PROJECT_DIR"/worker/index.js "$PROJECT_DIR"/worker/src/*.js; do
   node --check "$f" || { echo "🚫 语法错误：$f"; exit 1; }
 done
-echo "✅ 所有 JS 文件语法通过"
+echo "✅ Worker JS 语法通过"
 echo ""
 
 # ── 2. 前后端字段契约检查 ──────────────────────────────────────────────────────
@@ -37,6 +33,13 @@ echo "2️⃣  前后端字段契约检查..."
 node "$SCRIPT_DIR/check-api-contract.js"
 echo ""
 
+# ── 2.5 管理后台 HTML ↔ JS 一致性检查 ────────────────────────────────────────
+# 拦截"id 被引用但 HTML 没有""onclick 调用未定义/未桥接的函数"——
+# 这类错配构建全绿、上线后按钮才炸（真实发生过：登录按钮失效）。
+echo "2️⃣5️⃣  管理后台 HTML ↔ JS 一致性检查..."
+node "$SCRIPT_DIR/check-admin-html.mjs"
+echo ""
+
 # ── 3. CSS 覆盖检查 ────────────────────────────────────────────────────────────
 # JS createElement 出的 class 如果没有对应 CSS 规则，元素会以无定位的
 # 普通块渲染（抽屉就这样飘到了页脚下方），JS 和 CSS 都不会报错。
@@ -44,19 +47,13 @@ echo "3️⃣  CSS 覆盖检查..."
 node "$SCRIPT_DIR/check-css-coverage.js"
 echo ""
 
-# ── 4. 从 broadcast/ 源文件构建产物（消灭手工双副本）──────────────────────────
-# 捕获 BUILD_ID（build-html.js 输出的内容哈希），供第 8 步部署后验证使用。
-# 用 tee 而不是纯命令替换：build-html.js 会打印转义往返验证、内联脚本语法
-# 检查的结果，这些是部署前最关键的几行，不能因为要取一个变量就把它们吞掉。
-echo "4️⃣  构建 broadcast-html.js + 开发 bundle..."
-BUILD_LOG=$(mktemp)
-node "$SCRIPT_DIR/build-html.js" | tee "$BUILD_LOG"
-BUILD_ID=$(sed -n 's/.*BUILD_ID=\([^ ]*\).*/\1/p' "$BUILD_LOG")
-rm -f "$BUILD_LOG"
-if [ -z "$BUILD_ID" ]; then
-  echo "🚫 未能从构建输出捕获 BUILD_ID，中止部署"
-  exit 1
-fi
+# ── 4. 构建前端（Vite）──────────────────────────────────────────────────────────
+# 前端代码已迁移到 frontend/，用 Vite 构建到 frontend/dist/，然后同步到 public/_app/
+echo "4️⃣  构建前端..."
+cd "$PROJECT_DIR/frontend"
+npm run build
+cd "$PROJECT_DIR"
+node "$SCRIPT_DIR/sync-frontend-assets.mjs"
 echo ""
 
 # ── 5. 前端行为回归测试（需要 jsdom，没装则自动跳过）──────────────────────────
@@ -66,10 +63,14 @@ echo "5️⃣  前端行为回归测试..."
 node "$SCRIPT_DIR/test-frontend.mjs"
 echo ""
 
-# ── 6. 模板字面量转义安全检查（两个内联 HTML 的文件都要查）─────────────────────
-echo "6️⃣  模板字面量转义检查..."
-node "$SCRIPT_DIR/check-template-escapes.js" "$PROJECT_DIR/worker/index.js"
-node "$SCRIPT_DIR/check-template-escapes.js" "$PROJECT_DIR/worker/broadcast-html.js"
+# ── 6. 前端构建验证 ─────────────────────────────────────────────────────────────
+# Vite 构建已经保证了代码正确性，这里只做简单的产物存在性检查
+echo "6️⃣  前端构建验证..."
+if [ ! -f "$PROJECT_DIR/worker/public/_app/index.html" ]; then
+  echo "🚫 前端产物缺失：worker/public/_app/index.html 不存在"
+  exit 1
+fi
+echo "✅ 前端产物就绪"
 echo ""
 
 # ── 7. 后端改动提醒（不做静默跳过）─────────────────────────────────────────────
@@ -113,8 +114,14 @@ echo "✅ 部署完成"
 echo ""
 
 # ── 10. 部署后自动验证 ─────────────────────────────────────────────────────────
-# 不能只靠"部署命令成功"——上一次就是部署成功但线上跑的是旧 bundle（抽屉
-# 样式缺失、无定位 div），链路本身不报错。必须用构建标识对线上做断言。
-# 验证失败以非零退出，提醒人工检查（wrangler rollback 可回滚）。
-echo "8️⃣  部署后自动验证..."
-bash "$SCRIPT_DIR/verify-deploy.sh" "$BUILD_ID"
+# 使用前端产物的内容哈希验证线上版本
+echo "🔍 部署后自动验证..."
+SYNC_OUTPUT=$(node "$SCRIPT_DIR/sync-frontend-assets.mjs" 2>&1)
+echo "$SYNC_OUTPUT"
+BUILD_HASH=$(echo "$SYNC_OUTPUT" | grep -oE 'build:[a-f0-9]+' | head -1 | sed 's/build://')
+if [ -z "$BUILD_HASH" ]; then
+  echo "🚫 未能从 sync-frontend-assets.mjs 捕获 BUILD_HASH"
+  exit 1
+fi
+echo "📋 构建标识: build:${BUILD_HASH}"
+bash "$SCRIPT_DIR/verify-deploy.sh" "$BUILD_HASH"

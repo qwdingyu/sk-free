@@ -11,8 +11,8 @@
  *   才看得出来 —— 而肉眼恰好最容易漏掉这种"下方才出现"的元素。
  *
  * 做法：
- *   扫 broadcast/src/*.js 里出现的 class 名（className 赋值、classList 操作、
- *   模板里的 class="..."），逐个在 broadcast/styles.css 里找 .foo 选择器。
+ *   扫 frontend/src/broadcast/*.js 里出现的 class 名（className 赋值、classList 操作、
+ *   模板里的 class="..."），逐个在 frontend/src/styles.css 里找 .foo 选择器。
  *
  * 局限：
  *   纯文本匹配，不解析 CSS。只能回答"有没有写过这个选择器"，
@@ -23,8 +23,8 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const SRC_DIR = join(ROOT, "broadcast", "src");
-const css = readFileSync(join(ROOT, "broadcast", "styles.css"), "utf-8");
+const SRC_DIR = join(ROOT, "frontend", "src", "broadcast");
+const css = readFileSync(join(ROOT, "frontend", "src", "styles.css"), "utf-8");
 
 // 故意不写样式的 class：语义钩子、测试选择器、或由更具体的组合选择器覆盖
 const ALLOW = new Set([
