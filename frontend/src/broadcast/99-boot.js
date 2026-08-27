@@ -96,12 +96,71 @@ function renderFreshnessBar() {
 }
 
 /**
+ * 今日可信速览：基于鲜度 + 额度的前 3 个站点，放在筛选栏之前，
+ * 让首屏立刻建立"今天还能信哪个、哪个额度最大"的信任与方向感。
+ * 不新增字段/接口，纯前端计算。
+ */
+function renderTrustedStrip() {
+  const strip = document.getElementById("trustedStrip");
+  if (!strip) return;
+
+  const now = Date.now();
+  const candidates = state.sites
+    .filter((s) => !s.dead && s.enabled === 1 && s.verifiedAt)
+    .map((s) => {
+      const ts = parseUtc(s.verifiedAt);
+      if (isNaN(ts)) return null;
+      const ageHours = (now - ts) / (1000 * 60 * 60);
+      // 鲜度分：0h=100，100h+=0；额度分：直接用数值（不同单位无法精确换算，
+      // 但同一站点列表内仍有可比性，且鲜度权重更高）
+      const freshnessScore = Math.max(0, 100 - ageHours);
+      const q = s.quotaMax != null ? s.quotaMax : (s.quotaCallsEst != null ? s.quotaCallsEst : 0);
+      const quotaScore = typeof q === "number" ? q : 0;
+      return { s, score: freshnessScore * 2 + quotaScore };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
+
+  if (candidates.length === 0) {
+    strip.innerHTML = '<div class="trusted-empty">今日暂无已验证的高额度站点</div>';
+    return;
+  }
+
+  strip.innerHTML = `
+    <div class="trusted-header">
+      <h2>今日可信速览</h2>
+      <span class="trusted-sub">基于鲜度 + 额度综合排序</span>
+    </div>
+    <div class="trusted-cards">
+      ${candidates.map(({ s }) => {
+        const ts = parseUtc(s.verifiedAt);
+        const diff = now - ts;
+        let freshCls = "is-stale";
+        let freshLabel = "已验证";
+        if (diff <= FRESH_24H) { freshCls = "is-fresh"; freshLabel = "24h 内验证"; }
+        else if (diff <= FRESH_7D) { freshCls = "is-ok"; freshLabel = "7 天内验证"; }
+        return `
+          <a href="${esc(s.url)}" target="_blank" rel="noopener" class="trusted-card">
+            <div class="trusted-name" title="${esc(s.name)}">${esc(s.name)}</div>
+            <div class="trusted-meta">
+              <span class="trusted-freshness ${freshCls}">${freshLabel}</span>
+              <span class="trusted-quota">${esc(quotaText(s))}</span>
+            </div>
+          </a>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+/**
  * 渲染三层筛选器
  * 第一层：快捷视图 chips
  * 第二层：搜索 + 精确条件（默认折叠）
  * 第三层：结果条 + 视图切换 + 排序
  */
-function renderFilters() {
+function buildFilterBar() {
   els.filterRow.innerHTML = "";
 
   // ── 第一层：快捷视图 chips ──────────────────────────────────────────────────
@@ -151,8 +210,8 @@ function renderFilters() {
   const toggleBtn = document.createElement("button");
   toggleBtn.type = "button";
   toggleBtn.className = "filter-toggle-btn";
-  // 展开状态存在 state 里而不是局部变量：renderFilters() 会 innerHTML=""
-  // 重建整条筛选栏，局部变量每次都被重置成"收起"。
+  // 展开状态存在 state 里而不是局部变量：buildFilterBar() 只在初始化时调用一次，
+  // 后续由 updateFilterUI() 原地更新，不会再被 innerHTML="" 重置。
   toggleBtn.textContent = state.filterPanelOpen ? "收起筛选 ▴" : "更多筛选 ▾";
   toggleBtn.setAttribute("aria-expanded", String(state.filterPanelOpen));
   toggleBtn.setAttribute("aria-controls", "filterPanel");
@@ -279,6 +338,18 @@ function renderFilters() {
   clearBtn.addEventListener("click", clearAllFilters);
   resultBar.appendChild(clearBtn);
 
+  // 存储关键元素引用，供 updateFilterUI() 原地更新，避免重建整条筛选栏
+  state._filterEls = {
+    presetBtns: [...presetBar.querySelectorAll(".preset-btn")],
+    tableBtn,
+    cardBtn,
+    sortSelect,
+    resultCount,
+    clearBtn,
+    toggleBtn,
+    filterPanel,
+  };
+
   els.filterRow.append(presetBar, advancedBar, resultBar);
 }
 
@@ -300,6 +371,46 @@ function updateResultBar() {
   }
   const clearEl = document.getElementById("clearFiltersBtn");
   if (clearEl) clearEl.hidden = !hasActiveFilters();
+}
+
+/**
+ * 原地更新筛选栏的交互状态（快捷视图 / 视图切换 / 排序 / 结果计数），
+ * 不重建 DOM，因此搜索框不会失焦、"更多筛选"面板不会意外收起。
+ *
+ * 与 updateResultBar() 的区别：updateResultBar() 只改文字和 hidden，
+ * 本函数还同步按钮 active 状态、排序 value、面板展开状态。
+ */
+function updateFilterUI() {
+  const f = state._filterEls;
+  if (!f) return;
+
+  // 快捷视图 chips
+  if (f.presetBtns && f.presetBtns.length) {
+    f.presetBtns.forEach((btn, i) => {
+      const p = PRESETS[i];
+      if (!p) return;
+      const isActive = state.activePreset === p.key;
+      btn.classList.toggle("is-active", isActive);
+      btn.setAttribute("aria-pressed", String(isActive));
+    });
+  }
+
+  // 视图切换
+  if (f.tableBtn) f.tableBtn.classList.toggle("is-active", state.viewMode === "table");
+  if (f.cardBtn) f.cardBtn.classList.toggle("is-active", state.viewMode === "card");
+
+  // 排序
+  if (f.sortSelect) f.sortSelect.value = state.sortBy;
+
+  // 结果计数 + 清除按钮
+  updateResultBar();
+
+  // 更多筛选面板
+  if (f.toggleBtn) {
+    f.toggleBtn.textContent = state.filterPanelOpen ? "收起筛选 ▴" : "更多筛选 ▾";
+    f.toggleBtn.setAttribute("aria-expanded", String(state.filterPanelOpen));
+  }
+  if (f.filterPanel) f.filterPanel.hidden = !state.filterPanelOpen;
 }
 
 /** 筛选条件变化后的统一入口：更新计数 + 重渲列表，不重建筛选栏 */
@@ -377,7 +488,8 @@ function renderResults() {
 
 function render() {
   renderSummary();
-  renderFilters();
+  renderTrustedStrip();
+  updateFilterUI();
   renderResults();
 }
 
@@ -457,6 +569,9 @@ async function init() {
     state.sites.forEach((s) => {
       if (s.votes) state.votes[s.name] = { up: s.votes.up || 0, down: s.votes.down || 0 };
     });
+
+    // 初始化筛选栏（只构建一次，后续由 updateFilterUI() 原地更新状态）
+    buildFilterBar();
 
     render();
     loadNotice();

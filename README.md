@@ -1,19 +1,29 @@
-# Sk-free API Broadcast
+# 白嫖 API 速查
 
-TOKEN 站点速查 — 静态 GitHub Pages 导航站。
+每日验证 · 死链可见 · 额度横向比。免费 AI API 站点速查。
 
-- 线上地址：https://free.eforge.xyz/broadcast/
-- 数据文件：`broadcast/data/sites.json`
-- 公告文件：`broadcast/data/notice.md`
+- 线上地址：https://free.eforge.xyz/
+- 管理后台：https://free.eforge.xyz/admin.html
+- 数据文件：`frontend/broadcast/data/sites.json`
+- 公告文件：`frontend/broadcast/data/notice.md`
 
 ## 本地预览
 
 ```bash
-python3 -m http.server 8080
-# 访问 http://localhost:8080/broadcast/
+cd frontend && npm run dev
+# 访问 http://localhost:5173/_app/
 ```
 
-## 更新数据
+## 构建部署
 
-编辑 `broadcast/data/sites.json`，`git push` 后 GitHub Pages 自动部署。
+```bash
+cd frontend && npm run build
+# 产物在 frontend/dist/，按 Worker 部署流程上传
+```
+
+## 技术栈
+
+- 前端：Vite + vanilla JS，模块化源码在 `frontend/src/broadcast/`
+- 后端：Cloudflare Worker + D1
+- 构建：`npm run build` 自动拼接 broadcast/*.js → main.js 并打包
 

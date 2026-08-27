@@ -680,6 +680,112 @@ h1 {
   font-size: 0.8rem;
 }
 
+/* ═══════ 今日可信速览 ═══════ */
+.trusted-strip {
+  margin: 10px 0 0;
+}
+.trusted-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.trusted-header h2 {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+}
+.trusted-sub {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.trusted-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+@media (max-width: 768px) {
+  .trusted-cards {
+    grid-template-columns: 1fr;
+  }
+}
+.trusted-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  text-decoration: none;
+  color: inherit;
+  transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+.trusted-card:hover {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px var(--teal-soft);
+}
+.trusted-name {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.trusted-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.trusted-freshness {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+}
+.trusted-freshness::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.trusted-freshness.is-fresh {
+  color: var(--teal);
+}
+.trusted-freshness.is-fresh::before {
+  background: var(--teal);
+}
+.trusted-freshness.is-ok {
+  color: var(--amber);
+}
+.trusted-freshness.is-ok::before {
+  background: var(--amber);
+}
+.trusted-freshness.is-stale {
+  color: var(--muted);
+}
+.trusted-freshness.is-stale::before {
+  background: var(--muted);
+}
+.trusted-quota {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--ink);
+}
+.trusted-empty {
+  padding: 10px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
 /* ═══════ 鲜度分布条 + 图例 ═══════ */
 .freshness-bar {
   margin: 6px 0 0;

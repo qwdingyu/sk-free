@@ -42,6 +42,10 @@ function initDom() {
 function syncFromUrl() {
   const p = new URLSearchParams(location.search);
   if (p.has("view"))  state.viewMode = p.get("view") === "card" ? "card" : "table";
+  else {
+    // URL 无指定：按视口宽智能选默认视图（桌面表格 / 移动卡片）
+    state.viewMode = window.innerWidth < 680 ? "card" : "table";
+  }
   if (p.has("sort"))  state.sortBy = p.get("sort");
   if (p.has("q"))     state.query = p.get("q");
   if (p.has("preset")) state.activePreset = p.get("preset");
@@ -55,7 +59,8 @@ function syncFromUrl() {
 // 将当前筛选状态写入 URL（不污染浏览器历史）
 function syncToUrl(push) {
   const p = new URLSearchParams();
-  if (state.viewMode !== "table") p.set("view", state.viewMode);
+  var defaultView = window.innerWidth < 680 ? "card" : "table";
+  if (state.viewMode !== defaultView) p.set("view", state.viewMode);
   if (state.sortBy !== "fresh")   p.set("sort", state.sortBy);
   if (state.query)                p.set("q", state.query);
   if (state.activePreset)         p.set("preset", state.activePreset);
