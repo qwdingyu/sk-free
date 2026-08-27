@@ -75,32 +75,37 @@ function buildTagFilter() {
   sel.value = current;
 }
 function renderTable() {
-  const tbody = document.getElementById("sitesBody");
   if (SITES.length === 0) {
+    const tbody = document.getElementById("sitesBody");
     tbody.innerHTML = '<tr><td colspan="11" class="empty-state">暂无数据</td></tr>';
     return;
   }
-  tbody.innerHTML = SITES.map((s) => {
-    const tags = (s.tags || []).map((t) => '<span class="tag">' + esc(t) + '</span>').join("");
-    const checked = SELECTED.has(s.name) ? "checked" : "";
-    const toggleChecked = s.enabled ? "checked" : "";
-    const deadBadge = s.dead ? '<span class="badge badge-danger" title="已标记为死链（不可用）">死链</span>' : '';
-    const knownDeadBadge = DEAD_URLS.has(s.url.replace(/[/]+$/, "")) ? '<span class="badge badge-warning" title="dead_urls 中有历史记录">已知死链</span>' : '';
-    const origUrlHtml = s.originalUrl && s.originalUrl !== s.url ? '<span class="orig-url" title="' + esc(s.originalUrl) + '">原: ' + esc(s.originalUrl.slice(0, 40)) + (s.originalUrl.length > 40 ? '...' : '') + '</span>' : '';
-    return '<tr>' +
-      '<td class="w-check"><input type="checkbox" ' + checked + ' data-name="' + esc(s.name) + '" data-action="toggle-select"></td>' +
-      '<td><label class="toggle"><input type="checkbox" ' + toggleChecked + ' data-name="' + esc(s.name) + '" data-action="toggle-enable"><span class="slider"></span></label></td>' +
-      '<td class="name"><a href="' + esc(s.url) + '" target="_blank" title="' + esc(s.url) + '">' + esc(s.name) + '</a>' + deadBadge + knownDeadBadge + origUrlHtml + '</td>' +
-      '<td class="health">' + healthBadge(s) + '</td>' +
-      '<td class="tags">' + tags + '</td>' +
-      '<td>' + esc(s.checkin || "") + '</td>' +
-      '<td title="' + esc(s.ref || "") + '">' + esc(s.ref || "") + '</td>' +
-      '<td>' + esc(s.models || "") + '</td>' +
-      '<td>' + esc(s.rate || "") + '</td>' +
-      '<td class="summary" title="' + esc(s.summary || "") + '">' + esc(s.summary || "") + '</td>' +
-      '<td class="w-action actions"><button class="btn btn-sm" data-name="' + esc(s.name) + '" data-action="show-edit">编辑</button> <button class="btn btn-sm btn-danger" data-name="' + esc(s.name) + '" data-action="delete-site">删除</button></td>' +
-    '</tr>';
-  }).join("");
+  // RAF 包裹：避免主线程阻塞，确保滚动/输入优先
+  requestAnimationFrame(function() {
+    const tbody = document.getElementById("sitesBody");
+    if (!tbody) return;
+    tbody.innerHTML = SITES.map((s) => {
+      const tags = (s.tags || []).map((t) => '<span class="tag">' + esc(t) + '</span>').join("");
+      const checked = SELECTED.has(s.name) ? "checked" : "";
+      const toggleChecked = s.enabled ? "checked" : "";
+      const deadBadge = s.dead ? '<span class="badge badge-danger" title="已标记为死链（不可用）">死链</span>' : '';
+      const knownDeadBadge = DEAD_URLS.has(s.url.replace(/[/]+$/, "")) ? '<span class="badge badge-warning" title="dead_urls 中有历史记录">已知死链</span>' : '';
+      const origUrlHtml = s.originalUrl && s.originalUrl !== s.url ? '<span class="orig-url" title="' + esc(s.originalUrl) + '">原: ' + esc(s.originalUrl.slice(0, 40)) + (s.originalUrl.length > 40 ? '...' : '') + '</span>' : '';
+      return '<tr>' +
+        '<td class="w-check"><input type="checkbox" ' + checked + ' data-name="' + esc(s.name) + '" data-action="toggle-select"></td>' +
+        '<td><label class="toggle"><input type="checkbox" ' + toggleChecked + ' data-name="' + esc(s.name) + '" data-action="toggle-enable"><span class="slider"></span></label></td>' +
+        '<td class="name"><a href="' + esc(s.url) + '" target="_blank" title="' + esc(s.url) + '">' + esc(s.name) + '</a>' + deadBadge + knownDeadBadge + origUrlHtml + '</td>' +
+        '<td class="health">' + healthBadge(s) + '</td>' +
+        '<td class="tags">' + tags + '</td>' +
+        '<td>' + esc(s.checkin || "") + '</td>' +
+        '<td title="' + esc(s.ref || "") + '">' + esc(s.ref || "") + '</td>' +
+        '<td>' + esc(s.models || "") + '</td>' +
+        '<td>' + esc(s.rate || "") + '</td>' +
+        '<td class="summary" title="' + esc(s.summary || "") + '">' + esc(s.summary || "") + '</td>' +
+        '<td class="w-action actions"><button class="btn btn-sm" data-name="' + esc(s.name) + '" data-action="show-edit">编辑</button> <button class="btn btn-sm btn-danger" data-name="' + esc(s.name) + '" data-action="delete-site">删除</button></td>' +
+      '</tr>';
+    }).join("");
+  });
 }
 var _filterTimer = null;
 function renderPagination(meta) {
@@ -144,9 +149,15 @@ function changePageSize(n) {
   SITE_PAGE = 1;
   loadSites();
 }
+var _filterTimer = null;
+var _filterRaf = null;
 function filterTable() {
   SITE_PAGE = 1;
-  loadSites();
+  if (_filterRaf) cancelAnimationFrame(_filterRaf);
+  _filterRaf = requestAnimationFrame(function() {
+    clearTimeout(_filterTimer);
+    _filterTimer = setTimeout(loadSites, 150);
+  });
 }
 function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
 // D1 的 datetime('now') 产出 "YYYY-MM-DD HH:MM:SS"，内容是 UTC 但字符串不带时区标记。
