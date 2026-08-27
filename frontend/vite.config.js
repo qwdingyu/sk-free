@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
+import { execSync } from 'child_process';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // broadcast-watch plugin — 修复 Step 0 定时炸弹：开发模式下自动同步 broadcast/*.js → main.js
@@ -27,7 +28,6 @@ function broadcastWatchPlugin() {
           timeout = setTimeout(() => {
             console.log(`\n[broadcast-watch] detected ${event} in ${path}, regenerating main.js...`);
             try {
-              const { execSync } = require('child_process');
               execSync('node scripts/concat-broadcast.mjs', {
                 cwd: resolve(__dirname),
                 stdio: 'inherit',
