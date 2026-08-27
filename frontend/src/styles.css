@@ -2318,3 +2318,47 @@ h1 {
 
   .col-name { min-width: 100px; }
 }
+
+/* 站点管理分页 */
+#sitePagination {
+  margin-top: var(--space-2);
+}
+#sitePagination .pagination {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+#sitePagination .page-btn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+#sitePagination .page-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+#sitePagination .page-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+#sitePagination .page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+#sitePagination .page-ellipsis {
+  padding: 0 4px;
+  color: var(--muted);
+}
+#sitePagination .page-info {
+  margin-left: auto;
+  font-size: 0.78rem;
+  color: var(--muted);
+}

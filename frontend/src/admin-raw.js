@@ -3,6 +3,9 @@ let TOKEN = localStorage.getItem("sk-free-admin-token") || "";
 let SITES = [];
 let SELECTED = new Set();
 let DEAD_URLS = new Map(); // url -> { added_at, status, reason, error }（死链库）
+let SITE_PAGE = 1;
+let SITE_LIMIT = 20;
+let ALL_TAGS = []; // 缓存全量标签，避免分页后标签过滤选项丢失
 async function api(path, opts = {}) {
   const res = await fetch(path, { ...opts, headers: { "Content-Type": "application/json", "Authorization": "Bearer " + TOKEN, ...(opts.headers || {}) } });
   if (res.status === 401) { doLogout(); throw new Error("登录已过期"); }
@@ -34,10 +37,24 @@ document.getElementById("tokenInput").addEventListener("keydown", (e) => { if (e
 let _loadSitesSeq = 0;
 async function loadSites() {
   const seq = ++_loadSitesSeq;
-  const data = await api("/api/admin/sites");
-  if (seq !== _loadSitesSeq) return; // 已被更新的请求取代
+  const q = document.getElementById("searchInput").value.trim();
+  const tag = document.getElementById("tagFilter").value;
+  const params = new URLSearchParams();
+  params.set("page", SITE_PAGE);
+  params.set("limit", SITE_LIMIT);
+  if (q) params.set("q", q);
+  if (tag) params.set("tag", tag);
+  const data = await api("/api/admin/sites?" + params.toString());
+  if (seq !== _loadSitesSeq) return;
   SITES = data.sites || [];
-  document.getElementById("siteCount").textContent = SITES.length + " 个站点";
+  document.getElementById("siteCount").textContent = (data.metadata?.total ?? SITES.length) + " 个站点";
+  if (data.metadata) {
+    renderPagination(data.metadata);
+  }
+  // 无搜索/标签过滤时刷新全量标签缓存，保证标签过滤选项完整
+  if (!q && !tag && Array.isArray(data.sites)) {
+    ALL_TAGS = [...new Set(SITES.flatMap((s) => s.tags || []))].sort();
+  }
   buildTagFilter();
   renderTable();
 }
@@ -51,21 +68,19 @@ async function loadDeadUrls() {
   }
 }
 function buildTagFilter() {
-  const tags = [...new Set(SITES.flatMap((s) => s.tags || []))].sort();
+  const tags = ALL_TAGS.length > 0 ? ALL_TAGS : [...new Set(SITES.flatMap((s) => s.tags || []))].sort();
   const sel = document.getElementById("tagFilter");
   const current = sel.value;
   sel.innerHTML = '<option value="">全部标签</option>' + tags.map((t) => '<option value="' + esc(t) + '">' + esc(t) + '</option>').join("");
   sel.value = current;
 }
 function renderTable() {
-  const q = document.getElementById("searchInput").value.toLowerCase();
-  const tag = document.getElementById("tagFilter").value;
-  const filtered = SITES.filter((s) => {
-    const haystack = [s.name, s.url, s.summary, s.checkin, s.models, s.rate, ...(s.tags || [])].join(" ").toLowerCase();
-    return (!q || haystack.includes(q)) && (!tag || (s.tags || []).includes(tag));
-  });
   const tbody = document.getElementById("sitesBody");
-  tbody.innerHTML = filtered.map((s) => {
+  if (SITES.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="11" class="empty-state">暂无数据</td></tr>';
+    return;
+  }
+  tbody.innerHTML = SITES.map((s) => {
     const tags = (s.tags || []).map((t) => '<span class="tag">' + esc(t) + '</span>').join("");
     const checked = SELECTED.has(s.name) ? "checked" : "";
     const toggleChecked = s.enabled ? "checked" : "";
@@ -88,7 +103,33 @@ function renderTable() {
   }).join("");
 }
 var _filterTimer = null;
-function filterTable() { clearTimeout(_filterTimer); _filterTimer = setTimeout(renderTable, 150); }
+function renderPagination(meta) {
+  const el = document.getElementById("sitePagination");
+  if (!el || !meta) return;
+  const { total, page, limit, totalPages } = meta;
+  if (totalPages <= 1) { el.innerHTML = ""; return; }
+  const pages = [];
+  const add = (p, label, active, disabled) => {
+    pages.push('<button class="page-btn' + (active ? ' active' : '') + '" ' + (disabled ? 'disabled' : 'onclick="goToPage(' + p + ')"') + '>' + esc(label) + '</button>');
+  };
+  add(page - 1, "‹", false, page <= 1);
+  let start = Math.max(1, page - 2);
+  let end = Math.min(totalPages, page + 2);
+  if (start > 1) { add(1, "1", false, false); if (start > 2) pages.push('<span class="page-ellipsis">...</span>'); }
+  for (let i = start; i <= end; i++) add(i, String(i), i === page, false);
+  if (end < totalPages) { if (end < totalPages - 1) pages.push('<span class="page-ellipsis">...</span>'); add(totalPages, String(totalPages), false, false); }
+  add(page + 1, "›", false, page >= totalPages);
+  el.innerHTML = '<div class="pagination">' + pages.join("") + '<span class="page-info">第 ' + page + '/' + totalPages + ' 页，共 ' + total + ' 条</span></div>';
+}
+function goToPage(p) {
+  SITE_PAGE = p;
+  window.scrollTo(0, 0);
+  loadSites();
+}
+function filterTable() {
+  SITE_PAGE = 1;
+  loadSites();
+}
 function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
 // D1 的 datetime('now') 产出 "YYYY-MM-DD HH:MM:SS"，内容是 UTC 但字符串不带时区标记。
 // 直接 new Date(它) 会被当成本地时间，UTC+8 下实测偏 8 小时；某些浏览器还会返回 Invalid Date。
@@ -1079,5 +1120,5 @@ Object.assign(window, {
   batchDelete, batchDeleteDisabled, clearSelection, switchTab, batchCheckUrls, closeModal, saveSite,
   closeImportModal, doImport, confirmResolve, loadSchema, exportSchema,
   importSchema, saveSchema, toggleSelectAll, filterTable, loadFeedbacks,
-  batchFeedbackAction, clearFeedbackSelection,
+  batchFeedbackAction, clearFeedbackSelection, goToPage,
 });

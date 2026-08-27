@@ -278,8 +278,72 @@ export async function handleGetEnabledSites(db) {
  * @returns {Promise<Response>} JSON 响应
  */
 export async function handleAdminListSites(db, request) {
-  const data = await handleGetSites(db);
-  return jsonResponse(data, 200, request);
+  const url = new URL(request.url);
+  const page = Math.max(1, parseInt(url.searchParams.get("page")) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit")) || 20));
+  const q = (url.searchParams.get("q") || "").trim();
+  const tag = (url.searchParams.get("tag") || "").trim();
+
+  const offset = (page - 1) * limit;
+
+  // 构建 WHERE 条件（搜索 + 标签过滤都在服务端完成，保证分页正确）
+  const conditions = [];
+  const args = [];
+
+  if (q) {
+    conditions.push(
+      "(name LIKE ? OR url LIKE ? OR summary LIKE ? OR models LIKE ? OR register LIKE ? OR checkin LIKE ?)"
+    );
+    const like = `%${q}%`;
+    args.push(like, like, like, like, like, like);
+  }
+
+  if (tag) {
+    // tags 是 JSON 数组字符串，用 LIKE 做模糊匹配（管理后台标签数量少，可接受）
+    conditions.push("tags LIKE ?");
+    args.push(`%"${tag}"%`);
+  }
+
+  const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
+
+  // 先查总数
+  const countRow = await dbGet(db, `SELECT COUNT(*) as total FROM sites ${where}`, args);
+  const total = countRow?.total || 0;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+
+  // 再查分页数据
+  const sites = await dbAll(
+    db,
+    `SELECT * FROM sites ${where} ORDER BY sort_order ASC, name ASC LIMIT ? OFFSET ?`,
+    [...args, limit, offset]
+  );
+
+  const [votes, historyMap] = await Promise.all([
+    dbAll(db, "SELECT site_name, up_count, down_count FROM votes"),
+    getLatestHistoryMap(db),
+  ]);
+
+  const voteMap = {};
+  for (const v of votes) {
+    voteMap[v.site_name] = { up: v.up_count, down: v.down_count };
+  }
+
+  return {
+    ok: true,
+    sites: sites.map((s) => ({
+      ...formatSiteRow(s),
+      votes: voteMap[s.name] || { up: 0, down: 0 },
+      dead: s.enabled !== 1,
+      history: historyMap.get(s.name) || null,
+    })),
+    metadata: {
+      total,
+      page,
+      limit,
+      totalPages,
+      updatedAt: new Date().toISOString(),
+    },
+  };
 }
 
 /**
