@@ -96,6 +96,15 @@ export default {
         if (path === "/api/admin/sites/batch" && request.method === "POST") {
           const batchBody = await request.clone().json().catch(() => ({}));
           if (batchBody.action === "approve_submission" || batchBody.action === "reject_submission") {
+            // 原子批准必须走 handleAdminApproveSubmission（建站 + 标记同时完成），
+            // 否则只会改 submissions.status 而站点不存在，形成脏数据。
+            if (batchBody.action === "approve_submission") {
+              const result = await handleAdminApproveSubmission(db, batchBody.id);
+              const status = !result.ok
+                ? (result.error === "提交不存在或已处理" ? 404 : 409)
+                : 201;
+              return json(result, status, request);
+            }
             const result = await handleAdminSubmissionAction(db, batchBody.action, batchBody.id);
             return json(result, result.ok ? 200 : (result.error === "提交不存在" ? 404 : 400), request);
           }
@@ -107,7 +116,8 @@ export default {
         }
         // GET /api/admin/submissions
         if (path === "/api/admin/submissions" && request.method === "GET") {
-          const result = await handleAdminGetSubmissions(db);
+          const status = url.searchParams.get("status") || undefined;
+          const result = await handleAdminGetSubmissions(db, status);
           return json(result, 200, request);
         }
         // POST /api/admin/submissions/:id/approve — 原子批准（建站+标记，M6）
@@ -209,6 +219,14 @@ export default {
           const parsed = await parseJsonBody(request);
           if (!parsed.ok) return parsed.response;
           const result = await handleFeedbackAction(db, parseInt(fbMatch[1]), parsed.data.action);
+          return json(result, result.ok ? 200 : 400, request);
+        }
+        // POST /api/admin/feedbacks/batch — 批量处理反馈
+        if (path === "/api/admin/feedbacks/batch" && request.method === "POST") {
+          const parsed = await parseJsonBody(request);
+          if (!parsed.ok) return parsed.response;
+          const { action, ids } = parsed.data;
+          const result = await handleAdminBatchFeedbacks(db, action, ids);
           return json(result, result.ok ? 200 : 400, request);
         }
 

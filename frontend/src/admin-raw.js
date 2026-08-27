@@ -261,7 +261,17 @@ async function batchDeleteDisabled() {
   if (!ok) return;
   var btns = document.querySelectorAll('#batchBar .btn');
   btns.forEach(function(b) { btnLoading(b, true); });
-  try { await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "delete", names: disabled.map(function(s) { return s.name; }) }) }); toast("已删除 " + disabled.length + " 个停用站点", "success"); SELECTED.clear(); updateBatchBar(); await loadSites(); renderTable(); } catch (e) { toast(e.message, "error"); } finally { btns.forEach(function(b) { btnLoading(b, false); }); }
+  try {
+    var names = disabled.map(function(s) { return s.name; });
+    var totalAffected = 0;
+    for (var i = 0; i < names.length; i += 99) {
+      var batch = names.slice(i, i + 99);
+      var data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "delete", names: batch }) });
+      totalAffected += data.affected || 0;
+    }
+    toast("已删除 " + totalAffected + " 个停用站点", "success");
+    SELECTED.clear(); updateBatchBar(); await loadSites(); renderTable();
+  } catch (e) { toast(e.message, "error"); } finally { btns.forEach(function(b) { btnLoading(b, false); }); }
 }
 async function batchTag() {
   if (SELECTED.size === 0) return;
@@ -505,7 +515,17 @@ async function healthRestoreAllDead() {
   if (names.length === 0) { toast("没有死链站点", "info"); return; }
   var ok = await showConfirm("确认恢复全部", "<p>将恢复 <strong>" + names.length + "</strong> 个死链站点为可用</p>", "", "恢复全部");
   if (!ok) return;
-  try { await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "enable", names }) }); toast("已恢复 " + names.length + " 个站点", "success"); HEALTH_DEAD_SELECTED.clear(); await loadSites(); renderTable(); renderHealthFromSites(); } catch (e) { toast(e.message, "error"); }
+  try {
+    var totalAffected = 0;
+    for (var i = 0; i < names.length; i += 99) {
+      var batch = names.slice(i, i + 99);
+      var data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "enable", names: batch }) });
+      totalAffected += data.affected || 0;
+    }
+    toast("已恢复 " + totalAffected + " 个站点", "success");
+    HEALTH_DEAD_SELECTED.clear();
+    await loadSites(); renderTable(); renderHealthFromSites();
+  } catch (e) { toast(e.message, "error"); }
 }
 // 异常区的批量选择
 function healthToggleFailSelect(cb) {
@@ -785,6 +805,11 @@ async function loadFeedbacks() {
     statusEl.textContent = "共 " + (data.total || 0) + " 条" + (data.unread ? "（" + data.unread + " 条未读）" : "");
     if (data.unread > 0) { countEl.textContent = data.unread; countEl.style.display = "inline"; } else { countEl.style.display = "none"; }
     if (feedbacks.length === 0) { list.innerHTML = '<div class="empty-state">暂无反馈</div>'; return; }
+
+    // 批量操作栏（HTML 中已静态定义，此处确保显示）
+    var batchBar = document.getElementById("fbBatchBar");
+    if (batchBar) { batchBar.style.display = ""; }
+
     var typeColors = { error: "var(--coral)", correction: "var(--amber)", positive: "var(--teal)" };
     var typeLabels = { error: "报错", correction: "纠正", positive: "好评" };
     var statusLabels = { new: "🆕 待处理", read: "👁️ 已读", resolved: "✅ 已解决" };
@@ -800,12 +825,40 @@ async function loadFeedbacks() {
         '<span class="' + statusClass + ' text-sm">' + esc(statusLabels[f.status] || f.status) + '</span></div>' +
         '<div class="sub-summary" style="white-space:normal">' + esc(f.content) + '</div>' +
         '<div class="sub-actions">' +
+        '<input type="checkbox" class="fb-check" data-fb-id="' + f.id + '"> ' +
         (f.status !== "read" ? '<button class="btn btn-sm" data-fb-id="' + f.id + '" data-fb-action="read" data-action="fb-action">👁️ 标记已读</button> ' : '') +
         (f.status !== "resolved" ? '<button class="btn btn-sm btn-primary" data-fb-id="' + f.id + '" data-fb-action="resolved" data-action="fb-action">✅ 已解决</button> ' : '') +
         '<button class="btn btn-sm btn-danger" data-fb-id="' + f.id + '" data-fb-action="delete" data-action="fb-action">🗑️ 删除</button>' +
         '</div></div>';
     }).join("");
+    list.querySelectorAll(".fb-check").forEach(function(cb) {
+      cb.addEventListener("change", updateFeedbackBatchCount);
+    });
+    updateFeedbackBatchCount();
   } catch (e) { toast("加载反馈失败: " + e.message, "error"); }
+}
+function updateFeedbackBatchCount() {
+  var countEl = document.getElementById("fbBatchCount");
+  if (countEl) {
+    var checked = document.querySelectorAll("#feedbacksList .fb-check:checked");
+    countEl.textContent = checked.length;
+  }
+}
+function clearFeedbackSelection() {
+  document.querySelectorAll("#feedbacksList .fb-check").forEach(function(cb) { cb.checked = false; });
+  updateFeedbackBatchCount();
+}
+async function batchFeedbackAction(action) {
+  var checked = document.querySelectorAll("#feedbacksList .fb-check:checked");
+  var ids = Array.from(checked).map(function(cb) { return parseInt(cb.getAttribute("data-fb-id")); });
+  if (ids.length === 0) { toast("请先选择要处理的反馈", "info"); return; }
+  var ok = action === "delete" ? await showConfirm("确认删除", "<p>将删除 <strong>" + ids.length + "</strong> 条反馈</p>", "", "删除") : true;
+  if (!ok) return;
+  try {
+    var data = await api("/api/admin/feedbacks/batch", { method: "POST", body: JSON.stringify({ action: action, ids: ids }) });
+    toast("已处理 " + data.affected + " 条反馈", "success");
+    await loadFeedbacks();
+  } catch (e) { toast(e.message, "error"); }
 }
 async function feedbackAction(id, action) {
   if (action === "delete") {
@@ -1026,4 +1079,5 @@ Object.assign(window, {
   batchDelete, batchDeleteDisabled, clearSelection, switchTab, batchCheckUrls, closeModal, saveSite,
   closeImportModal, doImport, confirmResolve, loadSchema, exportSchema,
   importSchema, saveSchema, toggleSelectAll, filterTable, loadFeedbacks,
+  batchFeedbackAction, clearFeedbackSelection,
 });

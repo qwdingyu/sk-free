@@ -172,3 +172,38 @@ export async function handleFeedbackAction(db, id, action) {
 
   return { ok: false, error: "action 只能是 read, resolved, delete" };
 }
+
+/**
+ * 批量处理反馈（admin 专用）
+ * @param {object} db — D1 数据库实例
+ * @param {string} action — read / resolved / delete
+ * @param {number[]} ids — 反馈 ID 数组
+ * @returns {Promise<object>}
+ */
+export async function handleAdminBatchFeedbacks(db, action, ids) {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return { ok: false, error: "需要 ids 数组" };
+  }
+  if (!["read", "resolved", "delete"].includes(action)) {
+    return { ok: false, error: "action 只能是 read, resolved, delete" };
+  }
+
+  const cleanIds = ids.map((id) => (typeof id === "number" ? id : parseInt(id))).filter((id) => !Number.isNaN(id));
+  if (cleanIds.length === 0) {
+    return { ok: false, error: "ids 必须是非空数字数组" };
+  }
+
+  const placeholders = cleanIds.map(() => "?").join(",");
+  let affected = 0;
+
+  if (action === "delete") {
+    const result = await dbRun(db, `DELETE FROM feedbacks WHERE id IN (${placeholders})`, cleanIds);
+    affected = result.meta?.changes || 0;
+  } else {
+    const newStatus = action === "resolved" ? "resolved" : "read";
+    const result = await dbRun(db, `UPDATE feedbacks SET status = ? WHERE id IN (${placeholders})`, [newStatus, ...cleanIds]);
+    affected = result.meta?.changes || 0;
+  }
+
+  return { ok: true, action, affected };
+}

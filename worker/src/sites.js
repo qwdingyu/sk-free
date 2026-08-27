@@ -375,7 +375,9 @@ export async function handleAdminCreateSite(db, request, kv) {
     ]
   );
 
-  return jsonResponse({ ok: true, message: `站点 "${body.name}" 已创建` }, 201, request);
+  const created = await dbGet(db, "SELECT * FROM sites WHERE name = ?", [body.name]);
+  const site = { ...formatSiteRow(created), votes: { up: 0, down: 0 }, dead: created.enabled !== 1, history: null };
+  return jsonResponse({ ok: true, site }, 201, request);
 }
 
 /**
@@ -470,6 +472,17 @@ export async function handleAdminUpdateSite(db, request, siteName) {
     updated.verifiedBy = "manual";
   }
 
+  // 联动 dead_urls：启用时移除，停用时追加（与 UPDATE 同一 batch，原子）
+  const deadUrlStmt =
+    enabledFlip && existing.url
+      ? body.enabled
+        ? db.prepare("DELETE FROM dead_urls WHERE rtrim(url, '/') = rtrim(?, '/')").bind(existing.url)
+        : db.prepare(
+            `INSERT OR IGNORE INTO dead_urls (url, added_at, status, reason, error)
+             VALUES (?, ?, 0, 'manual-disabled', '')`
+          ).bind(existing.url, Date.now())
+      : null;
+
   const isRename = siteName !== updated.name;
   const jsonTags = JSON.stringify(updated.tags);
   const jsonNotes = updated.notes ? JSON.stringify(updated.notes) : "[]";
@@ -514,6 +527,7 @@ export async function handleAdminUpdateSite(db, request, siteName) {
     // 改名时关联表一起搬，用 batch 保证原子性
     await dbBatch(db, [
       updateSites,
+      ...(deadUrlStmt ? [deadUrlStmt] : []),
       db.prepare("UPDATE votes SET site_name = ? WHERE site_name = ?").bind(updated.name, siteName),
       db.prepare("UPDATE feedbacks SET site_name = ? WHERE site_name = ?").bind(updated.name, siteName),
       db.prepare("UPDATE site_history SET site_name = ? WHERE site_name = ?").bind(updated.name, siteName),
@@ -521,10 +535,18 @@ export async function handleAdminUpdateSite(db, request, siteName) {
   } else {
     // 额度变化写入 site_history：与 UPDATE 同一 batch，原子
     const historyStmts = buildHistoryStmts(db, siteName, existing, updated);
-    await dbBatch(db, [updateSites, ...historyStmts]);
+    await dbBatch(db, [updateSites, ...(deadUrlStmt ? [deadUrlStmt] : []), ...historyStmts]);
   }
 
-  return jsonResponse({ ok: true, site: updated }, 200, request);
+  const updatedRow = await dbGet(db, "SELECT * FROM sites WHERE name = ?", [updated.name]);
+  const historyMap = await getLatestHistoryMap(db);
+  const site = {
+    ...formatSiteRow(updatedRow),
+    votes: { up: 0, down: 0 },
+    dead: updatedRow.enabled !== 1,
+    history: historyMap.get(updatedRow.name) || null,
+  };
+  return jsonResponse({ ok: true, site }, 200, request);
 }
 
 /**
@@ -587,19 +609,22 @@ export async function handleAdminBatch(db, request) {
   if (names.length > 99 || !names.every((n) => typeof n === "string" && n.length > 0)) {
     return jsonResponse({ ok: false, error: "names 必须是 1-99 个非空字符串" }, 400, request);
   }
+  // 静默去重：前端可能重复发送（如批量操作边界情况），重复参数浪费绑定位
+  // 且可能让 affected 统计失真。
+  const uniqueNames = [...new Set(names)];
 
   let affected = 0;
 
   if (action === "delete") {
-    const placeholders = names.map(() => "?").join(",");
+    const placeholders = uniqueNames.map(() => "?").join(",");
     // 先取被删站点的 URL，用于清理死链表中的孤立记录
-    const doomed = await dbAll(db, `SELECT url, enabled FROM sites WHERE name IN (${placeholders}) AND url != ''`, names);
+    const doomed = await dbAll(db, `SELECT url, enabled FROM sites WHERE name IN (${placeholders}) AND url != ''`, uniqueNames);
     // batch 保证原子性：4 条 DELETE 要么都成功要么都不生效，不留孤儿
     const statements = [
-      db.prepare(`DELETE FROM sites WHERE name IN (${placeholders})`).bind(...names),
-      db.prepare(`DELETE FROM votes WHERE site_name IN (${placeholders})`).bind(...names),
-      db.prepare(`DELETE FROM feedbacks WHERE site_name IN (${placeholders})`).bind(...names),
-      db.prepare(`DELETE FROM site_history WHERE site_name IN (${placeholders})`).bind(...names),
+      db.prepare(`DELETE FROM sites WHERE name IN (${placeholders})`).bind(...uniqueNames),
+      db.prepare(`DELETE FROM votes WHERE site_name IN (${placeholders})`).bind(...uniqueNames),
+      db.prepare(`DELETE FROM feedbacks WHERE site_name IN (${placeholders})`).bind(...uniqueNames),
+      db.prepare(`DELETE FROM site_history WHERE site_name IN (${placeholders})`).bind(...uniqueNames),
     ];
     // 死链站点删除时保留 dead_urls 记录（append-only 证据库）
     // 记录已存在 → 追加删除痕迹；不存在 → 插入新记录
@@ -619,17 +644,49 @@ export async function handleAdminBatch(db, request) {
     affected = results?.[0]?.meta?.changes || 0;
   } else if (action === "enable" || action === "disable") {
     const enableVal = action === "enable" ? 1 : 0;
-    const placeholders = names.map(() => "?").join(",");
-    // 启用/禁用 = 决定层操作，同步写入 manual 验证时间（标记为人工判定）
-    const result = await dbRun(
-      db,
-      `UPDATE sites SET enabled = ?, verified_at = datetime('now'), verified_by = 'manual',
-        health_fail_count = CASE WHEN ? = 1 THEN 0 ELSE health_fail_count END,
-        updated_at = datetime('now')
-       WHERE name IN (${placeholders})`,
-      [enableVal, enableVal, ...names]
-    );
-    affected = result.meta?.changes || 0;
+    const placeholders = uniqueNames.map(() => "?").join(",");
+    // 先取 URL，用于 dead_urls 联动（与单条 removeDeadUrl 语义一致）
+    const rows = await dbAll(db, `SELECT name, url FROM sites WHERE name IN (${placeholders})`, uniqueNames);
+
+    const statements = [
+      db
+        .prepare(
+          `UPDATE sites SET enabled = ?, verified_at = datetime('now'), verified_by = 'manual',
+            health_fail_count = CASE WHEN ? = 1 THEN 0 ELSE health_fail_count END,
+            updated_at = datetime('now')
+           WHERE name IN (${placeholders})`
+        )
+        .bind(enableVal, enableVal, ...uniqueNames),
+    ];
+
+    if (action === "enable") {
+      // 启用时移除匹配的 dead_urls（恢复站点 = 死链证据失效）
+      for (const r of rows) {
+        if (r.url) {
+          statements.push(
+            db.prepare("DELETE FROM dead_urls WHERE rtrim(url, '/') = rtrim(?, '/')").bind(r.url)
+          );
+        }
+      }
+    } else {
+      // 停用时追加 dead_urls 记录（append-only 证据库，不覆盖已有 reason）
+      const now = Date.now();
+      for (const r of rows) {
+        if (r.url) {
+          statements.push(
+            db
+              .prepare(
+                `INSERT OR IGNORE INTO dead_urls (url, added_at, status, reason, error)
+                 VALUES (?, ?, 0, 'batch-disabled', '')`
+              )
+              .bind(r.url, now)
+          );
+        }
+      }
+    }
+
+    const results = await dbBatch(db, statements);
+    affected = results?.[0]?.meta?.changes || 0;
   } else if (action === "add_tag" || action === "remove_tag") {
     if (!tag) {
       return jsonResponse(
@@ -641,8 +698,8 @@ export async function handleAdminBatch(db, request) {
     // 标签是 JSON 数组，SQLite 里直接改比较麻烦，所以在 JS 里算。
     // 但不再逐条往返：原来是 N 次 SELECT + N 次 UPDATE（18 条站点 = 36 次 D1 往返，
     // 而 D1 查询计入 Workers 的 50 subrequest 配额），改成 1 次 SELECT + 1 次 batch。
-    const placeholders = names.map(() => "?").join(",");
-    const rows = await dbAll(db, `SELECT name, tags FROM sites WHERE name IN (${placeholders})`, names);
+    const placeholders = uniqueNames.map(() => "?").join(",");
+    const rows = await dbAll(db, `SELECT name, tags FROM sites WHERE name IN (${placeholders})`, uniqueNames);
 
     const statements = [];
     for (const row of rows) {
@@ -685,10 +742,11 @@ export async function handleAdminBatch(db, request) {
  */
 export async function handleAdminExport(db, request) {
   const data = await handleGetSites(db);
+  const datePart = new Date().toISOString().slice(0, 10);
   return new Response(JSON.stringify(data, null, 2), {
     headers: {
       "Content-Type": "application/json",
-      "Content-Disposition": `attachment; filename="sites-${data.metadata?.updatedAt || "export"}.json"`,
+      "Content-Disposition": `attachment; filename="sites-${datePart}.json"`,
       "Access-Control-Allow-Origin": request.headers.get("Origin") || "*",
       "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization",
@@ -777,6 +835,8 @@ export async function handleAdminImportSites(db, request) {
             `UPDATE sites SET
               url = ?, original_url = ?, ref = ?, tags = ?, summary = ?,
               checkin = ?, models = ?, rate = ?, register = ?, notes = ?,
+              slug = ?, kind = ?, quota_min = ?, quota_max = ?, quota_unit = ?,
+              quota_period = ?, quota_calls_est = ?, quota_tier = ?, quota_raw = ?, needs_proxy = ?,
               updated_at = datetime('now')
              WHERE name = ?`
           ).bind(
@@ -790,6 +850,16 @@ export async function handleAdminImportSites(db, request) {
               item.rate || "",
               item.register || "",
               JSON.stringify(item.notes || []),
+              strOrNull(item.slug),
+              strOrNull(item.kind) ?? "api_site",
+              numOrNull(item.quotaMin),
+              numOrNull(item.quotaMax),
+              strOrNull(item.quotaUnit),
+              strOrNull(item.quotaPeriod) ?? "none",
+              intOrNull(item.quotaCallsEst),
+              strOrNull(item.quotaTier) ?? "none",
+              strOrNull(item.quotaRaw) ?? strOrNull(item.checkin),
+              boolIntOrNull(item.needsProxy),
               existingName
           )
         );

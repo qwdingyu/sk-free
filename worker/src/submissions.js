@@ -110,16 +110,21 @@ function parseUtcTs(s) {
  * @param {object} db — D1 数据库实例
  * @returns {Promise<object>} { ok, submissions, total }
  */
-export async function handleAdminGetSubmissions(db) {
-  const pendingSubs = await dbAll(
-    db,
-    "SELECT * FROM submissions WHERE status = 'pending' ORDER BY created_at DESC"
-  );
+export async function handleAdminGetSubmissions(db, status) {
+  let sql = "SELECT * FROM submissions";
+  const args = [];
+  if (status && ["pending", "approved", "rejected"].includes(status)) {
+    sql += " WHERE status = ?";
+    args.push(status);
+  }
+  sql += " ORDER BY created_at DESC";
+
+  const subs = await dbAll(db, sql, args);
   const totalRow = await dbGet(db, "SELECT COUNT(*) as count FROM submissions");
   const total = totalRow?.count || 0;
 
   // 转换为前端期望的格式
-  const submissions = pendingSubs.map((sub) => ({
+  const submissions = subs.map((sub) => ({
     id: sub.id,
     site: {
       name: sub.site_name,
