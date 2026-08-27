@@ -237,7 +237,7 @@ console.log("\n11. 导入（含结构化字段）");
     // 旧版导出格式：不含结构化字段，应能正常导入并用默认值
     { name: "导入站C（旧版）", url: "https://import-c.example.com", tags: [], summary: "无结构化字段" },
   ];
-  const r = await admin("/api/admin/sites/import", "POST", { sites: importData });
+  const r = await admin("/api/admin/sites/import", "POST", { sites: importData, skipDead: false });
   check("导入 → 200", r.status, 200);
   const result = await r.json();
   check("3 条全部新增", result.added, 3);

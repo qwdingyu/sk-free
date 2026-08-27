@@ -54,7 +54,7 @@ export async function getDeadUrls(db) {
 export async function addDeadUrl(db, url, info = {}) {
   await dbRun(
     db,
-    "INSERT OR REPLACE INTO dead_urls (url, added_at, status, reason, error) VALUES (?, ?, 0, ?, ?)",
+    "INSERT OR IGNORE INTO dead_urls (url, added_at, status, reason, error) VALUES (?, ?, 0, ?, ?)",
     [url, Date.now(), info.reason || "unreachable", info.error || ""]
   );
 }
@@ -107,7 +107,10 @@ export async function batchDeadUrls(db, urls, action = "remove") {
       ? urls.map((url) =>
           db
             .prepare(
-              "INSERT OR IGNORE INTO dead_urls (url, added_at, status, reason) VALUES (?, ?, 0, 'auto-detected')"
+              `INSERT INTO dead_urls (url, added_at, status, reason, error)
+               VALUES (?, ?, 0, 'auto-detected', '')
+               ON CONFLICT(url) DO UPDATE SET
+                 reason = dead_urls.reason || ' | auto-detected'`
             )
             .bind(url, now)
         )

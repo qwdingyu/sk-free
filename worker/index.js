@@ -43,85 +43,187 @@ function getAdminHTML() {
 })();
 </script>
 <style>
-:root{--bg:#f5f5f5;--surface:#fff;--ink:#1a1a1a;--muted:#666;--line:#e0e0e0;--teal:#087f78;--teal-soft:#e6f7f5;--red:#d32f2f;--red-soft:#fdeaea;--coral:#d32f2f;--amber:#f57c00;--amber-soft:#fff3e0;--green:#2e7d32;--radius:6px;--font:system-ui,-apple-system,sans-serif;--hover:#f0f0f0;--th-bg:#fafafa;--tag-bg:#eee;--shadow:0 1px 3px rgba(0,0,0,.08)}
-[data-theme=dark]{--bg:#1a1d21;--surface:#23262b;--ink:#e0e0e0;--muted:#999;--line:#3a3d42;--teal:#4ecdc4;--teal-soft:#1a3a38;--red:#ef5350;--red-soft:#3a1a1a;--coral:#ef5350;--amber:#ffb74d;--amber-soft:#3a2a10;--green:#66bb6a;--hover:#2a2d32;--th-bg:#2a2d32;--tag-bg:#3a3d42;--shadow:0 1px 3px rgba(0,0,0,.3)}
+:root{--bg:#f5f5f5;--surface:#fff;--ink:#1a1a1a;--muted:#666;--line:#e0e0e0;--teal:#087f78;--teal-soft:#e6f7f5;--red:#d32f2f;--red-soft:#fdeaea;--coral:#d32f2f;--amber:#f57c00;--amber-soft:#fff3e0;--green:#2e7d32;--radius:6px;--font:system-ui,-apple-system,sans-serif;--hover:#f0f0f0;--th-bg:#fafafa;--tag-bg:#eee;--shadow:0 1px 3px rgba(0,0,0,.08);--shadow-md:0 4px 12px rgba(0,0,0,.08);--transition-fast:.12s;--transition-base:.2s;--transition-slow:.3s;--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:20px;--space-6:24px}
+[data-theme=dark]{--bg:#1a1d21;--surface:#23262b;--ink:#e0e0e0;--muted:#999;--line:#3a3d42;--teal:#4ecdc4;--teal-soft:#1a3a38;--red:#ef5350;--red-soft:#3a1a1a;--coral:#ef5350;--amber:#ffb74d;--amber-soft:#3a2a10;--green:#66bb6a;--hover:#2a2d32;--th-bg:#2a2d32;--tag-bg:#3a3d42;--shadow:0 1px 3px rgba(0,0,0,.3);--shadow-md:0 4px 12px rgba(0,0,0,.3)}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:var(--font);background:var(--bg);color:var(--ink);line-height:1.5;font-size:14px}
-a{color:var(--teal);text-decoration:none}
-.container{max-width:1200px;margin:0 auto;padding:16px}
-.login-box{max-width:360px;margin:80px auto;padding:24px;background:var(--surface);border-radius:var(--radius);border:1px solid var(--line);text-align:center;box-shadow:var(--shadow)}
-.login-box h2{margin-bottom:16px;font-size:18px}
-.login-box input{width:100%;padding:10px;border:1px solid var(--line);border-radius:var(--radius);font-size:14px;margin-bottom:12px;background:var(--surface);color:var(--ink)}
-.login-box button{width:100%;padding:10px;background:var(--teal);color:#fff;border:none;border-radius:var(--radius);font-size:14px;cursor:pointer;font-weight:700}
-.login-box button:hover{opacity:.9}
-.header{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);margin-bottom:16px;position:sticky;top:0;z-index:50;background:var(--bg);backdrop-filter:blur(8px)}
-.header h1{font-size:18px;flex:1}
-.header .count{color:var(--muted);font-size:13px}
-.theme-toggle{display:inline-flex;gap:2px;padding:2px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);cursor:pointer}
-.theme-toggle button{padding:4px 8px;border:none;background:none;cursor:pointer;font-size:13px;border-radius:4px;color:var(--muted);transition:.15s}
+body{font-family:var(--font);background:var(--bg);color:var(--ink);line-height:1.5;font-size:14px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+input:focus,select:focus,textarea:focus{border-color:var(--teal)!important;box-shadow:0 0 0 2px var(--teal-soft)}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+a{color:var(--teal);text-decoration:none;transition:opacity var(--transition-fast)}
+a:hover{opacity:.8}
+.container{max-width:1200px;margin:0 auto;padding:var(--space-4)}
+.login-box{max-width:360px;margin:80px auto;padding:var(--space-6);background:var(--surface);border-radius:var(--radius);border:1px solid var(--line);text-align:center;box-shadow:var(--shadow-md)}
+.login-box h2{margin-bottom:var(--space-4);font-size:18px;font-weight:700;letter-spacing:-.01em}
+.login-box input{width:100%;padding:10px;border:1px solid var(--line);border-radius:var(--radius);font-size:14px;margin-bottom:var(--space-3);background:var(--surface);color:var(--ink);transition:border-color var(--transition-fast),box-shadow var(--transition-fast)}
+.login-box input:focus{border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft)}
+.login-box button{width:100%;padding:10px;background:var(--teal);color:#fff;border:none;border-radius:var(--radius);font-size:14px;cursor:pointer;font-weight:600;transition:background var(--transition-fast),transform var(--transition-fast)}
+.login-box button:hover{background:color-mix(in srgb, var(--teal) 90%, black)}
+.login-box button:active{transform:scale(.98)}
+.header{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3) 0;border-bottom:1px solid var(--line);margin-bottom:var(--space-4);position:sticky;top:0;z-index:50;background:color-mix(in srgb, var(--bg) 85%, transparent);backdrop-filter:blur(12px) saturate(1.2)}
+.header h1{font-size:18px;flex:1;font-weight:700;letter-spacing:-.01em}
+.header .count{color:var(--muted);font-size:13px;font-weight:500}
+.theme-toggle{display:inline-flex;gap:2px;padding:2px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
+.theme-toggle button{padding:4px 8px;border:none;background:none;cursor:pointer;font-size:13px;border-radius:4px;color:var(--muted);transition:all var(--transition-fast)}
 .theme-toggle button.active{background:var(--teal);color:#fff}
-.theme-toggle button:hover:not(.active){background:var(--hover)}
-.btn{padding:6px 14px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);color:var(--ink);cursor:pointer;font-size:13px;font-weight:600}
-.btn:hover{background:var(--hover)}
+.theme-toggle button:hover:not(.active){background:var(--hover);color:var(--ink)}
+.btn{padding:var(--space-2) var(--space-3);border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);color:var(--ink);cursor:pointer;font-size:13px;font-weight:600;transition:all var(--transition-fast);display:inline-flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap}
+.btn:hover{background:var(--hover);border-color:color-mix(in srgb, var(--line) 80%, var(--muted))}
+.btn:active{transform:scale(.97);transition:transform var(--transition-fast)}
 .btn-primary{background:var(--teal);color:#fff;border-color:var(--teal)}
-.btn-primary:hover{opacity:.9}
+.btn-primary:hover{background:color-mix(in srgb, var(--teal) 88%, black);border-color:var(--teal)}
 .btn-danger{background:var(--red);color:#fff;border-color:var(--red)}
-.btn-danger:hover{opacity:.9}
-.btn-sm{padding:4px 10px;font-size:12px}
-.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
-.toolbar input[type="search"]{flex:1;min-width:200px;padding:8px 12px;border:1px solid var(--line);border-radius:var(--radius);font-size:13px;background:var(--surface);color:var(--ink)}
-.table-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
+.btn-danger:hover{background:color-mix(in srgb, var(--red) 88%, black);border-color:var(--red)}
+.btn-sm{padding:var(--space-1) var(--space-2);font-size:12px;border-radius:4px}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none!important}
+.btn-loading{position:relative;color:transparent!important;pointer-events:none}
+.btn-loading::after{content:"";position:absolute;width:14px;height:14px;border:2px solid transparent;border-top-color:currentColor;border-radius:50%;animation:spin .6s linear infinite;top:50%;left:50%;margin:-7px 0 0 -7px;color:var(--surface)}
+.btn-loading.btn-primary::after{color:#fff}
+.btn-loading.btn-danger::after{color:#fff}
+@keyframes spin{to{transform:rotate(360deg)}}
+tr{transition:background var(--transition-fast)}
+.toolbar{display:flex;gap:var(--space-3);flex-wrap:wrap;align-items:center;margin-bottom:var(--space-4)}
+.toolbar input[type="search"]{flex:1;min-width:200px;padding:8px 12px;border:1px solid var(--line);border-radius:var(--radius);font-size:13px;background:var(--surface);color:var(--ink);transition:border-color var(--transition-fast),box-shadow var(--transition-fast)}
+.toolbar input[type="search"]:focus{border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft)}
+.table-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
 table{width:100%;border-collapse:collapse;font-size:13px}
-th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
-th{background:var(--th-bg);font-weight:700;position:sticky;top:0}
-tr:hover{background:var(--hover)}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{background:var(--th-bg);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);position:sticky;top:0;z-index:1}
+tbody tr:hover{background:var(--hover)}
+tbody tr:last-child td{border-bottom:none}
+tr.selected{background:var(--teal-soft)!important}
+tr.selected td{position:relative}
+tr.selected td::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--teal)}
 td.name{font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis}
 td.tags{max-width:200px}
-.tag{display:inline-block;padding:2px 6px;border-radius:3px;font-size:11px;font-weight:700;background:var(--tag-bg);margin:1px}
+.tag{display:inline-flex;align-items:center;padding:2px 6px;border-radius:3px;font-size:11px;font-weight:600;background:var(--tag-bg);margin:1px 2px 1px 0;line-height:1.4;transition:background var(--transition-fast)}
+.tag:hover{background:color-mix(in srgb, var(--tag-bg) 80%, var(--muted))}
 td.summary{max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
 td.actions{white-space:nowrap;position:sticky;right:0;background:var(--surface);border-left:1px solid var(--line);z-index:1}
 th:last-child{position:sticky;right:0;background:var(--th-bg);border-left:1px solid var(--line);z-index:2}
-.toggle{position:relative;display:inline-block;width:36px;height:20px;cursor:pointer}
-.toggle input{opacity:0;width:0;height:0}
-.toggle .slider{position:absolute;inset:0;background:var(--line);border-radius:20px;transition:.3s}
-.toggle .slider::before{content:"";position:absolute;left:2px;bottom:2px;width:16px;height:16px;background:var(--surface);border-radius:50%;transition:.3s}
+.toggle{position:relative;display:inline-block;width:36px;height:20px;cursor:pointer;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0;position:absolute}
+.toggle .slider{position:absolute;inset:0;background:var(--line);border-radius:20px;transition:all var(--transition-fast)}
+.toggle .slider::before{content:"";position:absolute;left:2px;bottom:2px;width:16px;height:16px;background:var(--surface);border-radius:50%;transition:all var(--transition-fast);box-shadow:0 1px 2px rgba(0,0,0,.15)}
 .toggle input:checked+.slider{background:var(--teal)}
 .toggle input:checked+.slider::before{transform:translateX(16px)}
-.sub-card{padding:12px;border:1px solid var(--line);border-radius:var(--radius);margin-bottom:8px;background:var(--surface)}
-.sub-card .sub-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
-.sub-card .sub-name{font-weight:700;font-size:14px}
+.toggle input:focus-visible+.slider{box-shadow:0 0 0 3px var(--teal-soft)}
+.sub-card{padding:var(--space-4);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:var(--space-3);background:var(--surface);box-shadow:var(--shadow);transition:box-shadow var(--transition-fast)}
+.sub-card:hover{box-shadow:var(--shadow-md)}
+.sub-card .sub-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-2)}
+.sub-card .sub-name{font-weight:700;font-size:14px;color:var(--ink)}
 .sub-card .sub-time{color:var(--muted);font-size:12px}
 .sub-card .sub-url{color:var(--teal);font-size:12px;word-break:break-all}
-.sub-card .sub-summary{color:var(--muted);font-size:13px;margin-top:4px}
-.sub-card .sub-actions{margin-top:8px;display:flex;gap:6px}
-.sub-empty{color:var(--muted);padding:20px;text-align:center}
-.tab-bar{display:flex;gap:0;border-bottom:2px solid var(--line);margin-bottom:16px}
-.tab-btn{padding:10px 18px;border:none;background:none;cursor:pointer;font-size:14px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px}
+.sub-card .sub-summary{color:var(--muted);font-size:13px;margin-top:var(--space-2);line-height:1.6}
+.sub-card .sub-actions{margin-top:var(--space-3);display:flex;gap:var(--space-2);flex-wrap:wrap}
+.sub-empty{color:var(--muted);padding:var(--space-6) var(--space-4);text-align:center;font-size:13px}
+.tab-bar{display:flex;gap:0;border-bottom:2px solid var(--line);margin-bottom:var(--space-4);overflow-x:auto;scrollbar-width:none}
+.tab-bar::-webkit-scrollbar{display:none}
+.tab-btn{padding:var(--space-3) var(--space-4);border:none;background:none;cursor:pointer;font-size:14px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all var(--transition-fast);white-space:nowrap;position:relative}
 .tab-btn:hover{color:var(--ink)}
 .tab-btn.active{color:var(--teal);border-bottom-color:var(--teal)}
-.tab-panel{display:none}
+.tab-btn::after{content:"";position:absolute;bottom:-2px;left:0;right:0;height:2px;background:var(--teal);transform:scaleX(0);transition:transform var(--transition-base)}
+.tab-btn.active::after{transform:scaleX(1)}
+.tab-panel{display:none;animation:fadeIn var(--transition-base) ease}
 .tab-panel.active{display:block}
 td.url-cell{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;justify-content:center;align-items:center}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;justify-content:center;align-items:center;padding:var(--space-4)}
 .modal-overlay.active{display:flex}
-.modal{background:var(--surface);border-radius:var(--radius);padding:20px;width:min(560px,92vw);max-height:85vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2)}
-.modal h3{margin-bottom:16px;font-size:16px}
-.form-row{margin-bottom:12px}
-.form-row label{display:block;margin-bottom:4px;font-weight:600;font-size:13px}
-.form-row input,.form-row textarea,.form-row select{width:100%;padding:8px;border:1px solid var(--line);border-radius:var(--radius);font-size:13px;font-family:inherit;background:var(--surface);color:var(--ink)}
-.form-row textarea{min-height:60px;resize:vertical}
-.form-row .hint{font-size:11px;color:var(--muted);margin-top:2px}
-.form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
-.batch-bar{display:none;padding:10px 14px;background:var(--teal-soft);border-radius:var(--radius);margin-bottom:12px;align-items:center;gap:12px;font-size:13px}
+.modal{background:var(--surface);border-radius:var(--radius);padding:var(--space-5);width:min(560px,92vw);max-height:85vh;overflow-y:auto;box-shadow:var(--shadow-md);position:relative}
+.modal h3{margin-bottom:var(--space-4);font-size:16px;font-weight:700;letter-spacing:-.01em;display:flex;align-items:center;gap:var(--space-2)}
+.form-row{margin-bottom:var(--space-4)}
+.form-row label{display:block;margin-bottom:var(--space-1);font-weight:600;font-size:13px;color:var(--ink)}
+.form-row input,.form-row textarea,.form-row select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius);font-size:13px;font-family:inherit;background:var(--surface);color:var(--ink);transition:border-color var(--transition-fast),box-shadow var(--transition-fast)}
+.form-row input:focus,.form-row textarea:focus,.form-row select:focus{border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft);outline:none}
+.form-row textarea{min-height:60px;resize:vertical;line-height:1.6}
+.form-row .hint{font-size:11px;color:var(--muted);margin-top:var(--space-1);line-height:1.5}
+.form-actions{display:flex;gap:var(--space-2);justify-content:flex-end;margin-top:var(--space-5);padding-top:var(--space-4);border-top:1px solid var(--line)}
+.batch-bar{display:none;padding:var(--space-3) var(--space-4);background:var(--teal-soft);border-radius:var(--radius);margin-bottom:var(--space-3);align-items:center;gap:var(--space-3);font-size:13px;border:1px solid color-mix(in srgb, var(--teal) 20%, transparent)}
 .batch-bar.active{display:flex}
-.batch-bar .count{font-weight:700}
-.toast{position:fixed;bottom:20px;right:20px;padding:12px 20px;border-radius:var(--radius);color:#fff;font-size:13px;font-weight:600;z-index:200;transform:translateY(80px);opacity:0;transition:.3s}
+.batch-bar .count{font-weight:700;color:var(--teal)}
+.toast{position:fixed;bottom:var(--space-4);right:var(--space-4);padding:var(--space-3) var(--space-4);border-radius:var(--radius);color:#fff;font-size:13px;font-weight:600;z-index:200;transform:translateY(80px);opacity:0;transition:all var(--transition-slow);box-shadow:var(--shadow-md);max-width:calc(100vw - var(--space-4) * 2)}
 .toast.show{transform:translateY(0);opacity:1}
 .toast.success{background:var(--green)}
 .toast.error{background:var(--red)}
 .toast.info{background:var(--teal)}
-@media(max-width:768px){.toolbar{flex-direction:column}.toolbar input[type="search"]{min-width:0;width:100%}th,td{padding:6px 8px}}
+.toast-stack{position:fixed;bottom:var(--space-4);right:var(--space-4);z-index:200;display:flex;flex-direction:column;gap:var(--space-2);pointer-events:none;max-width:calc(100vw - var(--space-4) * 2)}
+.toast-stack .toast{position:static;transform:none;opacity:1;transition:all var(--transition-slow);pointer-events:auto;box-shadow:var(--shadow-md)}
+.toast-stack .toast.removing{opacity:0;transform:translateY(8px)}
+.modal-overlay{animation:fadeIn var(--transition-base) ease}
+.modal-overlay.closing{animation:fadeOut var(--transition-base) ease forwards}
+.modal-overlay.active{overflow-y:auto}
+body.modal-open{overflow:hidden;touch-action:none}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes fadeOut{from{opacity:1}to{opacity:0}}
+.modal{animation:slideIn var(--transition-base) cubic-bezier(.16,1,.3,1)}
+@keyframes slideIn{from{transform:translateY(-12px) scale(.98);opacity:0}to{transform:translateY(0) scale(1);opacity:1}}
+@media(max-width:768px){.toolbar{flex-direction:column;gap:var(--space-2)}.toolbar input[type="search"]{min-width:0;width:100%}th,td{padding:var(--space-2) var(--space-2);font-size:12px}.header{flex-wrap:wrap;gap:var(--space-2)}.batch-bar{flex-wrap:wrap;gap:var(--space-2)}}
+@media(max-width:480px){.container{padding:var(--space-2)}.header h1{font-size:16px}.modal{padding:var(--space-4);width:calc(100vw - var(--space-4) * 2);max-height:90vh}}
+.confirm-modal{max-width:420px}
+.confirm-modal h3{color:var(--ink)}
+.confirm-modal #confirmBody{font-size:14px;color:var(--ink)}
+.confirm-modal #confirmExtra label{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-3);background:var(--amber-soft);border-radius:var(--radius);border:1px solid var(--amber);cursor:pointer;transition:background var(--transition-fast)}
+.confirm-modal #confirmExtra label:hover{background:color-mix(in srgb, var(--amber-soft) 80%, var(--amber))}
+.confirm-modal #confirmExtra input[type="checkbox"]{width:16px;height:16px;accent-color:var(--amber);cursor:pointer;flex-shrink:0}
+.confirm-modal #confirmExtra .detail{font-size:11px;color:var(--muted);margin-top:var(--space-2);padding:var(--space-2) var(--space-3);background:var(--surface);border-radius:var(--radius);line-height:1.5}
+.import-preview-box{min-height:120px;max-height:240px;overflow-y:auto;padding:var(--space-3);background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);font-size:12px;font-family:monospace;white-space:pre-wrap;word-break:break-all;line-height:1.8}
+.import-preview-box .dead-warning{display:inline-block;padding:1px 4px;border-radius:3px;font-size:11px;font-weight:600;background:var(--amber-soft);color:var(--amber);margin-left:4px}
+.import-preview-box .dead-summary{margin-top:var(--space-2);padding:var(--space-2) var(--space-3);background:var(--amber-soft);border-radius:var(--radius);border:1px solid var(--amber);color:var(--amber);font-weight:600;font-size:12px}
+/* ── 表格系统 ──────────────────────────────────────────────────────────── */
+.table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:var(--space-4)}
+.table th,.table td{padding:var(--space-2) var(--space-3);text-align:left;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}
+.table th{background:var(--th-bg);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);position:sticky;top:0;z-index:1}
+.table tbody tr:hover{background:var(--hover)}
+.table tbody tr:last-child td{border-bottom:none}
+.table td{color:var(--ink)}
+.table .text-muted{color:var(--muted)}
+.table .text-coral{color:var(--coral)}
+.table .text-teal{color:var(--teal)}
+.table .text-amber{color:var(--amber)}
+.table .text-sm{font-size:11px}
+.table .text-xs{font-size:10px}
+.table .font-semibold{font-weight:600}
+.table .w-check{width:30px}
+.table .w-action{width:140px}
+.table .w-180{width:180px}
+/* ── 区块标题 ──────────────────────────────────────────────────────────── */
+.section-header{display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-3);flex-wrap:wrap}
+.section-header .title{font-weight:700;font-size:14px}
+.section-header .count{font-size:12px;color:var(--muted);font-weight:500}
+.section-header .spacer{flex:1}
+/* ── 徽章变体 ──────────────────────────────────────────────────────────── */
+.badge{display:inline-flex;align-items:center;padding:2px 6px;border-radius:3px;font-size:11px;font-weight:600;line-height:1.4;transition:all var(--transition-fast);border:1px solid transparent}
+.badge-danger{background:var(--red-soft);color:var(--red);border-color:color-mix(in srgb, var(--red) 30%, transparent)}
+.badge-warning{background:var(--amber-soft);color:var(--amber);border-color:color-mix(in srgb, var(--amber) 30%, transparent)}
+.badge-success{background:var(--teal-soft);color:var(--teal);border-color:color-mix(in srgb, var(--teal) 30%, transparent)}
+.badge-neutral{background:var(--tag-bg);color:var(--ink);border-color:var(--line)}
+.badge .badge-dot{width:6px;height:6px;border-radius:50%;margin-right:4px;flex-shrink:0}
+.badge-success .badge-dot{background:var(--teal)}
+.badge-danger .badge-dot{background:var(--red)}
+.badge-warning .badge-dot{background:var(--amber)}
+.badge-neutral .badge-dot{background:var(--muted)}
+/* ── 表单控件 ──────────────────────────────────────────────────────────── */
+.form-select{padding:8px;border:1px solid var(--line);border-radius:var(--radius);font-size:13px;background:var(--surface);color:var(--ink);transition:border-color var(--transition-fast),box-shadow var(--transition-fast);cursor:pointer}
+.form-select:focus{border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft);outline:none}
+.batch-tag-input{width:120px}
+/* ── 空状态 ──────────────────────────────────────────────────────────── */
+.empty-state{text-align:center;padding:var(--space-6) var(--space-4);color:var(--muted)}
+.empty-state svg{width:48px;height:48px;margin-bottom:var(--space-3);opacity:.4}
+.empty-state h3{font-size:14px;font-weight:600;margin-bottom:var(--space-1);color:var(--ink)}
+.empty-state p{font-size:13px;max-width:360px;margin:0 auto}
+/* ── 工具类 ──────────────────────────────────────────────────────────── */
+.mt-1{margin-top:var(--space-1)}.mt-2{margin-top:var(--space-2)}.mt-3{margin-top:var(--space-3)}.mb-1{margin-bottom:var(--space-1)}.mb-2{margin-bottom:var(--space-2)}.mb-3{margin-bottom:var(--space-3)}
+.mr-1{margin-right:var(--space-1)}.ml-1{margin-left:var(--space-1)}
+.gap-1{gap:var(--space-1)}.gap-2{gap:var(--space-2)}.gap-3{gap:var(--space-3)}
+.flex-wrap{flex-wrap:wrap}
+.items-center{align-items:center}
+.justify-between{justify-content:space-between}
+.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.word-break{word-break:break-all}
 </style>
 </head>
 <body>
@@ -149,34 +251,35 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
   </div>
   <div class="tab-bar">
     <button class="tab-btn active" data-tab="sites" onclick="switchTab('sites')">站点管理</button>
-    <button class="tab-btn" data-tab="submissions" onclick="switchTab('submissions')">提交审核 <span id="subCount" class="tag" style="display:none;background:var(--red);color:#fff"></span></button>
+    <button class="tab-btn" data-tab="submissions" onclick="switchTab('submissions')">提交审核 <span id="subCount" class="badge badge-danger" style="display:none"></span></button>
     <button class="tab-btn" data-tab="health" onclick="switchTab('health')">🔗 链接健康</button>
-    <button class="tab-btn" data-tab="feedback" onclick="switchTab('feedback')">💬 用户反馈 <span id="fbCount" class="tag" style="display:none;background:var(--red);color:#fff"></span></button>
+    <button class="tab-btn" data-tab="feedback" onclick="switchTab('feedback')">💬 用户反馈 <span id="fbCount" class="badge badge-danger" style="display:none"></span></button>
     <button class="tab-btn" data-tab="schema" onclick="switchTab('schema')">⚙️ Schema</button>
   </div>
   <div id="panelSites" class="tab-panel active">
     <div class="toolbar">
       <input type="search" id="searchInput" placeholder="搜索站名、域名、标签..." oninput="filterTable()">
-      <select id="tagFilter" onchange="filterTable()" style="padding:8px;border:1px solid var(--line);border-radius:var(--radius);font-size:13px;background:var(--surface);color:var(--ink)">
+      <select id="tagFilter" onchange="filterTable()" class="form-select">
         <option value="">全部标签</option>
       </select>
       <button class="btn btn-danger btn-sm" onclick="sitesCleanupDeadLinks()">🧹 一键清理死链</button>
-      <span id="sitesCleanStatus" style="color:var(--muted);font-size:12px"></span>
+      <span id="sitesCleanStatus" class="text-muted text-sm"></span>
     </div>
     <div class="batch-bar" id="batchBar">
       <span>已选 <span class="count" id="batchCount">0</span> 项</span>
       <button class="btn btn-sm" onclick="batchRecheck()">🔍 重新复查</button>
       <button class="btn btn-sm" onclick="batchTag()">🏷️ 批量打标签</button>
+      <input type="text" id="batchTagInput" placeholder="输入标签名称" class="form-select batch-tag-input">
       <button class="btn btn-sm" onclick="batchEnable()">✅ 批量启用</button>
       <button class="btn btn-sm" onclick="batchDisable()">⛔ 批量停用</button>
       <button class="btn btn-sm btn-danger" onclick="batchDelete()">🗑️ 批量删除</button>
       <button class="btn btn-sm" onclick="clearSelection()">取消选择</button>
     </div>
     <div class="table-wrap">
-      <table>
+      <table class="table">
         <thead>
           <tr>
-            <th style="width:30px"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+            <th class="w-check"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
             <th>启用</th>
             <th>站点名称</th>
             <th>健康</th>
@@ -186,7 +289,7 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
             <th>模型</th>
             <th>倍率</th>
             <th>摘要</th>
-            <th>操作</th>
+            <th class="w-action">操作</th>
           </tr>
         </thead>
         <tbody id="sitesBody"></tbody>
@@ -197,42 +300,43 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
     <div id="submissionsList"></div>
   </div>
   <div id="panelHealth" class="tab-panel">
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+    <div class="section-header">
       <button class="btn btn-primary btn-sm" onclick="batchCheckUrls()">🔍 批量检查所有站点</button>
-      <span id="healthStatus" style="color:var(--muted);font-size:13px"></span>
+      <span id="healthStatus" class="text-muted text-sm"></span>
     </div>
     <div id="healthResults"></div>
   </div>
   <div id="panelFeedback" class="tab-panel">
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
-      <select id="fbFilter" onchange="loadFeedbacks()" style="padding:8px;border:1px solid var(--line);border-radius:var(--radius);font-size:13px;background:var(--surface);color:var(--ink)">
+    <div class="section-header">
+      <select id="fbFilter" onchange="loadFeedbacks()" class="form-select">
         <option value="">全部状态</option>
         <option value="new">🆕 待处理</option>
         <option value="read">👁️ 已读</option>
         <option value="resolved">✅ 已解决</option>
       </select>
-      <span id="fbStatus" style="color:var(--muted);font-size:13px"></span>
+      <span id="fbStatus" class="text-muted text-sm"></span>
     </div>
     <div id="feedbacksList"></div>
   </div>
   <div id="panelSchema" class="tab-panel">
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+    <div class="section-header">
       <button class="btn btn-primary btn-sm" onclick="loadSchema()">🔄 加载 Schema</button>
       <button class="btn btn-sm" onclick="exportSchema()">📤 导出</button>
       <button class="btn btn-sm" onclick="importSchema()">📥 导入</button>
-      <span id="schemaStatus" style="color:var(--muted);font-size:13px"></span>
+      <span id="schemaStatus" class="text-muted text-sm"></span>
     </div>
     <div class="form-row">
       <label>Schema JSON（编辑后点击保存）</label>
-      <textarea id="schemaEditor" rows="20" style="font-family:monospace;font-size:12px;tab-size:2" placeholder="正在加载..."></textarea>
+      <textarea id="schemaEditor" rows="20" class="font-mono text-sm" style="tab-size:2" placeholder="正在加载..."></textarea>
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+    <div class="section-header" style="margin-top:var(--space-4)">
+      <div class="spacer"></div>
       <button class="btn" onclick="loadSchema()">↩️ 重置</button>
       <button class="btn btn-primary" onclick="saveSchema()">💾 保存 Schema</button>
     </div>
-    <div style="margin-top:16px;padding:12px;background:var(--teal-soft);border-radius:var(--radius);font-size:13px">
+    <div class="sub-card" style="margin-top:var(--space-4);background:var(--teal-soft);border-color:color-mix(in srgb, var(--teal) 20%, transparent)">
       <strong>💡 Schema 使用说明</strong>
-      <ul style="margin:8px 0 0 16px;line-height:1.8">
+      <ul style="margin:var(--space-2) 0 0 16px;line-height:1.8;font-size:13px">
         <li><code>fields</code>: 定义站点字段（key/label/type/required/unique/healthCheck/options/max）</li>
         <li><code>tags</code>: 全局标签选项列表</li>
         <li><code>display</code>: 前端展示配置（layout/columns/sortBy/priorityTags）</li>
@@ -266,8 +370,8 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
          额度那栏永远显示"未知"，只有直接写 SQL 或走导入才能填上。
          枚举值必须与 worker/src/sites.js 的 QUOTA_* / SITE_KINDS 完全一致，
          中文标签与 broadcast/src/00-config.js 保持一致，避免两边叫法不同。 -->
-    <div class="form-row" style="border-top:1px solid var(--border);padding-top:14px;margin-top:6px">
-      <label style="font-weight:600">结构化额度（决定前端排序与"25 刀/天"这类展示）</label>
+    <div class="form-row" style="border-top:1px solid var(--line);padding-top:14px;margin-top:6px">
+      <label class="font-semibold">结构化额度（决定前端排序与"25 刀/天"这类展示）</label>
       <div class="hint">留空 = 未知，前端会诚实显示"未知"，不会编造。跨单位没有汇率，排序只看档位。</div>
     </div>
     <div class="form-row"><label>额度档位（排序依据）</label>
@@ -332,19 +436,32 @@ td.url-cell .orig-url{display:block;color:var(--muted);font-size:11px;white-spac
   <div class="modal">
     <h3>📥 批量导入站点</h3>
     <div class="form-row"><label>选择 JSON 文件</label><input type="file" id="importFile" accept=".json" onchange="previewImport(this)"><div class="hint">支持 sites.json 格式或自定义 JSON 数组，自动剥离 URL 中的 aff/ref/invite 等推广参数</div></div>
-    <div class="form-row" id="importPreview" style="display:none"><label>预览（将导入 <span id="importCount">0</span> 条）</label><textarea id="importPreviewText" readonly style="min-height:120px;font-size:12px;font-family:monospace"></textarea></div>
+    <div class="form-row" id="importPreview" style="display:none"><label>预览（将导入 <span id="importCount">0</span> 条）</label><div id="importPreviewBox" class="import-preview-box"></div></div>
     <div class="form-row"><label><input type="checkbox" id="importOverwrite"> 覆盖已存在的同 URL 站点</label><div class="hint">不勾选时，同 URL 站点会被跳过；勾选时会更新已有站点信息</div></div>
+    <div class="form-row"><label><input type="checkbox" id="importSkipDead" checked> 跳过已知死链（dead_urls 中已存在的 URL）</label><div class="hint">勾选时，导入文件中命中已知死链的记录会被跳过；取消勾选可强制导入为启用站点</div></div>
     <div class="form-actions">
       <button class="btn" onclick="closeImportModal()">取消</button>
       <button class="btn btn-primary" id="importBtn" onclick="doImport()" disabled>开始导入</button>
     </div>
   </div>
 </div>
-<div class="toast" id="toast"></div>
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal confirm-modal">
+    <h3 id="confirmTitle">确认操作</h3>
+    <div id="confirmBody" class="text-muted" style="margin-bottom:var(--space-3)"></div>
+    <div id="confirmExtra" style="margin-bottom:var(--space-3)"></div>
+    <div class="form-actions">
+      <button class="btn" onclick="confirmResolve(false)">取消</button>
+      <button class="btn btn-danger" id="confirmOkBtn" onclick="confirmResolve(true)">确认</button>
+    </div>
+  </div>
+</div>
+<div class="toast-stack" id="toastStack"></div>
 <script>
 let TOKEN = localStorage.getItem("sk-free-admin-token") || "";
 let SITES = [];
 let SELECTED = new Set();
+let DEAD_URLS = new Map(); // url -> { added_at, status, reason, error }（死链库）
 async function api(path, opts = {}) {
   const res = await fetch(path, { ...opts, headers: { "Content-Type": "application/json", "Authorization": "Bearer " + TOKEN, ...(opts.headers || {}) } });
   if (res.status === 401) { doLogout(); throw new Error("登录已过期"); }
@@ -369,7 +486,7 @@ function doLogin() {
   TOKEN = document.getElementById("tokenInput").value.trim();
   if (!TOKEN) return;
   localStorage.setItem("sk-free-admin-token", TOKEN);
-  loadSites().then(() => { document.getElementById("loginView").style.display = "none"; document.getElementById("mainView").style.display = "block"; }).catch(() => { toast("密码错误", "error"); TOKEN = ""; localStorage.removeItem("sk-free-admin-token"); });
+  loadSites().then(() => loadDeadUrls()).then(() => { document.getElementById("loginView").style.display = "none"; document.getElementById("mainView").style.display = "block"; }).catch((e) => { toast("密码错误", "error"); TOKEN = ""; localStorage.removeItem("sk-free-admin-token"); });
 }
 function doLogout() { TOKEN = ""; localStorage.removeItem("sk-free-admin-token"); document.getElementById("loginView").style.display = "block"; document.getElementById("mainView").style.display = "none"; }
 document.getElementById("tokenInput").addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
@@ -379,6 +496,15 @@ async function loadSites() {
   document.getElementById("siteCount").textContent = SITES.length + " 个站点";
   buildTagFilter();
   renderTable();
+}
+async function loadDeadUrls() {
+  try {
+    const data = await api("/api/admin/dead-urls");
+    DEAD_URLS = new Map((data.deadUrls || []).map((d) => [d.url, d]));
+  } catch (e) {
+    console.warn("加载死链库失败", e);
+    DEAD_URLS = new Map();
+  }
 }
 function buildTagFilter() {
   const tags = [...new Set(SITES.flatMap((s) => s.tags || []))].sort();
@@ -399,12 +525,13 @@ function renderTable() {
     const tags = (s.tags || []).map((t) => '<span class="tag">' + esc(t) + '</span>').join("");
     const checked = SELECTED.has(s.name) ? "checked" : "";
     const toggleChecked = s.enabled !== false ? "checked" : "";
-    const deadBadge = s.dead ? '<span class="tag" style="background:var(--coral);color:#fff" title="已标记为死链（不可用）">死链</span>' : '';
+    const deadBadge = s.dead ? '<span class="badge badge-danger" title="已标记为死链（不可用）">死链</span>' : '';
+    const knownDeadBadge = DEAD_URLS.has(s.url.replace(/\/+$/, "")) ? '<span class="badge badge-warning" title="dead_urls 中有历史记录">已知死链</span>' : '';
     const origUrlHtml = s.originalUrl && s.originalUrl !== s.url ? '<span class="orig-url" title="' + esc(s.originalUrl) + '">原: ' + esc(s.originalUrl.slice(0, 40)) + (s.originalUrl.length > 40 ? '...' : '') + '</span>' : '';
     return '<tr>' +
       '<td><input type="checkbox" ' + checked + ' data-name="' + esc(s.name) + '" data-action="toggle-select"></td>' +
       '<td><label class="toggle"><input type="checkbox" ' + toggleChecked + ' data-name="' + esc(s.name) + '" data-action="toggle-enable"><span class="slider"></span></label></td>' +
-      '<td class="name"><a href="' + esc(s.url) + '" target="_blank" title="' + esc(s.url) + '">' + esc(s.name) + '</a>' + deadBadge + origUrlHtml + '</td>' +
+      '<td class="name"><a href="' + esc(s.url) + '" target="_blank" title="' + esc(s.url) + '">' + esc(s.name) + '</a>' + deadBadge + knownDeadBadge + origUrlHtml + '</td>' +
       '<td class="health">' + healthBadge(s) + '</td>' +
       '<td class="tags">' + tags + '</td>' +
       '<td>' + esc(s.checkin || "") + '</td>' +
@@ -417,6 +544,8 @@ function renderTable() {
   }).join("");
 }
 function filterTable() { renderTable(); }
+var _filterTimer = null;
+function filterTable() { clearTimeout(_filterTimer); _filterTimer = setTimeout(renderTable, 150); }
 function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
 // D1 的 datetime('now') 产出 "YYYY-MM-DD HH:MM:SS"，内容是 UTC 但字符串不带时区标记。
 // 直接 new Date(它) 会被当成本地时间，UTC+8 下实测偏 8 小时；某些浏览器还会返回 Invalid Date。
@@ -459,6 +588,7 @@ function showCreate() {
   document.getElementById("editTitle").textContent = "新增站点";
   document.getElementById("editOriginalName").value = "";
   TEXT_FIELDS.concat(STRUCT_FIELDS.map((f) => f[0])).forEach((id) => { document.getElementById(id).value = ""; });
+  _modalOpen();
   document.getElementById("editModal").classList.add("active");
   document.getElementById("editName").focus();
 }
@@ -478,15 +608,14 @@ function showEdit(name) {
   document.getElementById("editRegister").value = site.register || "";
   document.getElementById("editRef").value = site.ref || "";
   document.getElementById("editNotes").value = (site.notes || []).join("\\n");
-  // 结构化字段回填：null/undefined → 空字符串（对应各 select 的"未设置"项）。
-  // 注意不能用 || ""：quotaMin=0 和 needsProxy=0 都是有效值，会被 || 吃掉变成未设置。
   STRUCT_FIELDS.forEach(function (f) {
     const v = site[f[1]];
     document.getElementById(f[0]).value = v === null || v === undefined ? "" : String(v);
   });
+  _modalOpen();
   document.getElementById("editModal").classList.add("active");
 }
-function closeModal() { document.getElementById("editModal").classList.remove("active"); }
+function closeModal() { document.getElementById("editModal").classList.remove("active"); _modalClose(); }
 async function saveSite() {
   const originalName = document.getElementById("editOriginalName").value;
   const tags = document.getElementById("editTags").value.split(",").map((t) => t.trim()).filter(Boolean);
@@ -541,29 +670,66 @@ async function saveSite() {
   } catch (e) { toast(e.message, "error"); }
 }
 async function deleteSite(name) {
-  if (!confirm('确认删除 "' + name + '" ？')) return;
-  try { await api("/api/admin/sites/" + encodeURIComponent(name), { method: "DELETE" }); toast("已删除", "success"); SELECTED.delete(name); await loadSites(); } catch (e) { toast(e.message, "error"); }
+  var site = SITES.find(function(s) { return s.name === name; });
+  var deadInfo = site && site.url ? DEAD_URLS.get(site.url.replace(/\/+$/, "")) : null;
+  var extra = "";
+  if (deadInfo) {
+    extra += '<label style="display:flex;align-items:center;gap:var(--space-2);padding:var(--space-3);background:var(--amber-soft);border-radius:var(--radius);border:1px solid var(--amber);cursor:pointer;transition:background var(--transition-fast)"><input type="checkbox" id="deleteDeadCheck" checked><span style="font-weight:600;color:var(--amber)">此 URL 在 dead_urls 中有记录</span></label>';
+    extra += '<div class="text-sm text-muted" style="margin-top:var(--space-2);padding:var(--space-2) var(--space-3);background:var(--surface);border-radius:var(--radius);line-height:1.5">added_at: ' + fmtTime(deadInfo.added_at) + '<br>reason: ' + esc(deadInfo.reason) + '</div>';
+  }
+  var ok = await showConfirm("确认删除", '<p>站点：<strong>' + esc(name) + '</strong></p>' + (site ? '<p class="text-sm text-muted">URL：' + esc(site.url) + '</p>' : '') + (deadInfo ? '<p class="text-amber text-sm" style="margin-top:var(--space-2)">⚠️ 删除后 dead_urls 将追加 " | site-deleted" 痕迹</p>' : ''), extra, "删除");
+  if (!ok) return;
+  var addDead = deadInfo && document.getElementById("deleteDeadCheck").checked;
+  try {
+    await api("/api/admin/sites/" + encodeURIComponent(name), { method: "DELETE" });
+    toast("已删除" + (addDead ? "（死链已追加记录）" : ""), "success");
+    SELECTED.delete(name);
+    await loadSites();
+  } catch (e) { toast(e.message, "error"); }
 }
 async function batchDelete() {
-  if (!confirm("确认删除选中的 " + SELECTED.size + " 个站点？")) return;
-  try { await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "delete", names: [...SELECTED] }) }); toast("批量删除完成", "success"); SELECTED.clear(); await loadSites(); } catch (e) { toast(e.message, "error"); }
+  if (SELECTED.size === 0) return;
+  var selectedSites = SITES.filter(function(s) { return SELECTED.has(s.name); });
+  var hasDead = selectedSites.some(function(s) { return DEAD_URLS.has(s.url.replace(/\/+$/, "")); });
+  var ok = await showConfirm("确认批量删除", "<p>将删除 <strong>" + SELECTED.size + "</strong> 个站点</p>" + (hasDead ? '<p class="text-sm" style="color:var(--amber)">⚠️ 其中包含已知死链，删除后 dead_urls 将追加痕迹</p>' : ''), "", "批量删除");
+  if (!ok) return;
+  var btns = document.querySelectorAll('#batchBar .btn');
+  btns.forEach(function(b) { btnLoading(b, true); });
+  try { await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "delete", names: [...SELECTED] }) }); toast("批量删除完成", "success"); SELECTED.clear(); await loadSites(); } catch (e) { toast(e.message, "error"); } finally { btns.forEach(function(b) { btnLoading(b, false); }); }
 }
 async function batchTag() {
-  const tag = prompt("输入要添加的标签名称：");
-  if (!tag) return;
-  try { const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "add_tag", names: [...SELECTED], tag: tag.trim() }) }); toast("已为 " + data.affected + " 个站点添加标签", "success"); SELECTED.clear(); await loadSites(); } catch (e) { toast(e.message, "error"); }
+  if (SELECTED.size === 0) return;
+  var input = document.getElementById("batchTagInput");
+  var tag = input.value.trim();
+  if (!tag) { toast("请输入标签名称", "error"); input.focus(); return; }
+  try { const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "add_tag", names: [...SELECTED], tag: tag }) }); toast("已为 " + data.affected + " 个站点添加标签", "success"); SELECTED.clear(); input.value = ""; await loadSites(); } catch (e) { toast(e.message, "error"); }
 }
 async function toggleEnable(name, enabled) {
-  try { const site = SITES.find((s) => s.name === name); if (!site) return; await api("/api/admin/sites/" + encodeURIComponent(name), { method: "PUT", body: JSON.stringify({ ...site, enabled }) }); toast(enabled ? "已启用：" + name : "已停用：" + name, "success"); await loadSites(); } catch (e) { toast(e.message, "error"); }
+  try { const site = SITES.find((s) => s.name === name); if (!site) return; await api("/api/admin/sites/" + encodeURIComponent(name), { method: "PUT", body: JSON.stringify({ ...site, enabled }) }); toast(enabled ? "已启用：" + name : "已停用：" + name, "success"); if (!enabled && site.url) { try { await api("/api/admin/dead-urls", { method: "POST", body: JSON.stringify({ url: site.url, action: "add", reason: "manual-marked" }) }); } catch (e) { console.warn("写入 dead_urls 失败", e); } } await loadSites(); await loadDeadUrls(); } catch (e) { toast(e.message, "error"); }
 }
 async function batchEnable() {
   if (SELECTED.size === 0) return;
-  try { const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "enable", names: [...SELECTED] }) }); toast("已启用 " + data.affected + " 个站点", "success"); SELECTED.clear(); await loadSites(); } catch (e) { toast(e.message, "error"); }
+  var btns = document.querySelectorAll('#batchBar .btn');
+  btns.forEach(function(b) { btnLoading(b, true); });
+  try { const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "enable", names: [...SELECTED] }) }); toast("已启用 " + data.affected + " 个站点", "success"); SELECTED.clear(); await loadSites(); } catch (e) { toast(e.message, "error"); } finally { btns.forEach(function(b) { btnLoading(b, false); }); }
 }
 async function batchDisable() {
   if (SELECTED.size === 0) return;
-  if (!confirm("确认停用选中的 " + SELECTED.size + " 个站点？")) return;
-  try { const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "disable", names: [...SELECTED] }) }); toast("已停用 " + data.affected + " 个站点", "success"); SELECTED.clear(); await loadSites(); } catch (e) { toast(e.message, "error"); }
+  var ok = await showConfirm("确认批量停用", "<p>将停用 <strong>" + SELECTED.size + "</strong> 个站点</p><p class='text-sm text-muted'>站点将不再在公开页展示</p>", "", "停用");
+  if (!ok) return;
+  var btns = document.querySelectorAll('#batchBar .btn');
+  btns.forEach(function(b) { btnLoading(b, true); });
+  try { 
+    await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "disable", names: [...SELECTED] }) }); 
+    var selectedForDead = SITES.filter(function(s) { return SELECTED.has(s.name); });
+    var deadUrls = selectedForDead.map(function(s) { return s.url; }).filter(Boolean);
+    if (deadUrls.length > 0) {
+      try { await api("/api/admin/dead-urls/batch", { method: "POST", body: JSON.stringify({ urls: deadUrls, action: "add" }) }); } catch (e) { console.warn("批量写入 dead_urls 失败", e); }
+    }
+    toast("已停用 " + SELECTED.size + " 个站点", "success"); 
+    SELECTED.clear(); 
+    await loadSites(); await loadDeadUrls();
+  } catch (e) { toast(e.message, "error"); } finally { btns.forEach(function(b) { btnLoading(b, false); }); }
 }
 // 对选中的站点重新做健康检查（只查选中的，不查全部）
 async function batchRecheck() {
@@ -607,7 +773,7 @@ async function loadSubmissions() {
     list.innerHTML = data.submissions.map((sub) => {
       const time = fmtTime(sub.createdAt);
       const tags = (sub.site.tags || []).map((t) => '<span class="tag">' + esc(t) + '</span>').join(" ");
-      return '<div class="sub-card" id="sub-' + sub.id + '"><div class="sub-header"><span class="sub-name">' + esc(sub.site.name) + '</span><span class="sub-time">' + esc(time) + ' | ' + esc(sub.ip) + '</span></div><div class="sub-url">' + esc(sub.site.url) + '</div>' + (sub.site.summary ? '<div class="sub-summary">' + esc(sub.site.summary) + '</div>' : '') + (tags ? '<div style="margin-top:4px">' + tags + '</div>' : '') + '<div class="sub-actions"><button class="btn btn-sm btn-primary" data-id="' + esc(sub.id) + '" data-action="approve-submission">✅ 批准</button> <button class="btn btn-sm btn-danger" data-id="' + esc(sub.id) + '" data-action="reject-submission">❌ 驳回</button></div></div>';
+      return '<div class="sub-card" id="sub-' + sub.id + '"><div class="sub-header"><span class="sub-name">' + esc(sub.site.name) + '</span><span class="sub-time">' + esc(time) + ' | ' + esc(sub.ip) + '</span></div><div class="sub-url">' + esc(sub.site.url) + '</div>' + (sub.site.summary ? '<div class="sub-summary">' + esc(sub.site.summary) + '</div>' : '') + (tags ? '<div class="mt-1">' + tags + '</div>' : '') + '<div class="sub-actions"><button class="btn btn-sm btn-primary" data-id="' + esc(sub.id) + '" data-action="approve-submission">✅ 批准</button> <button class="btn btn-sm btn-danger" data-id="' + esc(sub.id) + '" data-action="reject-submission">❌ 驳回</button></div></div>';
     }).join("");
   } catch (e) { toast(e.message, "error"); }
 }
@@ -624,7 +790,8 @@ async function approveSubmission(id) {
   } catch (e) { toast(e.message, "error"); }
 }
 async function rejectSubmission(id) {
-  if (!confirm("确认驳回此提交？")) return;
+  var ok = await showConfirm("确认驳回", "<p>驳回后将无法恢复，确认驳回此提交？</p>", "", "驳回");
+  if (!ok) return;
   try { await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "reject_submission", id }) }); toast("已驳回", "success"); await loadSubmissions(); } catch (e) { toast(e.message, "error"); }
 }
 // 恢复死链 = 启用站点（走 /api/admin/sites/batch 的 enable，写人工验证时间）
@@ -634,21 +801,27 @@ async function setDeadByName(name, isDead) {
   try {
     const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: isDead ? "disable" : "enable", names: [name] }) });
     toast(isDead ? "已标记为死链：" + name : "已恢复为可用：" + name, "success");
-    await loadSites(); renderHealthFromSites();
+    if (isDead) {
+      const site = SITES.find((s) => s.name === name);
+      if (site && site.url) {
+        try { await api("/api/admin/dead-urls", { method: "POST", body: JSON.stringify({ url: site.url, action: "add", reason: "manual-marked" }) }); } catch {}
+      }
+    }
+    await loadSites(); await loadDeadUrls(); renderHealthFromSites();
   } catch (e) { toast(e.message, "error"); }
 }
 // 站点健康状态徽章（基于数据库已有数据，无需扫描）
 function healthBadge(s) {
-  if (s.dead) return '<span style="color:var(--coral);font-size:11px">\u2716 已停用</span>';
-  if (s.healthFailCount > 2) return '<span style="color:var(--coral);font-size:11px">\u26a0 连续失败 ' + s.healthFailCount + ' 次</span>';
+  if (s.dead) return '<span class="badge badge-danger text-xs">\u2716 已停用</span>';
+  if (s.healthFailCount > 2) return '<span class="badge badge-danger text-xs">\u26a0 连续失败 ' + s.healthFailCount + ' 次</span>';
   if (s.verifiedAt) {
     var ts = parseUtc(s.verifiedAt);
     var diff = Date.now() - ts;
-    if (diff < 86400000) return '<span style="color:var(--teal);font-size:11px">\u2714 24h内验证</span>';
-    if (diff < 604800000) return '<span style="color:#eab308;font-size:11px">\u25cf 7天内验证</span>';
-    return '<span style="color:var(--muted);font-size:11px">\u25cb 超7天未验证</span>';
+    if (diff < 86400000) return '<span class="badge badge-success text-xs">\u2714 24h内验证</span>';
+    if (diff < 604800000) return '<span class="badge badge-warning text-xs">\u25cf 7天内验证</span>';
+    return '<span class="badge badge-neutral text-xs">\u25cb 超7天未验证</span>';
   }
-  return '<span style="color:var(--muted);font-size:11px">\u25cb 未验证</span>';
+  return '<span class="badge badge-neutral text-xs">\u25cb 未验证</span>';
 }
 // 从数据库已有数据构建健康对账报告（无需扫描）
 // 包含批量操作：死链可批量恢复，异常可批量标记
@@ -665,32 +838,32 @@ function renderHealthFromSites() {
   var reachUnverified = SITES.filter(function(s) { return !s.dead && s.healthFailCount === 0 && !s.verifiedAt; });
   var html = "";
   // 通用表格样式
-  var tblStyle = 'style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px"';
-  var thStyle = 'style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--line);font-weight:700;background:var(--surface-soft);font-size:12px;white-space:nowrap"';
-  var tdStyle = 'style="padding:6px 10px;border-bottom:1px solid var(--line);vertical-align:middle"';
+  var tblClass = 'class="table"';
+  var thClass = 'class="text-sm text-muted font-semibold"';
+  var tdClass = 'class="text-sm"';
   // ── 死链表 ────────────────────────────────────────────────────────────
   if (unreachEnabled.length > 0) {
-    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">';
-    html += '<strong style="color:var(--coral)">\u2716 已标记为死链（' + unreachEnabled.length + '）</strong>';
+    html += '<div class="section-header">';
+    html += '<strong class="title text-coral">\u2716 已标记为死链（' + unreachEnabled.length + '）</strong>';
     html += '<button class="btn btn-sm btn-primary" onclick="healthBatchRestoreDead()">\u2705 恢复选中</button>';
     html += '<button class="btn btn-sm" onclick="healthBatchRecheckDead()">\u200d\u200d🔍 重新复查选中</button>';
     html += '<button class="btn btn-sm btn-danger" onclick="healthRestoreAllDead()">\u2705 恢复全部</button>';
     html += '<button class="btn btn-sm" onclick="healthClearDeadSelection()">\u2716 取消选择</button>';
-    html += '<span id="healthDeadCount" style="color:var(--muted);font-size:12px">已选 0 个</span>';
+    html += '<span id="healthDeadCount" class="count text-muted text-sm">已选 0 个</span>';
     html += '</div>';
-    html += '<table ' + tblStyle + '><thead><tr>';
-    html += '<th ' + thStyle + ' style="width:30px"><input type="checkbox" id="healthDeadSelectAll" onchange="healthToggleDeadSelectAll(this)"></th>';
-    html += '<th ' + thStyle + '>站点名称</th>';
-    html += '<th ' + thStyle + '>验证时间</th>';
-    html += '<th ' + thStyle + ' style="width:180px">操作</th>';
+    html += '<table ' + tblClass + '><thead><tr>';
+    html += '<th class="w-check"><input type="checkbox" id="healthDeadSelectAll" onchange="healthToggleDeadSelectAll(this)"></th>';
+    html += '<th ' + thClass + '>站点名称</th>';
+    html += '<th ' + thClass + '>验证时间</th>';
+    html += '<th ' + thClass + ' class="w-action">操作</th>';
     html += '</tr></thead><tbody>';
     html += unreachEnabled.map(function(s) {
       return '<tr>' +
-        '<td ' + tdStyle + '><input type="checkbox" data-name="' + esc(s.name) + '" onchange="healthToggleDeadSelect(this)"></td>' +
-        '<td ' + tdStyle + '><a href="' + esc(s.url) + '" target="_blank">' + esc(s.name) + '</a></td>' +
-        '<td ' + tdStyle + ' style="color:var(--muted);font-size:11px">' + (s.verifiedAt ? "\u2705 " + fmtTime(s.verifiedAt) : '\u25cb 未验证') + '</td>' +
-        '<td ' + tdStyle + '>' +
-        '<button class="btn btn-sm btn-primary" data-name="' + esc(s.name) + '" data-action="restore-dead" style="margin-right:4px">\u6062\u590d\u4e3a\u53ef\u7528</button>' +
+        '<td class="w-check"><input type="checkbox" data-name="' + esc(s.name) + '" onchange="healthToggleDeadSelect(this)"></td>' +
+        '<td ' + tdClass + '><a href="' + esc(s.url) + '" target="_blank">' + esc(s.name) + '</a></td>' +
+        '<td ' + tdClass + ' class="text-muted text-sm">' + (s.verifiedAt ? "\u2705 " + fmtTime(s.verifiedAt) : '\u25cb 未验证') + '</td>' +
+        '<td ' + tdClass + '>' +
+        '<button class="btn btn-sm btn-primary" data-name="' + esc(s.name) + '" data-action="restore-dead" class="mr-1">\u6062\u590d\u4e3a\u53ef\u7528</button>' +
         '<button class="btn btn-sm" data-name="' + esc(s.name) + '" data-action="recheck-dead">\u200d\u200d🔍 复查</button></td>' +
         '</tr>';
     }).join("");
@@ -698,30 +871,30 @@ function renderHealthFromSites() {
   }
   // ── 异常表：可批量标记死链 ────────────────────────────────────────────
   if (reachWithFails.length > 0) {
-    html += '<div style="display:flex;align-items:center;gap:8px;margin:12px 0 8px;flex-wrap:wrap">';
-    html += '<strong style="color:var(--coral)">\u26a0 可用但连续失败（' + reachWithFails.length + '）</strong>';
+    html += '<div class="section-header" style="margin:var(--space-3) 0 var(--space-2)">';
+    html += '<strong class="title text-coral">\u26a0 可用但连续失败（' + reachWithFails.length + '）</strong>';
     html += '<button class="btn btn-sm btn-danger" onclick="healthBatchMarkDead()">\u2716 标记选中为死链</button>';
     html += '<button class="btn btn-sm" onclick="healthClearFailSelection()">\u2716 取消选择</button>';
-    html += '<span id="healthFailCount" style="color:var(--muted);font-size:12px">已选 0 个</span>';
+    html += '<span id="healthFailCount" class="count text-muted text-sm">已选 0 个</span>';
     html += '</div>';
-    html += '<table ' + tblStyle + '><thead><tr>';
-    html += '<th ' + thStyle + ' style="width:30px"><input type="checkbox" id="healthFailSelectAll" onchange="healthToggleFailSelectAll(this)"></th>';
-    html += '<th ' + thStyle + '>站点名称</th>';
-    html += '<th ' + thStyle + '>失败次数</th>';
-    html += '<th ' + thStyle + ' style="width:130px">操作</th>';
+    html += '<table ' + tblClass + '><thead><tr>';
+    html += '<th class="w-check"><input type="checkbox" id="healthFailSelectAll" onchange="healthToggleFailSelectAll(this)"></th>';
+    html += '<th ' + thClass + '>站点名称</th>';
+    html += '<th ' + thClass + '>失败次数</th>';
+    html += '<th ' + thClass + ' class="w-action">操作</th>';
     html += '</tr></thead><tbody>';
     html += reachWithFails.map(function(s) {
       return '<tr>' +
-        '<td ' + tdStyle + '><input type="checkbox" data-name="' + esc(s.name) + '" onchange="healthToggleFailSelect(this)"></td>' +
-        '<td ' + tdStyle + '><a href="' + esc(s.url) + '" target="_blank">' + esc(s.name) + '</a></td>' +
-        '<td ' + tdStyle + ' style="color:var(--coral);font-size:11px">\u26a0 ' + s.healthFailCount + ' 次</td>' +
-        '<td ' + tdStyle + '><button class="btn btn-sm btn-danger" data-name="' + esc(s.name) + '" data-action="mark-dead">\u6807\u8bb0\u4e3a\u6b7b\u94fe</button></td>' +
+        '<td class="w-check"><input type="checkbox" data-name="' + esc(s.name) + '" onchange="healthToggleFailSelect(this)"></td>' +
+        '<td ' + tdClass + '><a href="' + esc(s.url) + '" target="_blank">' + esc(s.name) + '</a></td>' +
+        '<td ' + tdClass + ' class="text-coral text-sm">\u26a0 ' + s.healthFailCount + ' 次</td>' +
+        '<td ' + tdClass + '><button class="btn btn-sm btn-danger" data-name="' + esc(s.name) + '" data-action="mark-dead">\u6807\u8bb0\u4e3a\u6b7b\u94fe</button></td>' +
         '</tr>';
     }).join("");
     html += '</tbody></table>';
   }
   // ── 正常区 ────────────────────────────────────────────────────────────
-  html += '<div style="margin:12px 0 4px;color:var(--muted);font-size:12px">\u2705 正常：' + (reachVerified.length + reachUnverified.length) + '（已验证 ' + reachVerified.length + '，未验证 ' + reachUnverified.length + '）。</div>';
+  html += '<div class="text-muted text-sm" style="margin:var(--space-3) 0 var(--space-1)">\u2705 正常：' + (reachVerified.length + reachUnverified.length) + '（已验证 ' + reachVerified.length + '，未验证 ' + reachUnverified.length + '）。</div>';
   resultsEl.innerHTML = html;
   statusEl.textContent = "基于数据库最近一次 cron 检查结果（每 6 小时自动更新）。需要最新数据请点【批量检查】。";
 }
@@ -764,7 +937,8 @@ async function healthBatchRestoreDead() {
 async function healthRestoreAllDead() {
   var names = SITES.filter(function(s) { return s.dead; }).map(function(s) { return s.name; });
   if (names.length === 0) { toast("没有死链站点", "info"); return; }
-  if (!confirm("确认恢复全部 " + names.length + " 个死链站点为可用？")) return;
+  var ok = await showConfirm("确认恢复全部", "<p>将恢复 <strong>" + names.length + "</strong> 个死链站点为可用</p>", "", "恢复全部");
+  if (!ok) return;
   try { await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "enable", names }) }); toast("已恢复 " + names.length + " 个站点", "success"); HEALTH_DEAD_SELECTED.clear(); await loadSites(); renderHealthFromSites(); } catch (e) { toast(e.message, "error"); }
 }
 // 异常区的批量选择
@@ -790,7 +964,17 @@ function healthClearFailSelection() {
 }
 async function healthBatchMarkDead() {
   if (HEALTH_FAIL_SELECTED.size === 0) { toast("请先选择要标记的站点", "info"); return; }
-  try { await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "disable", names: [...HEALTH_FAIL_SELECTED] }) }); toast("已标记 " + HEALTH_FAIL_SELECTED.size + " 个站点为死链", "success"); HEALTH_FAIL_SELECTED.clear(); await loadSites(); renderHealthFromSites(); } catch (e) { toast(e.message, "error"); }
+  var selectedSites = SITES.filter(function(s) { return HEALTH_FAIL_SELECTED.has(s.name); });
+  var urls = selectedSites.map(function(s) { return s.url; }).filter(Boolean);
+  try {
+    await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "disable", names: [...HEALTH_FAIL_SELECTED] }) });
+    if (urls.length > 0) {
+      try { await api("/api/admin/dead-urls/batch", { method: "POST", body: JSON.stringify({ urls: urls, action: "add" }) }); } catch (e) { console.warn("批量写入 dead_urls 失败", e); }
+    }
+    toast("已标记 " + HEALTH_FAIL_SELECTED.size + " 个站点为死链", "success");
+    HEALTH_FAIL_SELECTED.clear();
+    await loadSites(); await loadDeadUrls(); renderHealthFromSites();
+  } catch (e) { toast(e.message, "error"); }
 }
 /**
  * 共享的健康扫描逻辑（链接健康 tab 和站点管理 tab 共用）
@@ -850,29 +1034,26 @@ async function batchCheckUrls() {
           if (r.ok) { if (isEnabled) reachEnabled.push(r); else reachDisabled.push(r); }
           else { if (isEnabled) unreachEnabled.push(r); else unreachDisabled.push(r); }
         });
-        var tblStyle = 'style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px"';
-        var thStyle = 'style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--line);font-weight:700;background:var(--surface-soft);font-size:12px;white-space:nowrap"';
-        var tdStyle = 'style="padding:6px 10px;border-bottom:1px solid var(--line);vertical-align:middle"';
+        var tblClass = 'class="table"';
+        var thClass = 'class="text-sm text-muted font-semibold"';
+        var tdClass = 'class="text-sm"';
         function section(id, title, color, rows, batchBtn, evidence) {
           if (rows.length === 0) return "";
           var h = '<div id="' + id + 'Section">';
-          h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">';
-          h += '<strong style="color:' + color + '">' + title + '(' + rows.length + ')</strong>';
-          // 内联 handler 一律不带字符串参数：本段 JS 嵌在服务端模板字面量里，
-          // 三层转义（模板→JS源→HTML属性）会把 \' 变成非法代码。
-          // 参数改走 data-* 属性，handler 内部自取——与 HEALTH_* 系列同一纪律。
-          h += '<label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px"><input type="checkbox" data-scan-all="' + id + '" onchange="scanToggleAll(this)"> 全选</label>';
+          h += '<div class="section-header">';
+          h += '<strong class="title text-coral">' + title + '(' + rows.length + ')</strong>';
+          h += '<label class="text-sm text-muted" style="display:flex;align-items:center;gap:4px"><input type="checkbox" data-scan-all="' + id + '" onchange="scanToggleAll(this)"> 全选</label>';
           h += batchBtn;
-          h += '<span id="' + id + 'Count" style="color:var(--muted);font-size:12px">已选 0 个</span>';
+          h += '<span id="' + id + 'Count" class="count text-muted text-sm">已选 0 个</span>';
           h += '</div>';
-          h += '<table ' + tblStyle + '><tbody id="' + id + 'Body">';
+          h += '<table ' + tblClass + '><tbody id="' + id + 'Body">';
           h += rows.map(function(r) {
             var s = byUrl[r.url];
             return '<tr data-name="' + esc(s.name) + '">' +
-              '<td ' + tdStyle + ' style="width:30px"><input type="checkbox" data-name="' + esc(s.name) + '" data-body="' + id + 'Body" onchange="scanCkChanged(this)"></td>' +
-              '<td ' + tdStyle + '><a href="' + esc(r.url) + '" target="_blank">' + esc(s.name) + '</a> <span style="color:var(--muted);font-size:11px">' + esc(r.url) + '</span></td>' +
-              '<td ' + tdStyle + ' style="white-space:nowrap;color:' + color + ';font-size:12px">' + evidence(r) + '</td>' +
-              '<td ' + tdStyle + ' style="width:120px">' +
+              '<td class="w-check"><input type="checkbox" data-name="' + esc(s.name) + '" data-body="' + id + 'Body" onchange="scanCkChanged(this)"></td>' +
+              '<td ' + tdClass + '><a href="' + esc(r.url) + '" target="_blank">' + esc(s.name) + '</a> <span class="text-muted text-xs">' + esc(r.url) + '</span></td>' +
+              '<td class="text-sm" style="white-space:nowrap;color:' + color + '">' + evidence(r) + '</td>' +
+              '<td ' + tdClass + ' class="w-action">' +
               '<button class="btn btn-sm ' + (id === "scanMark" ? "btn-danger" : "btn-primary") + '" onclick="scanOne(this,' + (id === "scanMark" ? "true" : "false") + ')">' + (id === "scanMark" ? "\u6807\u8bb0\u4e3a\u6b7b\u94fe" : "\u6062\u590d\u4e3a\u53ef\u7528") + '</button></td>' +
               '</tr>';
           }).join("");
@@ -886,7 +1067,7 @@ async function batchCheckUrls() {
         html += section("scanRestore", "\ud83d\udd04 \u5df2\u53ef\u8fbe\u4f46\u5f53\u524d\u4e3a\u6b7b\u94fe\uff08\u5efa\u8bae\u6062\u590d\u4e3a\u53ef\u7528\uff09", "var(--teal)", reachDisabled,
           '<button class="btn btn-sm btn-primary" onclick="scanBatchRestore()">\u2714 \u6062\u590d\u9009\u4e2d\u4e3a\u53ef\u7528</button>',
           function(r) { return "HTTP " + r.status; });
-        html += '<div style="margin:12px 0 4px;color:var(--muted);font-size:12px">\u5df2\u4e00\u81f4\uff08\u65e0\u9700\u64cd\u4f5c\uff09\uff1a\u4e0d\u53ef\u8fbe\u4e14\u5df2\u6807\u8bb0\u6b7b\u94fe ' + unreachDisabled.length + ' \u4e2a\uff1b\u53ef\u8fbe\u4e14\u53ef\u7528 ' + reachEnabled.length + ' \u4e2a\u3002\u52fe\u9009\u540e\u70b9\u6279\u91cf\u6309\u94ae\uff0c\u5904\u7406\u8fc7\u7684\u884c\u4f1a\u4ece\u5217\u8868\u79fb\u9664\u3002</div>';
+        html += '<div class="text-muted text-sm" style="margin:var(--space-3) 0 var(--space-1)">\u5df2\u4e00\u81f4\uff08\u65e0\u9700\u64cd\u4f5c\uff09\uff1a\u4e0d\u53ef\u8fbe\u4e14\u5df2\u6807\u8bb0\u6b7b\u94fe ' + unreachDisabled.length + ' \u4e2a\uff1b\u53ef\u8fbe\u4e14\u53ef\u7528 ' + reachEnabled.length + ' \u4e2a\u3002\u52fe\u9009\u540e\u70b9\u6279\u91cf\u6309\u94ae\uff0c\u5904\u7406\u8fc7\u7684\u884c\u4f1a\u4ece\u5217\u8868\u79fb\u9664\u3002</div>';
         // 静默刷新 SITES（站点表开关/徽章保持最新）；绝不调 renderHealthFromSites，
         // 否则 DB 状态视图会立刻覆盖掉刚生成的扫描对账报告
         resultsEl.innerHTML = html; loadSites();
@@ -933,7 +1114,7 @@ function scanRemoveRows(bodyId, names) {
   });
   var section = document.getElementById(scanSectionId(bodyId));
   if (section && body.querySelectorAll("tr").length === 0) {
-    section.innerHTML = '<div style="margin:12px 0;color:var(--muted);font-size:12px">\u2714 \u672c\u7ec4\u5df2\u5168\u90e8\u5904\u7406\u5b8c\u6bd5</div>';
+    section.innerHTML = '<div class="text-muted text-sm" style="margin:var(--space-3) 0">\u2714 \u672c\u7ec4\u5df2\u5168\u90e8\u5904\u7406\u5b8c\u6bd5</div>';
   } else {
     scanUpdateCount(bodyId);
   }
@@ -941,12 +1122,22 @@ function scanRemoveRows(bodyId, names) {
 // 核心：调批量接口 + 原位移除 + 静默刷新（绝不重渲染整个视图）
 async function scanApply(names, action, bodyId) {
   if (!names || names.length === 0) { toast("请先勾选站点", "info"); return; }
-  if (action === "disable" && !confirm("确认将选中的 " + names.length + " 个站点标记为死链？")) return;
+  if (action === "disable") {
+    var ok = await showConfirm("确认标记为死链", "<p>将标记 <strong>" + names.length + "</strong> 个站点为死链</p><p style='font-size:12px;color:var(--muted)'>站点将不再在公开页展示</p>", "", "标记为死链");
+    if (!ok) return;
+  }
   try {
     var data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: action, names: names }) });
     toast((action === "disable" ? "已标记 " : "已恢复 ") + data.affected + " 个站点", "success");
     scanRemoveRows(bodyId, names);
-    await loadSites();
+    if (action === "disable") {
+      var scanSites = SITES.filter(function(s) { return names.indexOf(s.name) !== -1; });
+      var scanUrls = scanSites.map(function(s) { return s.url; }).filter(Boolean);
+      if (scanUrls.length > 0) {
+        try { await api("/api/admin/dead-urls/batch", { method: "POST", body: JSON.stringify({ urls: scanUrls, action: "add" }) }); } catch (e) { console.warn("扫描批量写入 dead_urls 失败", e); }
+      }
+    }
+    await loadSites(); await loadDeadUrls();
   } catch (e) { toast(e.message, "error"); }
 }
 function scanBatchMark() { scanApply(scanCheckedNames("scanMarkBody"), "disable", "scanMarkBody"); }
@@ -961,7 +1152,8 @@ function scanOne(btn, isDead) {
 async function sitesCleanupDeadLinks() {
   var statusEl = document.getElementById("sitesCleanStatus");
   if (SITES.length === 0) { toast("请先加载站点列表", "error"); return; }
-  if (!confirm("将检查全部 " + SITES.length + " 个站点的 URL 可达性，结果支持一键标记/恢复。确认继续？")) return;
+  var ok = await showConfirm("确认扫描", "<p>将检查全部 <strong>" + SITES.length + "</strong> 个站点的 URL 可达性</p><p class='text-sm text-muted'>结果支持一键标记/恢复</p>", "", "开始扫描");
+  if (!ok) return;
   statusEl.textContent = "正在检查中...";
   try {
     await runHealthScan({
@@ -979,26 +1171,26 @@ async function sitesCleanupDeadLinks() {
         // 构建与 batchCheckUrls 一致的对账报告，存入缓存供健康 tab 查看
         var html = "";
         if (unreachEnabled.length > 0) {
-          html += '<div style="margin-bottom:10px"><strong style="color:var(--coral)">\u26a1 \u4e0d\u53ef\u8fbe\u4f46\u5f53\u524d\u53ef\u7528\uff08\u5efa\u8bae\u6807\u8bb0\u4e3a\u6b7b\u94fe\uff09(' + unreachEnabled.length + ')</strong></div>';
+          html += '<div style="margin-bottom:var(--space-2)"><strong style="color:var(--coral)">\u26a1 \u4e0d\u53ef\u8fbe\u4f46\u5f53\u524d\u53ef\u7528\uff08\u5efa\u8bae\u6807\u8bb0\u4e3a\u6b7b\u94fe\uff09(' + unreachEnabled.length + ')</strong></div>';
           html += unreachEnabled.map(function(r) {
             var s = byUrl[r.url];
-            return '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)">' +
+            return '<div class="section-header" style="padding:var(--space-1) 0;font-size:12px;border-bottom:1px solid var(--line)">' +
               '<span style="flex:1;word-break:break-all"><a href="' + esc(r.url) + '" target="_blank">' + esc(s.name) + '</a> <span style="color:var(--muted)">' + esc(r.url) + '</span></span>' +
               '<span style="color:var(--coral);white-space:nowrap">' + esc(r.error || ("HTTP " + r.status)) + '</span>' +
               '<button class="btn btn-sm btn-danger" data-name="' + esc(s.name) + '" data-action="mark-dead">\u6807\u8bb0\u4e3a\u6b7b\u94fe</button></div>';
           }).join("");
         }
         if (reachDisabled.length > 0) {
-          html += '<div style="margin:12px 0 10px"><strong style="color:var(--teal)">\ud83d\udd04 \u5df2\u53ef\u8fbe\u4f46\u5f53\u524d\u4e3a\u6b7b\u94fe\uff08\u5efa\u8bae\u6062\u590d\u4e3a\u53ef\u7528\uff09(' + reachDisabled.length + ')</strong></div>';
+          html += '<div style="margin:var(--space-3) 0 var(--space-2)"><strong style="color:var(--teal)">\ud83d\udd04 \u5df2\u53ef\u8fbe\u4f46\u5f53\u524d\u4e3a\u6b7b\u94fe\uff08\u5efa\u8bae\u6062\u590d\u4e3a\u53ef\u7528\uff09(' + reachDisabled.length + ')</strong></div>';
           html += reachDisabled.map(function(r) {
             var s = byUrl[r.url];
-            return '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;border-bottom:1px solid var(--line)">' +
+            return '<div class="section-header" style="padding:var(--space-1) 0;font-size:12px;border-bottom:1px solid var(--line)">' +
               '<span style="flex:1;word-break:break-all"><a href="' + esc(r.url) + '" target="_blank">' + esc(s.name) + '</a> <span style="color:var(--muted)">' + esc(r.url) + '</span></span>' +
               '<span style="color:var(--teal);white-space:nowrap">HTTP ' + r.status + '</span>' +
               '<button class="btn btn-sm btn-primary" data-name="' + esc(s.name) + '" data-action="restore-dead">\u6062\u590d\u4e3a\u53ef\u7528</button></div>';
           }).join("");
         }
-        html += '<div style="margin:12px 0 4px;color:var(--muted);font-size:12px">\u5df2\u4e00\u81f4\uff08\u65e0\u9700\u64cd\u4f5c\uff09\uff1a\u4e0d\u53ef\u8fbe\u4e14\u5df2\u6807\u8bb0\u6b7b\u94fe ' + (allResults.length - unreachEnabled.length - reachDisabled.length) + ' \u4e2a\uff1b\u53ef\u8fbe\u4e14\u53ef\u7528 0 \u4e2a\u3002</div>';
+        html += '<div style="margin:var(--space-3) 0 var(--space-1);color:var(--muted);font-size:12px">\u5df2\u4e00\u81f4\uff08\u65e0\u9700\u64cd\u4f5c\uff09\uff1a\u4e0d\u53ef\u8fbe\u4e14\u5df2\u6807\u8bb0\u6b7b\u94fe ' + (allResults.length - unreachEnabled.length - reachDisabled.length) + ' \u4e2a\uff1b\u53ef\u8fbe\u4e14\u53ef\u7528 0 \u4e2a\u3002</div>';
         var msg = "检查完成：" + alive + " 正常，" + dead + " 不可达";
         if (unreachEnabled.length > 0) msg += "（" + unreachEnabled.length + " 个待标记死链）";
         if (reachDisabled.length > 0) msg += "（" + reachDisabled.length + " 个待恢复）";
@@ -1022,19 +1214,20 @@ async function loadFeedbacks() {
     var feedbacks = data.feedbacks || [];
     statusEl.textContent = "共 " + (data.total || 0) + " 条" + (data.unread ? "（" + data.unread + " 条未读）" : "");
     if (data.unread > 0) { countEl.textContent = data.unread; countEl.style.display = "inline"; } else { countEl.style.display = "none"; }
-    if (feedbacks.length === 0) { list.innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center">暂无反馈</div>'; return; }
+    if (feedbacks.length === 0) { list.innerHTML = '<div class="empty-state">暂无反馈</div>'; return; }
     var typeColors = { error: "var(--coral)", correction: "var(--amber)", positive: "var(--teal)" };
     var typeLabels = { error: "报错", correction: "纠正", positive: "好评" };
     var statusLabels = { new: "🆕 待处理", read: "👁️ 已读", resolved: "✅ 已解决" };
     list.innerHTML = feedbacks.map(function(f) {
       var time = fmtTime(f.createdAt);
-      var statusStyle = f.status === "new" ? "font-weight:700" : "color:var(--muted)";
-      var typeStyle = "background:" + (typeColors[f.type] || "var(--tag-bg)") + ";color:#fff";
-      return '<div class="sub-card" style="border-left:3px solid ' + (typeColors[f.type] || "var(--line)") + '">' +
+      var statusClass = f.status === "new" ? "font-semibold" : "text-muted";
+      var typeClass = f.type === "error" ? "badge-danger" : f.type === "correction" ? "badge-warning" : f.type === "positive" ? "badge-success" : "badge-neutral";
+      var borderColor = typeColors[f.type] || "var(--line)";
+      return '<div class="sub-card" style="border-left:3px solid ' + borderColor + '">' +
         '<div class="sub-header"><span class="sub-name">' + esc(f.siteName) + '</span>' +
         '<span class="sub-time">' + esc(time) + ' | ' + esc(f.ip) + '</span></div>' +
-        '<div style="margin:4px 0"><span class="tag" style="' + typeStyle + '">' + esc(typeLabels[f.type] || f.type) + '</span> ' +
-        '<span style="' + statusStyle + ';font-size:12px">' + esc(statusLabels[f.status] || f.status) + '</span></div>' +
+        '<div class="mt-1"><span class="badge ' + typeClass + '">' + esc(typeLabels[f.type] || f.type) + '</span> ' +
+        '<span class="' + statusClass + ' text-sm">' + esc(statusLabels[f.status] || f.status) + '</span></div>' +
         '<div class="sub-summary" style="white-space:normal">' + esc(f.content) + '</div>' +
         '<div class="sub-actions">' +
         (f.status !== "read" ? '<button class="btn btn-sm" data-fb-id="' + f.id + '" data-fb-action="read" data-action="fb-action">👁️ 标记已读</button> ' : '') +
@@ -1045,7 +1238,10 @@ async function loadFeedbacks() {
   } catch (e) { toast("加载反馈失败: " + e.message, "error"); }
 }
 async function feedbackAction(id, action) {
-  if (action === "delete" && !confirm("确认删除此反馈？")) return;
+  if (action === "delete") {
+    var ok = await showConfirm("确认删除", "<p>删除后无法恢复，确认删除此反馈？</p>", "", "删除");
+    if (!ok) return;
+  }
   try {
     await api("/api/admin/feedbacks/" + id, { method: "POST", body: JSON.stringify({ action: action }) });
     toast("操作成功", "success");
@@ -1074,21 +1270,91 @@ function exportSites() {
   fetch("/api/admin/export", { headers: { "Authorization": "Bearer " + TOKEN } }).then(function(res) { if (!res.ok) { toast("导出失败: " + res.status, "error"); return; } return res.text(); }).then(function(text) { if (!text) return; var blob = new Blob([text], { type: "application/json" }); var url = URL.createObjectURL(blob); var a = document.createElement("a"); a.href = url; a.download = "sites-export.json"; a.click(); URL.revokeObjectURL(url); toast("导出成功"); }).catch(function() { toast("网络错误", "error"); });
 }
 let IMPORT_DATA = null;
-function showImport() { IMPORT_DATA = null; document.getElementById("importFile").value = ""; document.getElementById("importPreview").style.display = "none"; document.getElementById("importBtn").disabled = true; document.getElementById("importOverwrite").checked = false; document.getElementById("importModal").classList.add("active"); }
-function closeImportModal() { document.getElementById("importModal").classList.remove("active"); IMPORT_DATA = null; }
+function showImport() { IMPORT_DATA = null; document.getElementById("importFile").value = ""; document.getElementById("importPreview").style.display = "none"; document.getElementById("importBtn").disabled = true; document.getElementById("importOverwrite").checked = false; document.getElementById("importSkipDead").checked = true; _modalOpen(); document.getElementById("importModal").classList.add("active"); }
+function closeImportModal() { document.getElementById("importModal").classList.remove("active"); IMPORT_DATA = null; _modalClose(); }
 function previewImport(input) {
   const file = input.files[0]; if (!file) return;
   const reader = new FileReader();
-  reader.onload = (e) => { try { const raw = JSON.parse(e.target.result); let sites = Array.isArray(raw) ? raw : (raw.sites || []); sites = sites.filter((s) => s && s.name && s.url); if (sites.length === 0) { toast("未找到有效站点数据", "error"); return; } IMPORT_DATA = sites; document.getElementById("importCount").textContent = sites.length; const preview = sites.slice(0, 10).map((s) => { let line = "• " + s.name; if (s.url) line += " → " + s.url.slice(0, 50) + (s.url.length > 50 ? "..." : ""); return line; }).join("\\n"); document.getElementById("importPreviewText").value = preview + (sites.length > 10 ? "\\n... 共 " + sites.length + " 条" : ""); document.getElementById("importPreview").style.display = "block"; document.getElementById("importBtn").disabled = false; } catch (err) { toast("JSON 解析失败: " + err.message, "error"); } };
+  reader.onload = (e) => { try { const raw = JSON.parse(e.target.result); let sites = Array.isArray(raw) ? raw : (raw.sites || []); sites = sites.filter((s) => s && s.name && s.url); if (sites.length === 0) { toast("未找到有效站点数据", "error"); return; } IMPORT_DATA = sites; document.getElementById("importCount").textContent = sites.length; var deadWarnings = []; var html = sites.slice(0, 10).map((s) => { var line = "<div style='margin:2px 0'>• " + esc(s.name); if (s.url) { var deadInfo = DEAD_URLS.get(s.url.replace(/\/+$/, "")); if (deadInfo) { var detail = "（added_at: " + fmtTime(deadInfo.added_at) + ", reason: " + esc(deadInfo.reason) + "）"; deadWarnings.push(s.name + detail); line += " <span style='color:var(--amber);font-weight:600'>⚠️ 已知死链</span>" + detail; } line += " → " + esc(s.url.slice(0, 50)) + (s.url.length > 50 ? "..." : ""); } return line + "</div>"; }).join(""); if (deadWarnings.length > 0) html += "<div style='margin-top:8px;padding:8px;background:var(--amber-soft);border-radius:var(--radius);border:1px solid var(--amber);color:var(--amber);font-weight:600'>⚠️ 已知死链（" + deadWarnings.length + " 条）：" + esc(deadWarnings.join("、")) + "</div>"; if (sites.length > 10) html += "<div style='color:var(--muted)'>... 共 " + sites.length + " 条</div>"; document.getElementById("importPreviewBox").innerHTML = html; document.getElementById("importPreview").style.display = "block"; document.getElementById("importBtn").disabled = false; } catch (err) { toast("JSON 解析失败: " + err.message, "error"); } };
   reader.readAsText(file);
 }
 async function doImport() {
   if (!IMPORT_DATA || IMPORT_DATA.length === 0) { toast("无数据可导入", "error"); return; }
-  const overwrite = document.getElementById("importOverwrite").checked; document.getElementById("importBtn").disabled = true;
-  try { const data = await api("/api/admin/sites/import", { method: "POST", body: JSON.stringify({ sites: IMPORT_DATA, overwrite }) }); let msg = "导入完成：新增 " + data.added + " 条"; if (data.updated) msg += "，更新 " + data.updated + " 条"; if (data.skipped) msg += "，跳过 " + data.skipped + " 条"; if (data.duplicates && data.duplicates.length > 0) msg += "\\n重复站点：" + data.duplicates.map((d) => d.existingName).join(", "); toast(msg, "success"); closeImportModal(); await loadSites(); } catch (e) { toast(e.message, "error"); document.getElementById("importBtn").disabled = false; }
+  const overwrite = document.getElementById("importOverwrite").checked;
+  const skipDead = document.getElementById("importSkipDead").checked;
+  document.getElementById("importBtn").disabled = true;
+  try { const data = await api("/api/admin/sites/import", { method: "POST", body: JSON.stringify({ sites: IMPORT_DATA, overwrite, skipDead }) }); let msg = "导入完成：新增 " + data.added + " 条"; if (data.updated) msg += "，更新 " + data.updated + " 条"; if (data.skipped) msg += "，跳过 " + data.skipped + " 条"; if (data.skippedDead) msg += "（其中已知死链 " + data.skippedDead + " 条）"; if (data.duplicates && data.duplicates.length > 0) msg += "\\n重复站点：" + data.duplicates.map((d) => d.existingName).join(", "); toast(msg, "success"); closeImportModal(); await loadSites(); } catch (e) { toast(e.message, "error"); document.getElementById("importBtn").disabled = false; }
 }
-function toast(msg, type) { const el = document.getElementById("toast"); el.textContent = msg; el.className = "toast " + type + " show"; setTimeout(() => el.classList.remove("show"), 3000); }
-if (TOKEN) { loadSites().then(() => { document.getElementById("loginView").style.display = "none"; document.getElementById("mainView").style.display = "block"; }).catch(() => { TOKEN = ""; localStorage.removeItem("sk-free-admin-token"); }); }
+// 按钮加载状态（防重复点击 + 视觉反馈）
+function btnLoading(btn, loading) {
+  if (!btn) return;
+  btn.disabled = loading;
+  if (loading) btn.classList.add("btn-loading");
+  else btn.classList.remove("btn-loading");
+}
+
+// Toast 堆叠队列（最多 4 条，避免覆盖）
+var _toastQueue = [];
+var _toastMax = 4;
+function toast(msg, type) {
+  var stack = document.getElementById("toastStack");
+  var el = document.createElement("div");
+  el.className = "toast " + (type || "info");
+  el.textContent = msg;
+  stack.appendChild(el);
+  _toastQueue.push(el);
+  while (_toastQueue.length > _toastMax) {
+    var old = _toastQueue.shift();
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+  }
+  setTimeout(function() {
+    el.classList.add("removing");
+    setTimeout(function() {
+      if (el.parentNode) el.parentNode.removeChild(el);
+      _toastQueue = _toastQueue.filter(function(t) { return t !== el; });
+    }, 300);
+  }, 3000);
+}
+
+// 自定义确认弹窗（替代原生 confirm）
+var _confirmCb = null;
+var _modalCount = 0;
+function _modalOpen() { _modalCount++; document.body.classList.add("modal-open"); }
+function _modalClose() { _modalCount = Math.max(0, _modalCount - 1); if (_modalCount === 0) document.body.classList.remove("modal-open"); }
+function showConfirm(title, body, extraHtml, okText) {
+  return new Promise(function(resolve) {
+    _confirmCb = resolve;
+    document.getElementById("confirmTitle").textContent = title || "确认操作";
+    document.getElementById("confirmBody").innerHTML = body || "";
+    var extra = document.getElementById("confirmExtra");
+    extra.innerHTML = extraHtml || "";
+    document.getElementById("confirmOkBtn").textContent = okText || "确认";
+    _modalOpen();
+    document.getElementById("confirmModal").classList.add("active");
+  });
+}
+function confirmResolve(result) {
+  var modal = document.getElementById("confirmModal");
+  modal.classList.add("closing");
+  _modalClose();
+  setTimeout(function() { modal.classList.remove("active", "closing"); }, 150);
+  if (_confirmCb) { var cb = _confirmCb; _confirmCb = null; cb(result); }
+}
+// 点击遮罩关闭
+document.getElementById("confirmModal").addEventListener("click", function(e) {
+  if (e.target === this) confirmResolve(false);
+});
+// ESC 关闭
+document.addEventListener("keydown", function(e) {
+  if (e.key === "Escape" && document.getElementById("confirmModal").classList.contains("active")) {
+    confirmResolve(false);
+  }
+  // 批量标签输入框回车提交
+  if (e.key === "Enter" && document.activeElement && document.activeElement.id === "batchTagInput") {
+    batchTag();
+  }
+});
+if (TOKEN) { loadSites().then(() => loadDeadUrls()).then(() => { document.getElementById("loginView").style.display = "none"; document.getElementById("mainView").style.display = "block"; }).catch(() => { toast("密码错误", "error"); TOKEN = ""; localStorage.removeItem("sk-free-admin-token"); }); }
 document.addEventListener("click", function(e) {
   var el = e.target.closest("[data-action]"); if (!el) return;
   var action = el.getAttribute("data-action"); var name = el.getAttribute("data-name") || ""; var id = el.getAttribute("data-id") || "";
@@ -1226,10 +1492,10 @@ export default {
         if (path === "/api/admin/dead-urls" && request.method === "POST") {
           const parsed = await parseJsonBody(request);
           if (!parsed.ok) return parsed.response;
-          const { url: deadUrl, action } = parsed.data;
+          const { url: deadUrl, action, reason } = parsed.data;
           if (!deadUrl || !action) return json({ ok: false, error: "需要 url 和 action 参数" }, 400, request);
           if (action === "add") {
-            await addDeadUrl(db, deadUrl, { reason: "unreachable" });
+            await addDeadUrl(db, deadUrl, { reason: reason || "unreachable" });
           } else if (action === "remove") {
             await removeDeadUrl(db, deadUrl);
           } else {

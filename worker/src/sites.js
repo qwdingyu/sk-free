@@ -524,12 +524,6 @@ export async function handleAdminUpdateSite(db, request, siteName) {
     await dbBatch(db, [updateSites, ...historyStmts]);
   }
 
-  // 联动：站点从禁用恢复为启用时，从死链接表移除对应 URL
-  // （管理员明确恢复上线 = 认为 URL 已可达，与死链接黑名单矛盾，必须清除）
-  if (updated.enabled && existing.enabled === 0 && updated.url) {
-    await dbRun(db, "DELETE FROM dead_urls WHERE url = ?", [updated.url]);
-  }
-
   return jsonResponse({ ok: true, site: updated }, 200, request);
 }
 
@@ -541,9 +535,8 @@ export async function handleAdminUpdateSite(db, request, siteName) {
  * @returns {Promise<Response>}
  */
 export async function handleAdminDeleteSite(db, request, siteName) {
-  // 必须把 url 一起取出来：下面的死链清理依赖 existing.url，
-  // 原来只 SELECT name，existing.url 恒为 undefined，那段清理从来没执行过。
-  const existing = await dbGet(db, "SELECT name, url FROM sites WHERE name = ?", [siteName]);
+  // 必须把 url、enabled 一起取出来：下面的死链清理依赖 existing.url 和 existing.enabled
+  const existing = await dbGet(db, "SELECT name, url, enabled FROM sites WHERE name = ?", [siteName]);
   if (!existing) {
     return jsonResponse({ ok: false, error: `站点 "${siteName}" 不存在` }, 404, request);
   }
@@ -556,9 +549,17 @@ export async function handleAdminDeleteSite(db, request, siteName) {
     db.prepare("DELETE FROM feedbacks WHERE site_name = ?").bind(siteName),
     db.prepare("DELETE FROM site_history WHERE site_name = ?").bind(siteName),
   ];
-  // 同步清理死链表中的孤立记录（站点已删除，其 URL 不应再留在黑名单）
-  if (existing.url) {
-    statements.push(db.prepare("DELETE FROM dead_urls WHERE url = ?").bind(existing.url));
+  // 死链站点删除时保留 dead_urls 记录（append-only 证据库）
+  // 记录已存在 → 追加删除痕迹；不存在 → 插入新记录
+  if (existing.enabled === 0 && existing.url) {
+    statements.push(
+      db.prepare(
+        `INSERT INTO dead_urls (url, added_at, status, reason, error)
+         VALUES (?, ?, 0, 'site-deleted', '')
+         ON CONFLICT(url) DO UPDATE SET
+           reason = dead_urls.reason || ' | site-deleted'`
+      ).bind(existing.url, Date.now())
+    );
   }
   await dbBatch(db, statements);
 
@@ -592,7 +593,7 @@ export async function handleAdminBatch(db, request) {
   if (action === "delete") {
     const placeholders = names.map(() => "?").join(",");
     // 先取被删站点的 URL，用于清理死链表中的孤立记录
-    const doomed = await dbAll(db, `SELECT url FROM sites WHERE name IN (${placeholders}) AND url != ''`, names);
+    const doomed = await dbAll(db, `SELECT url, enabled FROM sites WHERE name IN (${placeholders}) AND url != ''`, names);
     // batch 保证原子性：4 条 DELETE 要么都成功要么都不生效，不留孤儿
     const statements = [
       db.prepare(`DELETE FROM sites WHERE name IN (${placeholders})`).bind(...names),
@@ -600,11 +601,19 @@ export async function handleAdminBatch(db, request) {
       db.prepare(`DELETE FROM feedbacks WHERE site_name IN (${placeholders})`).bind(...names),
       db.prepare(`DELETE FROM site_history WHERE site_name IN (${placeholders})`).bind(...names),
     ];
-    if (doomed.length > 0) {
-      const urlPlaceholders = doomed.map(() => "?").join(",");
-      statements.push(
-        db.prepare(`DELETE FROM dead_urls WHERE url IN (${urlPlaceholders})`).bind(...doomed.map((r) => r.url))
-      );
+    // 死链站点删除时保留 dead_urls 记录（append-only 证据库）
+    // 记录已存在 → 追加删除痕迹；不存在 → 插入新记录
+    for (const r of doomed) {
+      if (r.enabled === 0) {
+        statements.push(
+          db.prepare(
+            `INSERT INTO dead_urls (url, added_at, status, reason, error)
+             VALUES (?, ?, 0, 'site-deleted', '')
+             ON CONFLICT(url) DO UPDATE SET
+               reason = dead_urls.reason || ' | site-deleted'`
+          ).bind(r.url, Date.now())
+        );
+      }
     }
     const results = await dbBatch(db, statements);
     affected = results?.[0]?.meta?.changes || 0;
@@ -621,15 +630,6 @@ export async function handleAdminBatch(db, request) {
       [enableVal, enableVal, ...names]
     );
     affected = result.meta?.changes || 0;
-    // 向后兼容：清理 dead_urls 中的对应记录（表已不再权威，但保持数据一致）
-    if (action === "enable") {
-      const rows = await dbAll(db, `SELECT url FROM sites WHERE name IN (${placeholders}) AND url != ''`, names);
-      const urls = rows.map((r) => r.url);
-      if (urls.length > 0) {
-        const urlPlaceholders = urls.map(() => "?").join(",");
-        await dbRun(db, `DELETE FROM dead_urls WHERE url IN (${urlPlaceholders})`, urls);
-      }
-    }
   } else if (action === "add_tag" || action === "remove_tag") {
     if (!tag) {
       return jsonResponse(
@@ -729,11 +729,15 @@ export async function handleAdminImportSites(db, request) {
     existingCleanUrls.set(cleanUrl, s.name);
   }
 
-  // 死链黑名单已退役（可用性由 sites.enabled 单轴决定），导入不再按它过滤。
-  // 旧逻辑会拿残留的 dead_urls 行静默丢弃导入项（deadFiltered）——而这张表
-  // 已无任何写入路径，数据只会越来越陈旧。省一次 D1 读取，行为也更可预期。
+  // 死链库（dead_urls）是 append-only 证据库，导入时必须感知：
+  // 命中 dead_urls 的 URL 按 skipDead 参数决定跳过或强制导入。
+  const skipDead = body.skipDead !== false;
+  const deadUrlRows = await dbAll(db, "SELECT url FROM dead_urls");
+  const deadUrlSet = new Set(deadUrlRows.map((r) => r.url.replace(/\/+$/, "")));
+
   let added = 0,
     skipped = 0,
+    skippedDead = 0,
     updated = 0;
   const duplicates = [];
   const statements = [];
@@ -755,6 +759,15 @@ export async function handleAdminImportSites(db, request) {
     }
 
     const { originalUrl, cleanUrl, ref } = parseSiteUrl(item.url);
+
+    // 导入感知：已知死链按策略跳过或强制导入
+    const deadKey = cleanUrl.replace(/\/+$/, "");
+    if (skipDead && deadUrlSet.has(deadKey)) {
+      skipped++;
+      skippedDead++;
+      continue;
+    }
+
     const existingName = existingCleanUrls.get(cleanUrl);
 
     if (existingName) {
@@ -843,6 +856,7 @@ export async function handleAdminImportSites(db, request) {
       added,
       updated,
       skipped,
+      skippedDead,
       duplicates: duplicates.length > 0 ? duplicates : undefined,
     },
     200,
