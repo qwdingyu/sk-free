@@ -6,6 +6,7 @@ let DEAD_URLS = new Map(); // url -> { added_at, status, reason, error }（死�
 let SITE_PAGE = 1;
 let SITE_LIMIT = 20;
 let ALL_TAGS = []; // 缓存全量标签，避免分页后标签过滤选项丢失
+let SUBMISSION_SELECTED = new Set();
 async function api(path, opts = {}) {
   const res = await fetch(path, { ...opts, headers: { "Content-Type": "application/json", "Authorization": "Bearer " + TOKEN, ...(opts.headers || {}) } });
   if (res.status === 401) { doLogout(); throw new Error("登录已过期"); }
@@ -405,13 +406,95 @@ async function loadSubmissions() {
     const data = await api("/api/admin/submissions");
     const list = document.getElementById("submissionsList");
     const countEl = document.getElementById("subCount");
-    if (!data.submissions || data.submissions.length === 0) { list.innerHTML = '<div class="sub-empty">暂无待审核提交</div>'; countEl.style.display = "none"; return; }
-    countEl.textContent = data.submissions.length; countEl.style.display = "inline";
+    const batchBar = document.getElementById("subBatchBar");
+    if (!data.submissions || data.submissions.length === 0) { 
+      list.innerHTML = '<div class="sub-empty">暂无待审核提交</div>'; 
+      countEl.style.display = "none";
+      if (batchBar) batchBar.style.display = "none";
+      return; 
+    }
+    countEl.textContent = data.submissions.length; 
+    countEl.style.display = "inline";
+    if (batchBar) batchBar.style.display = "";
     list.innerHTML = data.submissions.map((sub) => {
       const time = fmtTime(sub.createdAt);
       const tags = (sub.site.tags || []).map((t) => '<span class="tag">' + esc(t) + '</span>').join(" ");
-      return '<div class="sub-card" id="sub-' + sub.id + '"><div class="sub-header"><span class="sub-name">' + esc(sub.site.name) + '</span><span class="sub-time">' + esc(time) + ' | ' + esc(sub.ip) + '</span></div><div class="sub-url">' + esc(sub.site.url) + '</div>' + (sub.site.summary ? '<div class="sub-summary">' + esc(sub.site.summary) + '</div>' : '') + (tags ? '<div class="mt-1">' + tags + '</div>' : '') + '<div class="sub-actions"><button class="btn btn-sm btn-primary" data-id="' + esc(sub.id) + '" data-action="approve-submission">✅ 批准</button> <button class="btn btn-sm btn-danger" data-id="' + esc(sub.id) + '" data-action="reject-submission">❌ 驳回</button></div></div>';
+      const checked = SUBMISSION_SELECTED.has(sub.id) ? "checked" : "";
+      return '<div class="sub-card" id="sub-' + sub.id + '"><div class="sub-header"><span class="sub-name">' + 
+        '<input type="checkbox" ' + checked + ' data-sub-id="' + sub.id + '" data-action="toggle-submission-select"> ' + 
+        esc(sub.site.name) + '</span><span class="sub-time">' + esc(time) + ' | ' + esc(sub.ip) + '</span></div>' +
+        '<div class="sub-url">' + esc(sub.site.url) + '</div>' + 
+        (sub.site.summary ? '<div class="sub-summary">' + esc(sub.site.summary) + '</div>' : '') + 
+        (tags ? '<div class="mt-1">' + tags + '</div>' : '') + 
+        '<div class="sub-actions"><button class="btn btn-sm btn-primary" data-id="' + esc(sub.id) + '" data-action="approve-submission">✅ 批准</button> <button class="btn btn-sm btn-danger" data-id="' + esc(sub.id) + '" data-action="reject-submission">❌ 驳回</button></div></div>';
     }).join("");
+    // 绑定复选框事件
+    list.querySelectorAll('input[data-action="toggle-submission-select"]').forEach(function(cb) {
+      cb.addEventListener("change", function() {
+        var id = parseInt(this.getAttribute("data-sub-id"));
+        if (this.checked) SUBMISSION_SELECTED.add(id);
+        else SUBMISSION_SELECTED.delete(id);
+        updateSubBatchCount();
+      });
+    });
+  } catch (e) { toast(e.message, "error"); }
+}
+function updateSubBatchCount() {
+  var countEl = document.getElementById("subBatchCount");
+  if (countEl) {
+    countEl.textContent = SUBMISSION_SELECTED.size;
+  }
+}
+function clearSubmissionSelection() {
+  SUBMISSION_SELECTED.clear();
+  document.querySelectorAll('#submissionsList input[data-action="toggle-submission-select"]').forEach(function(cb) { cb.checked = false; });
+  updateSubBatchCount();
+}
+async function batchApproveSubmissions() {
+  if (SUBMISSION_SELECTED.size === 0) { toast("请先选择要批准的提交", "info"); return; }
+  var ok = await showConfirm("批量批准", "<p>将批准 <strong>" + SUBMISSION_SELECTED.size + "</strong> 个提交并创建站点</p>", "", "批量批准");
+  if (!ok) return;
+  try {
+    var ids = [...SUBMISSION_SELECTED];
+    var success = 0;
+    var failed = 0;
+    for (const id of ids) {
+      try {
+        await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "approve_submission", ids: [id] }) });
+        success++;
+      } catch (e) {
+        failed++;
+        console.warn("批准提交 " + id + " 失败:", e);
+      }
+    }
+    toast("批量批准完成：成功 " + success + " 个" + (failed > 0 ? "，失败 " + failed + " 个" : ""), failed > 0 ? "warning" : "success");
+    SUBMISSION_SELECTED.clear();
+    updateSubBatchCount();
+    await loadSubmissions();
+    await loadSites();
+  } catch (e) { toast(e.message, "error"); }
+}
+async function batchRejectSubmissions() {
+  if (SUBMISSION_SELECTED.size === 0) { toast("请先选择要驳回的提交", "info"); return; }
+  var ok = await showConfirm("批量驳回", "<p>将驳回 <strong>" + SUBMISSION_SELECTED.size + "</strong> 个提交</p>", "", "批量驳回");
+  if (!ok) return;
+  try {
+    var ids = [...SUBMISSION_SELECTED];
+    var success = 0;
+    var failed = 0;
+    for (const id of ids) {
+      try {
+        await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "reject_submission", ids: [id] }) });
+        success++;
+      } catch (e) {
+        failed++;
+        console.warn("驳回提交 " + id + " 失败:", e);
+      }
+    }
+    toast("批量驳回完成：成功 " + success + " 个" + (failed > 0 ? "，失败 " + failed + " 个" : ""), failed > 0 ? "warning" : "success");
+    SUBMISSION_SELECTED.clear();
+    updateSubBatchCount();
+    await loadSubmissions();
   } catch (e) { toast(e.message, "error"); }
 }
 async function approveSubmission(id) {
@@ -466,7 +549,7 @@ var HEALTH_DEAD_SELECTED = new Set();
 var HEALTH_FAIL_SELECTED = new Set();
 function renderHealthFromSites() {
   var statusEl = document.getElementById("healthStatus");
-  var resultsEl = document.getElementById("healthResults");
+  var reportEl = document.getElementById("healthReport");
   if (!SITES || SITES.length === 0) { statusEl.textContent = "请先加载站点列表"; return; }
   // 从数据库数据派生对账报告
   var unreachEnabled = SITES.filter(function(s) { return s.dead; });
@@ -532,7 +615,7 @@ function renderHealthFromSites() {
   }
   // ── 正常区 ────────────────────────────────────────────────────────────
   html += '<div class="text-muted text-sm" style="margin:var(--space-3) 0 var(--space-1)">\u2705 正常：' + (reachVerified.length + reachUnverified.length) + '（已验证 ' + reachVerified.length + '，未验证 ' + reachUnverified.length + '）。</div>';
-  resultsEl.innerHTML = html;
+  reportEl.innerHTML = html;
   statusEl.textContent = "基于数据库最近一次 cron 检查结果（每 6 小时自动更新）。需要最新数据请点【批量检查】。";
 }
 // 死链区的批量选择
@@ -543,7 +626,7 @@ function healthToggleDeadSelect(cb) {
   document.getElementById("healthDeadSelectAll").checked = HEALTH_DEAD_SELECTED.size === SITES.filter(function(s) { return s.dead; }).length;
 }
 function healthToggleDeadSelectAll(cb) {
-  document.querySelectorAll('#healthResults .health-dead-table tbody input[type="checkbox"]').forEach(function(el) {
+  document.querySelectorAll('#healthReport .health-dead-table tbody input[type="checkbox"]').forEach(function(el) {
     el.checked = cb.checked;
     var name = el.getAttribute("data-name");
     if (cb.checked) HEALTH_DEAD_SELECTED.add(name); else HEALTH_DEAD_SELECTED.delete(name);
@@ -553,7 +636,7 @@ function healthToggleDeadSelectAll(cb) {
 function healthClearDeadSelection() {
   HEALTH_DEAD_SELECTED.clear();
   document.getElementById("healthDeadSelectAll").checked = false;
-  document.querySelectorAll('#healthResults .health-dead-table tbody input[type="checkbox"]').forEach(function(el) { el.checked = false; });
+  document.querySelectorAll('#healthReport .health-dead-table tbody input[type="checkbox"]').forEach(function(el) { el.checked = false; });
   document.getElementById("healthDeadCount").textContent = "已选 0 个";
 }
 async function healthBatchRecheckDead() {
@@ -596,7 +679,7 @@ function healthToggleFailSelect(cb) {
   document.getElementById("healthFailSelectAll").checked = HEALTH_FAIL_SELECTED.size === SITES.filter(function(s) { return !s.dead && s.healthFailCount > 0; }).length;
 }
 function healthToggleFailSelectAll(cb) {
-  document.querySelectorAll('#healthResults .health-fail-table tbody input[type="checkbox"]').forEach(function(el) {
+  document.querySelectorAll('#healthReport .health-fail-table tbody input[type="checkbox"]').forEach(function(el) {
     el.checked = cb.checked;
     var name = el.getAttribute("data-name");
     if (cb.checked) HEALTH_FAIL_SELECTED.add(name); else HEALTH_FAIL_SELECTED.delete(name);
@@ -606,7 +689,7 @@ function healthToggleFailSelectAll(cb) {
 function healthClearFailSelection() {
   HEALTH_FAIL_SELECTED.clear();
   document.getElementById("healthFailSelectAll").checked = false;
-  document.querySelectorAll('#healthResults .health-fail-table tbody input[type="checkbox"]').forEach(function(el) { el.checked = false; });
+  document.querySelectorAll('#healthReport .health-fail-table tbody input[type="checkbox"]').forEach(function(el) { el.checked = false; });
   document.getElementById("healthFailCount").textContent = "已选 0 个";
 }
 async function healthBatchMarkDead() {
@@ -659,8 +742,8 @@ async function runHealthScan({ onProgress, onResult }) {
 }
 
 async function batchCheckUrls() {
-  const statusEl = document.getElementById("healthStatus"); const resultsEl = document.getElementById("healthResults");
-  statusEl.textContent = "正在检查中，请稍候..."; resultsEl.innerHTML = "";
+  const statusEl = document.getElementById("healthStatus"); const scanEl = document.getElementById("healthScanResults");
+  statusEl.textContent = "正在检查中，请稍候..."; scanEl.innerHTML = ""; scanEl.style.display = "none";
   try {
     await runHealthScan({
       onProgress: (msg) => { statusEl.textContent = msg; },
@@ -721,7 +804,7 @@ async function batchCheckUrls() {
         html += '<div class="text-muted text-sm" style="margin:var(--space-3) 0 var(--space-1)">\u5df2\u4e00\u81f4\uff08\u65e0\u9700\u64cd\u4f5c\uff09\uff1a\u4e0d\u53ef\u8fbe\u4e14\u5df2\u6807\u8bb0\u6b7b\u94fe ' + unreachDisabled.length + ' \u4e2a\uff1b\u53ef\u8fbe\u4e14\u53ef\u7528 ' + reachEnabled.length + ' \u4e2a\u3002\u52fe\u9009\u540e\u70b9\u6279\u91cf\u6309\u94ae\uff0c\u5904\u7406\u8fc7\u7684\u884c\u4f1a\u4ece\u5217\u8868\u79fb\u9664\u3002</div>';
         // 静默刷新 SITES（站点表开关/徽章保持最新）；绝不调 renderHealthFromSites，
         // 否则 DB 状态视图会立刻覆盖掉刚生成的扫描对账报告
-        resultsEl.innerHTML = html; loadSites();
+        scanEl.innerHTML = html; scanEl.style.display = ""; loadSites();
       },
     });
   } catch (e) { statusEl.textContent = "检查失败: " + e.message; }
@@ -1127,6 +1210,7 @@ document.addEventListener("change", function(e) {
     case "healthToggleFailSelect": healthToggleFailSelect(el); break;
     case "scanToggleAll": scanToggleAll(el); break;
     case "scanCkChanged": scanCkChanged(el); break;
+    case "toggle-submission-select": break; // handled by event listener in loadSubmissions
   }
 });
 
@@ -1141,4 +1225,5 @@ Object.assign(window, {
   closeImportModal, doImport, confirmResolve, loadSchema, exportSchema,
   importSchema, saveSchema, toggleSelectAll, filterTable, loadFeedbacks,
   batchFeedbackAction, clearFeedbackSelection, goToPage, changePageSize,
+  batchApproveSubmissions, batchRejectSubmissions, clearSubmissionSelection,
 });

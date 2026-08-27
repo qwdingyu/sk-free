@@ -16,7 +16,7 @@ import {
   handleAdminBatch, handleAdminExport, handleAdminImportSites
 } from "./src/sites.js";
 import { handleGetVotes, handleVote } from "./src/votes.js";
-import { handleSubmitSite, handleAdminGetSubmissions, handleAdminSubmissionAction, handleAdminApproveSubmission } from "./src/submissions.js";
+import { handleSubmitSite, handleAdminGetSubmissions, handleAdminSubmissionAction, handleAdminApproveSubmission, handleAdminBatchSubmissions } from "./src/submissions.js";
 import { getDeadUrls, addDeadUrl, removeDeadUrl, batchDeadUrls } from "./src/deadurls.js";
 import { checkUrlHealth, checkBatchHealth, HEALTH_BATCH_SIZE } from "./src/health.js";
 import { handleSubmitFeedback, handleGetFeedbacks, handleFeedbackAction } from "./src/feedbacks.js";
@@ -97,17 +97,13 @@ export default {
         if (path === "/api/admin/sites/batch" && request.method === "POST") {
           const batchBody = await request.clone().json().catch(() => ({}));
           if (batchBody.action === "approve_submission" || batchBody.action === "reject_submission") {
-            // 原子批准必须走 handleAdminApproveSubmission（建站 + 标记同时完成），
-            // 否则只会改 submissions.status 而站点不存在，形成脏数据。
-            if (batchBody.action === "approve_submission") {
-              const result = await handleAdminApproveSubmission(db, batchBody.id);
-              const status = !result.ok
-                ? (result.error === "提交不存在或已处理" ? 404 : 409)
-                : 201;
-              return json(result, status, request);
+            const ids = Array.isArray(batchBody.ids) ? batchBody.ids : (batchBody.id ? [batchBody.id] : []);
+            if (ids.length === 0) {
+              return json({ ok: false, error: "需要 id 或 ids 参数" }, 400, request);
             }
-            const result = await handleAdminSubmissionAction(db, batchBody.action, batchBody.id);
-            return json(result, result.ok ? 200 : (result.error === "提交不存在" ? 404 : 400), request);
+            const result = await handleAdminBatchSubmissions(db, batchBody.action, ids);
+            const status = result.ok ? 200 : (result.error === "提交不存在" ? 404 : 400);
+            return json(result, status, request);
           }
           return handleAdminBatch(db, request);
         }

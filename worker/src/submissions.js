@@ -243,3 +243,50 @@ export async function handleAdminSubmissionAction(db, action, id) {
 
   return { ok: true, action, id };
 }
+
+/**
+ * 批量处理提交审核操作（批准/驳回）
+ * @param {object} db — D1 数据库实例
+ * @param {string} action — "approve_submission" 或 "reject_submission"
+ * @param {number[]} ids — 提交 ID 数组
+ * @returns {Promise<object>} { ok, action, success, failed, results }
+ */
+export async function handleAdminBatchSubmissions(db, action, ids) {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return { ok: false, error: "需要 ids 数组" };
+  }
+  if (!["approve_submission", "reject_submission"].includes(action)) {
+    return { ok: false, error: "action 只能是 approve_submission 或 reject_submission" };
+  }
+
+  const cleanIds = ids.map((id) => (typeof id === "number" ? id : parseInt(id))).filter((id) => !Number.isNaN(id));
+  if (cleanIds.length === 0) {
+    return { ok: false, error: "ids 必须是非空数字数组" };
+  }
+
+  const results = [];
+  for (const id of cleanIds) {
+    try {
+      if (action === "approve_submission") {
+        const result = await handleAdminApproveSubmission(db, id);
+        results.push({ id, ok: result.ok, error: result.error || null });
+      } else {
+        const result = await handleAdminSubmissionAction(db, action, id);
+        results.push({ id, ok: result.ok, error: result.error || null });
+      }
+    } catch (e) {
+      results.push({ id, ok: false, error: e.message || "未知错误" });
+    }
+  }
+
+  const success = results.filter((r) => r.ok).length;
+  const failed = results.filter((r) => !r.ok).length;
+
+  return {
+    ok: true,
+    action,
+    success,
+    failed,
+    results,
+  };
+}

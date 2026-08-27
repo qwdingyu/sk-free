@@ -90,6 +90,12 @@
     <div class="pagination-bar" id="sitePagination"></div>
   </div>
   <div id="panelSubmissions" class="tab-panel">
+    <div class="batch-bar" id="subBatchBar" style="display:none">
+      <span>已选 <span class="count" id="subBatchCount">0</span> 项</span>
+      <button class="btn btn-sm btn-primary" onclick="batchApproveSubmissions()">✅ 批量批准</button>
+      <button class="btn btn-sm btn-danger" onclick="batchRejectSubmissions()">❌ 批量驳回</button>
+      <button class="btn btn-sm" onclick="clearSubmissionSelection()">取消选择</button>
+    </div>
     <div id="submissionsList" class="list-wrap"></div>
   </div>
   <div id="panelHealth" class="tab-panel">
@@ -97,7 +103,8 @@
       <button class="btn btn-primary btn-sm" onclick="batchCheckUrls()">🔍 批量检查所有站点</button>
       <span id="healthStatus" class="text-muted text-sm"></span>
     </div>
-    <div id="healthResults" class="table-wrap"></div>
+    <div id="healthReport" class="table-wrap"></div>
+    <div id="healthScanResults" class="table-wrap" style="display:none; margin-top: var(--space-3)"></div>
   </div>
   <div id="panelFeedback" class="tab-panel">
     <div class="section-header">
