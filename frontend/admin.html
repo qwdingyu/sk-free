@@ -55,18 +55,18 @@
       <button class="btn btn-danger btn-sm" onclick="sitesCleanupDeadLinks()">🧹 一键清理死链</button>
       <span id="sitesCleanStatus" class="text-muted text-sm"></span>
     </div>
-    <div class="batch-bar" id="batchBar">
-      <span>已选 <span class="count" id="batchCount">0</span> 项</span>
-      <button class="btn btn-sm" onclick="batchRecheck()">🔍 重新复查</button>
-      <button class="btn btn-sm" onclick="batchTag()">🏷️ 批量打标签</button>
-      <input type="text" id="batchTagInput" placeholder="输入标签名称" class="form-select batch-tag-input">
-      <button class="btn btn-sm" onclick="batchEnable()">✅ 批量启用</button>
-      <button class="btn btn-sm" onclick="batchDisable()">⛔ 批量停用</button>
-      <button class="btn btn-sm btn-danger" onclick="batchDelete()">🗑️ 批量删除</button>
-      <button class="btn btn-sm btn-danger" onclick="batchDeleteDisabled()">🗑️ 一键删除停用站点</button>
-      <button class="btn btn-sm" onclick="clearSelection()">取消选择</button>
-    </div>
     <div class="table-wrap">
+      <div class="batch-bar" id="batchBar">
+        <span>已选 <span class="count" id="batchCount">0</span> 项</span>
+        <button class="btn btn-sm" onclick="batchRecheck()">🔍 重新复查</button>
+        <button class="btn btn-sm" onclick="batchTag()">🏷️ 批量打标签</button>
+        <input type="text" id="batchTagInput" placeholder="输入标签名称" class="form-select batch-tag-input">
+        <button class="btn btn-sm" onclick="batchEnable()">✅ 批量启用</button>
+        <button class="btn btn-sm" onclick="batchDisable()">⛔ 批量停用</button>
+        <button class="btn btn-sm btn-danger" onclick="batchDelete()">🗑️ 批量删除</button>
+        <button class="btn btn-sm btn-danger" onclick="batchDeleteDisabled()">🗑️ 一键删除停用站点</button>
+        <button class="btn btn-sm" onclick="clearSelection()">取消选择</button>
+      </div>
       <table class="table">
         <thead>
           <tr>
@@ -89,14 +89,14 @@
     <div class="pagination-bar" id="sitePagination"></div>
   </div>
   <div id="panelSubmissions" class="tab-panel">
-    <div id="submissionsList"></div>
+    <div id="submissionsList" class="list-wrap"></div>
   </div>
   <div id="panelHealth" class="tab-panel">
     <div class="section-header">
       <button class="btn btn-primary btn-sm" onclick="batchCheckUrls()">🔍 批量检查所有站点</button>
       <span id="healthStatus" class="text-muted text-sm"></span>
     </div>
-    <div id="healthResults"></div>
+    <div id="healthResults" class="table-wrap"></div>
   </div>
   <div id="panelFeedback" class="tab-panel">
     <div class="section-header">
@@ -115,7 +115,7 @@
       <button class="btn btn-sm btn-danger" onclick="batchFeedbackAction('delete')">🗑️ 批量删除</button>
       <button class="btn btn-sm" onclick="clearFeedbackSelection()">取消选择</button>
     </div>
-    <div id="feedbacksList"></div>
+    <div id="feedbacksList" class="list-wrap"></div>
   </div>
   <div id="panelSchema" class="tab-panel">
     <div class="section-header">
