@@ -253,6 +253,16 @@ async function batchDelete() {
   btns.forEach(function(b) { btnLoading(b, true); });
   try { await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "delete", names: [...SELECTED] }) }); toast("批量删除完成", "success"); SELECTED.clear(); updateBatchBar(); await loadSites(); renderTable(); } catch (e) { toast(e.message, "error"); } finally { btns.forEach(function(b) { btnLoading(b, false); }); }
 }
+async function batchDeleteDisabled() {
+  var disabled = SITES.filter(function(s) { return !s.enabled; });
+  if (disabled.length === 0) { toast("当前没有停用的站点", "info"); return; }
+  var hasDead = disabled.some(function(s) { return DEAD_URLS.has(s.url.replace(/[/]+$/, "")); });
+  var ok = await showConfirm("确认删除停用站点", "<p>将删除 <strong>" + disabled.length + "</strong> 个停用站点</p>" + (hasDead ? '<p class="text-sm" style="color:var(--amber)">⚠️ 其中包含已知死链，删除后 dead_urls 将追加痕迹</p>' : ''), "", "删除停用站点");
+  if (!ok) return;
+  var btns = document.querySelectorAll('#batchBar .btn');
+  btns.forEach(function(b) { btnLoading(b, true); });
+  try { await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "delete", names: disabled.map(function(s) { return s.name; }) }) }); toast("已删除 " + disabled.length + " 个停用站点", "success"); SELECTED.clear(); updateBatchBar(); await loadSites(); renderTable(); } catch (e) { toast(e.message, "error"); } finally { btns.forEach(function(b) { btnLoading(b, false); }); }
+}
 async function batchTag() {
   if (SELECTED.size === 0) return;
   var input = document.getElementById("batchTagInput");
@@ -1013,7 +1023,7 @@ document.addEventListener("change", function(e) {
 Object.assign(window, {
   doLogin, doLogout, loadSites, showCreate, showImport, exportSites,
   sitesCleanupDeadLinks, batchRecheck, batchTag, batchEnable, batchDisable,
-  batchDelete, clearSelection, switchTab, batchCheckUrls, closeModal, saveSite,
+  batchDelete, batchDeleteDisabled, clearSelection, switchTab, batchCheckUrls, closeModal, saveSite,
   closeImportModal, doImport, confirmResolve, loadSchema, exportSchema,
   importSchema, saveSchema, toggleSelectAll, filterTable, loadFeedbacks,
 });
