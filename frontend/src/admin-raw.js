@@ -550,6 +550,8 @@ var HEALTH_FAIL_SELECTED = new Set();
 function renderHealthFromSites() {
   var statusEl = document.getElementById("healthStatus");
   var reportEl = document.getElementById("healthReport");
+  // 安全防护：元素不存在时静默跳过（admin 页面未完全加载/其他 tab 调用）
+  if (!statusEl || !reportEl) return;
   if (!SITES || SITES.length === 0) { statusEl.textContent = "请先加载站点列表"; return; }
   // 从数据库数据派生对账报告
   var unreachEnabled = SITES.filter(function(s) { return s.dead; });
@@ -751,6 +753,7 @@ async function runHealthScan({ onProgress, onResult }) {
 
 async function batchCheckUrls() {
   const statusEl = document.getElementById("healthStatus"); const scanEl = document.getElementById("healthScanResults");
+  if (!statusEl || !scanEl) { toast("健康检查面板未就绪", "error"); return; }
   statusEl.textContent = "正在检查中，请稍候..."; scanEl.innerHTML = ""; scanEl.style.display = "none";
   try {
     await runHealthScan({
