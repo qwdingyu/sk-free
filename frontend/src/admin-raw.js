@@ -410,12 +410,12 @@ async function loadSubmissions() {
     if (!data.submissions || data.submissions.length === 0) { 
       list.innerHTML = '<div class="sub-empty">暂无待审核提交</div>'; 
       countEl.style.display = "none";
-      if (batchBar) batchBar.style.display = "none";
+      if (batchBar) batchBar.classList.remove("active");
       return; 
     }
     countEl.textContent = data.submissions.length; 
     countEl.style.display = "inline";
-    if (batchBar) batchBar.style.display = "";
+    if (batchBar) batchBar.classList.add("active");
     list.innerHTML = data.submissions.map((sub) => {
       const time = fmtTime(sub.createdAt);
       const tags = (sub.site.tags || []).map((t) => '<span class="tag">' + esc(t) + '</span>').join(" ");
@@ -562,21 +562,23 @@ function renderHealthFromSites() {
   var thClass = 'class="text-sm text-muted font-semibold"';
   var tdClass = 'class="text-sm"';
   // ── 死链表 ────────────────────────────────────────────────────────────
+  html += '<div class="section-header">';
+  html += '<strong class="title text-coral">\u2716 已标记为死链（' + unreachEnabled.length + '）</strong>';
   if (unreachEnabled.length > 0) {
-    html += '<div class="section-header">';
-    html += '<strong class="title text-coral">\u2716 已标记为死链（' + unreachEnabled.length + '）</strong>';
     html += '<button class="btn btn-sm btn-primary" data-action="healthBatchRestoreDead">\u2705 恢复选中</button>';
     html += '<button class="btn btn-sm" data-action="healthBatchRecheckDead">\u200d\u200d🔍 重新复查选中</button>';
     html += '<button class="btn btn-sm btn-danger" data-action="healthRestoreAllDead">\u2705 恢复全部</button>';
     html += '<button class="btn btn-sm" data-action="healthClearDeadSelection">\u2716 取消选择</button>';
     html += '<span id="healthDeadCount" class="count text-muted text-sm">已选 0 个</span>';
-    html += '</div>';
-    html += '<table class="table health-dead-table"><thead><tr>';
-    html += '<th class="w-check"><input type="checkbox" id="healthDeadSelectAll" data-action="healthToggleDeadSelectAll"></th>';
-    html += '<th ' + thClass + '>站点名称</th>';
-    html += '<th ' + thClass + '>验证时间</th>';
-    html += '<th ' + thClass + ' class="w-action">操作</th>';
-    html += '</tr></thead><tbody>';
+  }
+  html += '</div>';
+  html += '<table class="table health-dead-table"><thead><tr>';
+  html += '<th class="w-check"><input type="checkbox" id="healthDeadSelectAll" data-action="healthToggleDeadSelectAll"></th>';
+  html += '<th ' + thClass + '>站点名称</th>';
+  html += '<th ' + thClass + '>验证时间</th>';
+  html += '<th ' + thClass + ' class="w-action">操作</th>';
+  html += '</tr></thead><tbody>';
+  if (unreachEnabled.length > 0) {
     html += unreachEnabled.map(function(s) {
       return '<tr>' +
         '<td class="w-check"><input type="checkbox" data-name="' + esc(s.name) + '" data-action="healthToggleDeadSelect"></td>' +
@@ -587,22 +589,26 @@ function renderHealthFromSites() {
         '<button class="btn btn-sm" data-name="' + esc(s.name) + '" data-action="recheck-dead">\u200d\u200d🔍 复查</button></td>' +
         '</tr>';
     }).join("");
-    html += '</tbody></table>';
+  } else {
+    html += '<tr><td colspan="4" class="empty-state">暂无死链站点</td></tr>';
   }
+  html += '</tbody></table>';
   // ── 异常表：可批量标记死链 ────────────────────────────────────────────
+  html += '<div class="section-header" style="margin:var(--space-3) 0 var(--space-2)">';
+  html += '<strong class="title text-coral">\u26a0 可用但连续失败（' + reachWithFails.length + '）</strong>';
   if (reachWithFails.length > 0) {
-    html += '<div class="section-header" style="margin:var(--space-3) 0 var(--space-2)">';
-    html += '<strong class="title text-coral">\u26a0 可用但连续失败（' + reachWithFails.length + '）</strong>';
     html += '<button class="btn btn-sm btn-danger" data-action="healthBatchMarkDead">\u2716 标记选中为死链</button>';
     html += '<button class="btn btn-sm" data-action="healthClearFailSelection">\u2716 取消选择</button>';
     html += '<span id="healthFailCount" class="count text-muted text-sm">已选 0 个</span>';
-    html += '</div>';
-    html += '<table class="table health-fail-table"><thead><tr>';
-    html += '<th class="w-check"><input type="checkbox" id="healthFailSelectAll" data-action="healthToggleFailSelectAll"></th>';
-    html += '<th ' + thClass + '>站点名称</th>';
-    html += '<th ' + thClass + '>失败次数</th>';
-    html += '<th ' + thClass + ' class="w-action">操作</th>';
-    html += '</tr></thead><tbody>';
+  }
+  html += '</div>';
+  html += '<table class="table health-fail-table"><thead><tr>';
+  html += '<th class="w-check"><input type="checkbox" id="healthFailSelectAll" data-action="healthToggleFailSelectAll"></th>';
+  html += '<th ' + thClass + '>站点名称</th>';
+  html += '<th ' + thClass + '>失败次数</th>';
+  html += '<th ' + thClass + ' class="w-action">操作</th>';
+  html += '</tr></thead><tbody>';
+  if (reachWithFails.length > 0) {
     html += reachWithFails.map(function(s) {
       return '<tr>' +
         '<td class="w-check"><input type="checkbox" data-name="' + esc(s.name) + '" data-action="healthToggleFailSelect"></td>' +
@@ -611,8 +617,10 @@ function renderHealthFromSites() {
         '<td ' + tdClass + ' class="w-action"><button class="btn btn-sm btn-danger" data-name="' + esc(s.name) + '" data-action="mark-dead">\u6807\u8bb0\u4e3a\u6b7b\u94fe</button></td>' +
         '</tr>';
     }).join("");
-    html += '</tbody></table>';
+  } else {
+    html += '<tr><td colspan="4" class="empty-state">暂无连续失败的站点</td></tr>';
   }
+  html += '</tbody></table>';
   // ── 正常区 ────────────────────────────────────────────────────────────
   html += '<div class="text-muted text-sm" style="margin:var(--space-3) 0 var(--space-1)">\u2705 正常：' + (reachVerified.length + reachUnverified.length) + '（已验证 ' + reachVerified.length + '，未验证 ' + reachUnverified.length + '）。</div>';
   reportEl.innerHTML = html;
@@ -948,11 +956,11 @@ async function loadFeedbacks() {
     var feedbacks = data.feedbacks || [];
     statusEl.textContent = "共 " + (data.total || 0) + " 条" + (data.unread ? "（" + data.unread + " 条未读）" : "");
     if (data.unread > 0) { countEl.textContent = data.unread; countEl.style.display = "inline"; } else { countEl.style.display = "none"; }
-    if (feedbacks.length === 0) { list.innerHTML = '<div class="empty-state">暂无反馈</div>'; return; }
+    if (feedbacks.length === 0) { list.innerHTML = '<div class="empty-state">暂无反馈</div>'; if (batchBar) batchBar.classList.remove("active"); return; }
 
     // 批量操作栏（HTML 中已静态定义，此处确保显示）
     var batchBar = document.getElementById("fbBatchBar");
-    if (batchBar) { batchBar.style.display = ""; }
+    if (batchBar) { batchBar.classList.add("active"); }
 
     var typeColors = { error: "var(--coral)", correction: "var(--amber)", positive: "var(--teal)" };
     var typeLabels = { error: "报错", correction: "纠正", positive: "好评" };
