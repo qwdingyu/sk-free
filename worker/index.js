@@ -19,7 +19,7 @@ import { handleGetVotes, handleVote } from "./src/votes.js";
 import { handleSubmitSite, handleAdminGetSubmissions, handleAdminSubmissionAction, handleAdminApproveSubmission, handleAdminBatchSubmissions } from "./src/submissions.js";
 import { getDeadUrls, addDeadUrl, removeDeadUrl, batchDeadUrls } from "./src/deadurls.js";
 import { checkUrlHealth, checkBatchHealth, HEALTH_BATCH_SIZE } from "./src/health.js";
-import { handleSubmitFeedback, handleGetFeedbacks, handleFeedbackAction } from "./src/feedbacks.js";
+import { handleSubmitFeedback, handleGetFeedbacks, handleFeedbackAction, handleAdminBatchFeedbacks } from "./src/feedbacks.js";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Worker 入口 — 路由分发
@@ -223,8 +223,13 @@ export default {
           const parsed = await parseJsonBody(request);
           if (!parsed.ok) return parsed.response;
           const { action, ids } = parsed.data;
-          const result = await handleAdminBatchFeedbacks(db, action, ids);
-          return json(result, result.ok ? 200 : 400, request);
+          try {
+            const result = await handleAdminBatchFeedbacks(db, action, ids);
+            return json(result, result.ok ? 200 : 400, request);
+          } catch (e) {
+            console.error("[feedbacks-batch] error:", e);
+            return json({ ok: false, error: "服务器内部错误: " + (e.message || e) }, 500, request);
+          }
         }
 
         // ── Schema ────────────────────────────────────────────

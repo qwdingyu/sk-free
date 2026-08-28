@@ -259,7 +259,21 @@ export async function handleAdminBatchSubmissions(db, action, ids) {
     return { ok: false, error: "action 只能是 approve_submission 或 reject_submission" };
   }
 
-  const cleanIds = ids.map((id) => (typeof id === "number" ? id : parseInt(id))).filter((id) => !Number.isNaN(id));
+  const cleanIds = ids.map((id) => {
+    if (typeof id === "number" && !Number.isNaN(id)) return id;
+    if (typeof id === "string") {
+      const trimmed = id.trim();
+      if (!trimmed) return NaN;
+      // 提交 ID 可能是纯数字字符串，也可能是带字母的字符串（如 "1787566350487-p9tks9"）
+      // parseInt 会截断带字母的 ID，导致查询失败。保留原始字符串。
+      return trimmed;
+    }
+    return NaN;
+  }).filter((id) => {
+    if (typeof id === "number") return !Number.isNaN(id);
+    if (typeof id === "string") return id.length > 0;
+    return false;
+  });
   if (cleanIds.length === 0) {
     return { ok: false, error: "ids 必须是非空数字数组" };
   }

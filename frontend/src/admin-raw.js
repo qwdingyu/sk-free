@@ -431,7 +431,7 @@ async function loadSubmissions() {
     // 绑定复选框事件
     list.querySelectorAll('input[data-action="toggle-submission-select"]').forEach(function(cb) {
       cb.addEventListener("change", function() {
-        var id = parseInt(this.getAttribute("data-sub-id"));
+        var id = this.getAttribute("data-sub-id");
         if (this.checked) SUBMISSION_SELECTED.add(id);
         else SUBMISSION_SELECTED.delete(id);
         updateSubBatchCount();

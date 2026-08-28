@@ -33,6 +33,7 @@ export function json(data, status, request) {
     status,
     headers: {
       "Content-Type": "application/json",
+      "Cache-Control": "no-store",
       ...corsHeaders(request),
     },
   });

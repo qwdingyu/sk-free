@@ -181,29 +181,41 @@ export async function handleFeedbackAction(db, id, action) {
  * @returns {Promise<object>}
  */
 export async function handleAdminBatchFeedbacks(db, action, ids) {
-  if (!Array.isArray(ids) || ids.length === 0) {
-    return { ok: false, error: "需要 ids 数组" };
-  }
-  if (!["read", "resolved", "delete"].includes(action)) {
-    return { ok: false, error: "action 只能是 read, resolved, delete" };
-  }
+  console.log("[feedbacks-batch] action=", action, "ids=", JSON.stringify(ids));
+  try {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return { ok: false, error: "需要 ids 数组" };
+    }
+    if (!["read", "resolved", "delete"].includes(action)) {
+      return { ok: false, error: "action 只能是 read, resolved, delete" };
+    }
 
-  const cleanIds = ids.map((id) => (typeof id === "number" ? id : parseInt(id))).filter((id) => !Number.isNaN(id));
-  if (cleanIds.length === 0) {
-    return { ok: false, error: "ids 必须是非空数字数组" };
+    const cleanIds = ids.map((id) => (typeof id === "number" ? id : parseInt(id))).filter((id) => !Number.isNaN(id));
+    if (cleanIds.length === 0) {
+      return { ok: false, error: "ids 必须是非空数字数组" };
+    }
+
+    let affected = 0;
+
+    if (action === "delete") {
+      const statements = cleanIds.map((id) =>
+        db.prepare("DELETE FROM feedbacks WHERE id = ?").bind(id)
+      );
+      const results = await dbBatch(db, statements);
+      affected = results.filter((r) => r && r.success).length;
+    } else {
+      const newStatus = action === "resolved" ? "resolved" : "read";
+      const statements = cleanIds.map((id) =>
+        db.prepare("UPDATE feedbacks SET status = ? WHERE id = ?").bind(newStatus, id)
+      );
+      const results = await dbBatch(db, statements);
+      affected = results.filter((r) => r && r.success).length;
+    }
+
+    console.log("[feedbacks-batch] affected=", affected);
+    return { ok: true, action, affected };
+  } catch (e) {
+    console.error("[feedbacks-batch] error:", e);
+    throw e;
   }
-
-  const placeholders = cleanIds.map(() => "?").join(",");
-  let affected = 0;
-
-  if (action === "delete") {
-    const result = await dbRun(db, `DELETE FROM feedbacks WHERE id IN (${placeholders})`, cleanIds);
-    affected = result.meta?.changes || 0;
-  } else {
-    const newStatus = action === "resolved" ? "resolved" : "read";
-    const result = await dbRun(db, `UPDATE feedbacks SET status = ? WHERE id IN (${placeholders})`, [newStatus, ...cleanIds]);
-    affected = result.meta?.changes || 0;
-  }
-
-  return { ok: true, action, affected };
 }
