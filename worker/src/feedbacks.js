@@ -190,9 +190,9 @@ export async function handleAdminBatchFeedbacks(db, action, ids) {
       return { ok: false, error: "action 只能是 read, resolved, delete" };
     }
 
-    const cleanIds = ids.map((id) => (typeof id === "number" ? id : parseInt(id))).filter((id) => !Number.isNaN(id));
+    const cleanIds = ids.map((id) => String(id).trim()).filter(Boolean);
     if (cleanIds.length === 0) {
-      return { ok: false, error: "ids 必须是非空数字数组" };
+      return { ok: false, error: "需要有效的 ids" };
     }
 
     let affected = 0;
