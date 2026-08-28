@@ -90,7 +90,7 @@
     <div class="pagination-bar" id="sitePagination"></div>
   </div>
   <div id="panelSubmissions" class="tab-panel">
-    <div class="batch-bar" id="subBatchBar">
+    <div class="batch-bar" id="subBatchBar" style="display:flex">
       <span>已选 <span class="count" id="subBatchCount">0</span> 项</span>
       <button class="btn btn-sm btn-primary" onclick="batchApproveSubmissions()">✅ 批量批准</button>
       <button class="btn btn-sm btn-danger" onclick="batchRejectSubmissions()">❌ 批量驳回</button>
@@ -116,7 +116,7 @@
       </select>
       <span id="fbStatus" class="text-muted text-sm"></span>
     </div>
-    <div id="fbBatchBar" class="batch-bar">
+    <div id="fbBatchBar" class="batch-bar" style="display:flex">
       <span>已选 <span class="count" id="fbBatchCount">0</span> 项</span>
       <button class="btn btn-sm" onclick="batchFeedbackAction('read')">👁️ 批量标记已读</button>
       <button class="btn btn-sm btn-primary" onclick="batchFeedbackAction('resolved')">✅ 批量标记已解决</button>

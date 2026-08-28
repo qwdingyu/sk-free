@@ -410,12 +410,12 @@ async function loadSubmissions() {
     if (!data.submissions || data.submissions.length === 0) { 
       list.innerHTML = '<div class="sub-empty">暂无待审核提交</div>'; 
       countEl.style.display = "none";
-      if (batchBar) batchBar.classList.remove("active");
+      if (batchBar) { batchBar.style.display = "none"; batchBar.classList.remove("active"); }
       return; 
     }
     countEl.textContent = data.submissions.length; 
     countEl.style.display = "inline";
-    if (batchBar) batchBar.classList.add("active");
+    if (batchBar) { batchBar.style.display = ""; batchBar.classList.add("active"); }
     list.innerHTML = data.submissions.map((sub) => {
       const time = fmtTime(sub.createdAt);
       const tags = (sub.site.tags || []).map((t) => '<span class="tag">' + esc(t) + '</span>').join(" ");
@@ -956,11 +956,11 @@ async function loadFeedbacks() {
     var feedbacks = data.feedbacks || [];
     statusEl.textContent = "共 " + (data.total || 0) + " 条" + (data.unread ? "（" + data.unread + " 条未读）" : "");
     if (data.unread > 0) { countEl.textContent = data.unread; countEl.style.display = "inline"; } else { countEl.style.display = "none"; }
-    if (feedbacks.length === 0) { list.innerHTML = '<div class="empty-state">暂无反馈</div>'; if (batchBar) batchBar.classList.remove("active"); return; }
+    if (feedbacks.length === 0) { list.innerHTML = '<div class="empty-state">暂无反馈</div>'; if (batchBar) { batchBar.style.display = "none"; batchBar.classList.remove("active"); } return; }
 
     // 批量操作栏（HTML 中已静态定义，此处确保显示）
     var batchBar = document.getElementById("fbBatchBar");
-    if (batchBar) { batchBar.classList.add("active"); }
+    if (batchBar) { batchBar.style.display = ""; batchBar.classList.add("active"); }
 
     var typeColors = { error: "var(--coral)", correction: "var(--amber)", positive: "var(--teal)" };
     var typeLabels = { error: "报错", correction: "纠正", positive: "好评" };
