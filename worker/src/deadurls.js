@@ -30,16 +30,14 @@ const URL_MATCH = "rtrim(url, '/') = rtrim(?, '/')";
  */
 export async function getDeadUrls(db) {
   const rows = await dbAll(db, "SELECT url, added_at, status, reason, error FROM dead_urls");
-  const deadUrls = {};
-  for (const row of rows) {
-    deadUrls[row.url] = {
-      addedAt: row.added_at,
-      status: row.status,
-      reason: row.reason,
-      error: row.error,
-    };
-  }
-  return deadUrls;
+  // 前端 admin-raw.js 按数组解析，且 lookup 时会对 url 做 rtrim('/')
+  return rows.map((row) => ({
+    url: row.url.replace(/[/]+$/, ""),
+    added_at: row.added_at,
+    status: row.status,
+    reason: row.reason,
+    error: row.error,
+  }));
 }
 
 /**

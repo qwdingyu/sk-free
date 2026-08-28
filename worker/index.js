@@ -158,7 +158,7 @@ export default {
             return json({ ok: false, error: "action 只能是 add 或 remove" }, 400, request);
           }
           const deadUrls = await getDeadUrls(db);
-          return json({ ok: true, count: Object.keys(deadUrls).length }, 200, request);
+          return json({ ok: true, count: deadUrls.length }, 200, request);
         }
         // POST /api/admin/dead-urls/batch — 批量添加/移除死链接
         if (path === "/api/admin/dead-urls/batch" && request.method === "POST") {
@@ -170,7 +170,7 @@ export default {
           }
           const { changed } = await batchDeadUrls(db, urls, action);
           const deadUrls = await getDeadUrls(db);
-          return json({ ok: true, changed, action, count: Object.keys(deadUrls).length }, 200, request);
+          return json({ ok: true, changed, action, count: deadUrls.length }, 200, request);
         }
 
         // ── Health Check ──────────────────────────────────────

@@ -415,7 +415,7 @@ function updateFilterUI() {
 
 /** 筛选条件变化后的统一入口：更新计数 + 重渲列表，不重建筛选栏 */
 function applyFilterChange() {
-  updateResultBar();
+  updateFilterUI();
   renderResults();
 }
 
@@ -510,6 +510,8 @@ async function init() {
     heroPresetBtn.addEventListener("click", () => {
       state.activePreset = "high";
       state.query = "";
+      var si = document.getElementById("searchInput");
+      if (si) si.value = "";
       syncToUrl(false);
       applyFilterChange();
       document.getElementById("cardsArea")?.scrollIntoView({ behavior: "smooth", block: "start" });

@@ -227,10 +227,12 @@ h1 {
   background: var(--teal);
   color: #fff;
   border-color: var(--teal);
+  box-shadow: 0 4px 12px rgba(8, 127, 120, 0.25);
 }
 .cta-primary:hover {
   background: var(--teal-ink);
   box-shadow: 0 6px 16px rgba(8, 127, 120, 0.4);
+  transform: translateY(-2px);
 }
 .cta-secondary {
   background: transparent;
@@ -720,11 +722,12 @@ h1 {
   background: var(--surface);
   text-decoration: none;
   color: inherit;
-  transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+  transition: box-shadow var(--transition-fast), border-color var(--transition-fast), transform 0.18s ease;
 }
 .trusted-card:hover {
   border-color: var(--teal);
   box-shadow: 0 0 0 3px var(--teal-soft);
+  transform: translateY(-2px);
 }
 .trusted-name {
   font-weight: 700;
@@ -1083,7 +1086,8 @@ h1 {
   }
 
   .vote-flash,
-  .skeleton-cell {
+  .skeleton-cell,
+  .site-card {
     animation: none;
   }
 
@@ -1094,6 +1098,23 @@ h1 {
     transform: none;
   }
 }
+
+/* ── 卡片入场动画 ─────────────────────────────────────────────────────────── */
+@keyframes card-enter {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.site-card {
+  animation: card-enter 0.4s ease both;
+}
+
+/* 错开入场：每张卡延迟递增，但不超过 6 张以免首屏感觉慢 */
+.site-card:nth-child(2) { animation-delay: 0.04s; }
+.site-card:nth-child(3) { animation-delay: 0.08s; }
+.site-card:nth-child(4) { animation-delay: 0.12s; }
+.site-card:nth-child(5) { animation-delay: 0.16s; }
+.site-card:nth-child(6) { animation-delay: 0.20s; }
 
 .empty-state,
 .error-state {

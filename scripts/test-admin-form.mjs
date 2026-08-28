@@ -7,14 +7,24 @@
  *   而且漏了不会报错 —— 表单上有输入框、点保存也提示"成功"，只是值没发出去。
  *   实测发生过：后端 API 早就能收 13 个结构化字段，表单里一个输入框都没有，
  *   于是从后台新建的站点额度永远是"未知"。
- *   这个测试直接把线上 /admin 的 HTML 喂给 jsdom，stub 掉 fetch，
- *   然后断言"填进输入框的值确实出现在请求体里"。
+ *
+ * 为什么 eval 源码而不是直接加载 /admin 的 HTML：
+ *   线上 /admin 的脚本是 Vite 产物 <script type="module">，而 jsdom 不执行
+ *   ES module —— 旧版实现抓线上 HTML 后 window.showCreate 等桥接函数根本
+ *   不存在，整份测试从未真正跑起来。这里改为：本地 admin.html 提供 DOM
+ *   骨架 + eval(admin-raw.js)（无 import 的普通脚本，与 /tmp 审计 harness 同法），
+ *   不再依赖运行中的 worker。
  *
  * 用法：
- *   （先起本地 worker）node scripts/test-admin-form.mjs http://127.0.0.1:8799 localtest123
+ *   node scripts/test-admin-form.mjs [http://127.0.0.1:8799]
  *   没装 jsdom 时自动跳过，退出码 0。
  */
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const BASE = (process.argv[2] || "http://127.0.0.1:8799").replace(/\/$/, "");
 
 let JSDOM;
@@ -25,14 +35,15 @@ try {
   process.exit(0);
 }
 
+const html = readFileSync(path.join(ROOT, "frontend/admin.html"), "utf8");
+const js = readFileSync(path.join(ROOT, "frontend/src/admin-raw.js"), "utf8");
+
 let passed = 0;
 const failures = [];
 function check(name, actual, expected) {
   if (JSON.stringify(actual) === JSON.stringify(expected)) { passed++; console.log(`  ✅ ${name}`); }
   else { failures.push(`${name}\n       期望: ${JSON.stringify(expected)}\n       实际: ${JSON.stringify(actual)}`); console.log(`  ❌ ${name}`); }
 }
-
-const html = await (await fetch(`${BASE}/admin`)).text();
 
 // 记录页面发出的每一个请求，供断言用
 const sent = [];
@@ -41,6 +52,7 @@ const sent = [];
 const state = { sites: [] };
 const dom = new JSDOM(html, {
   runScripts: "dangerously",
+  resources: "usable",
   url: `${BASE}/admin`,
   beforeParse(win) {
     win.fetch = async (url, opts = {}) => {
@@ -53,11 +65,13 @@ const dom = new JSDOM(html, {
         text: async () => "{}",
       };
     };
-    win.localStorage.setItem("adminToken", "localtest123");
+    // 正确的管理端 token 键（应用读的就是这个键；旧版写成 adminToken）
+    win.localStorage.setItem("sk-free-admin-token", "localtest123");
   },
 });
 const win = dom.window;
 const doc = win.document;
+win.eval(js); // 注入真实管理脚本（window 桥接函数由此可用）
 // 等页面上的 DOMContentLoaded 初始化跑完
 await new Promise((r) => setTimeout(r, 400));
 
@@ -224,10 +238,15 @@ console.log("\n8. 扫描对账报告：多选 + 批量操作 + 原位更新");
     }
     return { ok: true, status: 200, json: async () => ({ ok: true, sites: state.sites, submissions: [], deadUrls: [], feedbacks: [], total: 0 }), text: async () => "{}" };
   };
-  win.confirm = () => true; // jsdom 默认返回 falsy 会中断"标记死链"
+  win.confirm = () => true; // 兜底（现用自定义 confirm 弹窗，真正的放行走 confirmResolve）
+
+  // 批量标记为死链会弹自定义确认框（showConfirm），必须 confirmResolve(true) 放行，
+  // 否则 scanApply await 在确认 promise 上挂起，后续断言全部落空。
   await win.loadSites();
   sent.length = 0;
-  await win.batchCheckUrls();
+  const markPromise = win.batchCheckUrls();
+  await new Promise((r) => setTimeout(r, 80));
+  await markPromise;
   await new Promise((r) => setTimeout(r, 60));
 
   const markBody = idOf("scanMarkBody");
@@ -245,7 +264,10 @@ console.log("\n8. 扫描对账报告：多选 + 批量操作 + 原位更新");
   check("全选后计数联动", idOf("scanMarkCount").textContent, "已选 2 个");
 
   // 批量标记为死链 → 请求体正确 + 行被原位移除 + 报告不被覆盖
-  await win.scanBatchMark();
+  const applyPromise = win.scanBatchMark();
+  await new Promise((r) => setTimeout(r, 80)); // 等 showConfirm 弹窗出现
+  win.confirmResolve(true);
+  await applyPromise;
   await new Promise((r) => setTimeout(r, 60));
   const batchCalls = sent.filter((s) => s.url.includes("/api/admin/sites/batch"));
   check("批量请求发出", batchCalls.length, 1);

@@ -13,15 +13,15 @@
   document.documentElement.dataset.themeChoice=c;
 })();
   </script>
-  <script type="module" crossorigin src="/_app/admin.js?build=22692fda4d82"></script>
+  <script type="module" crossorigin src="/_app/admin.js?build=aaa3d24fd906"></script>
   <link rel="modulepreload" crossorigin href="/_app/assets/modulepreload-polyfill-B5Qt9EMX.js">
-  <link rel="stylesheet" crossorigin href="/_app/assets/admin-BJCb5L0O.css">
+  <link rel="stylesheet" crossorigin href="/_app/assets/admin-DLEU7Mf-.css">
 </head>
 <body>
 <div id="loginView" class="container">
   <div class="login-box">
     <h2>🔐 sk-free 管理后台</h2>
-    <input id="tokenInput" type="password" placeholder="输入管理密码" autofocus>
+    <input id="tokenInput" type="password" placeholder="输入管理密码" autocomplete="current-password" autofocus>
     <button onclick="doLogin()">登 录</button>
   </div>
 </div>
@@ -41,8 +41,8 @@
     <button class="btn btn-danger btn-sm" onclick="doLogout()">退出</button>
   </div>
   <div class="tab-bar">
-    <button class="tab-btn" data-tab="sites" onclick="switchTab('sites')">站点管理</button>
-    <button class="tab-btn active" data-tab="health" onclick="switchTab('health')">🔗 链接健康</button>
+    <button class="tab-btn active" data-tab="sites" onclick="switchTab('sites')">站点管理</button>
+    <button class="tab-btn" data-tab="health" onclick="switchTab('health')">🔗 链接健康</button>
     <button class="tab-btn" data-tab="submissions" onclick="switchTab('submissions')">提交审核 <span id="subCount" class="badge badge-danger" style="display:none"></span></button>
     <button class="tab-btn" data-tab="feedback" onclick="switchTab('feedback')">💬 用户反馈 <span id="fbCount" class="badge badge-danger" style="display:none"></span></button>
     <button class="tab-btn" data-tab="schema" onclick="switchTab('schema')">⚙️ Schema</button>
@@ -155,7 +155,7 @@
     </div>
   </div>
 </div>
-<div class="modal-overlay" id="editModal">
+<div class="modal-overlay" id="editModal" role="dialog" aria-modal="true" aria-labelledby="editTitle">
   <div class="modal">
     <h3 id="editTitle">新增站点</h3>
     <input type="hidden" id="editOriginalName">
@@ -235,13 +235,13 @@
     <div class="form-row"><label>slug（URL 短标识）</label><input id="editSlug" placeholder="留空则不设置"><div class="hint">全站唯一。留空写 NULL，不会与其它空 slug 冲突。</div></div>
     <div class="form-actions">
       <button class="btn" onclick="closeModal()">取消</button>
-      <button class="btn btn-primary" onclick="saveSite()">保存</button>
+      <button class="btn btn-primary" id="saveSiteBtn" onclick="saveSite()">保存</button>
     </div>
   </div>
 </div>
-<div class="modal-overlay" id="importModal">
+<div class="modal-overlay" id="importModal" role="dialog" aria-modal="true" aria-labelledby="importTitle">
   <div class="modal">
-    <h3>📥 批量导入站点</h3>
+    <h3 id="importTitle">📥 批量导入站点</h3>
     <div class="form-row"><label>选择 JSON 文件</label><input type="file" id="importFile" accept=".json" onchange="previewImport(this)"><div class="hint">支持 sites.json 格式或自定义 JSON 数组，自动剥离 URL 中的 aff/ref/invite 等推广参数</div></div>
     <div class="form-row" id="importPreview" style="display:none"><label>预览（将导入 <span id="importCount">0</span> 条）</label><div id="importPreviewBox" class="import-preview-box"></div></div>
     <div class="form-row"><label><input type="checkbox" id="importOverwrite"> 覆盖已存在的同 URL 站点</label><div class="hint">不勾选时，同 URL 站点会被跳过；勾选时会更新已有站点信息</div></div>
@@ -252,13 +252,13 @@
     </div>
   </div>
 </div>
-<div class="modal-overlay" id="confirmModal">
+<div class="modal-overlay" id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
   <div class="modal confirm-modal">
     <h3 id="confirmTitle">确认操作</h3>
     <div id="confirmBody" class="text-muted" style="margin-bottom:var(--space-3)"></div>
     <div id="confirmExtra" style="margin-bottom:var(--space-3)"></div>
     <div class="form-actions">
-      <button class="btn" onclick="confirmResolve(false)">取消</button>
+      <button class="btn" id="confirmCancelBtn" onclick="confirmResolve(false)">取消</button>
       <button class="btn btn-danger" id="confirmOkBtn" onclick="confirmResolve(true)">确认</button>
     </div>
   </div>

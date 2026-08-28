@@ -703,7 +703,7 @@ function renderTable() {
   const stats = computeStats();
 
   if (!visible.length) {
-    els.cardsArea.innerHTML = '<div class="empty-state">没有匹配的站点。</div>';
+    els.cardsArea.innerHTML = '<div class="empty-state"><p>没有匹配的站点。试试调整筛选或搜索条件，或 <a href="/" style="color:var(--teal);text-decoration:underline">查看全部站点</a>。</p></div>';
     return;
   }
 
@@ -884,7 +884,7 @@ function renderCards() {
   const visible = filteredSites();
 
   if (!visible.length) {
-    els.cardsArea.innerHTML = '<div class="empty-state">没有匹配的站点。</div>';
+    els.cardsArea.innerHTML = '<div class="empty-state"><p>没有匹配的站点。试试调整筛选或搜索条件，或 <a href="/" style="color:var(--teal);text-decoration:underline">查看全部站点</a>。</p></div>';
     return;
   }
 
@@ -1857,7 +1857,7 @@ function updateFilterUI() {
 
 /** 筛选条件变化后的统一入口：更新计数 + 重渲列表，不重建筛选栏 */
 function applyFilterChange() {
-  updateResultBar();
+  updateFilterUI();
   renderResults();
 }
 
@@ -1952,6 +1952,8 @@ async function init() {
     heroPresetBtn.addEventListener("click", () => {
       state.activePreset = "high";
       state.query = "";
+      var si = document.getElementById("searchInput");
+      if (si) si.value = "";
       syncToUrl(false);
       applyFilterChange();
       document.getElementById("cardsArea")?.scrollIntoView({ behavior: "smooth", block: "start" });

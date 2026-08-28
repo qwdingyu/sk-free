@@ -9,7 +9,7 @@ function renderCards() {
   const visible = filteredSites();
 
   if (!visible.length) {
-    els.cardsArea.innerHTML = '<div class="empty-state">没有匹配的站点。</div>';
+    els.cardsArea.innerHTML = '<div class="empty-state"><p>没有匹配的站点。试试调整筛选或搜索条件，或 <a href="/" style="color:var(--teal);text-decoration:underline">查看全部站点</a>。</p></div>';
     return;
   }
 

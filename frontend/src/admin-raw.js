@@ -7,11 +7,14 @@ let SITE_PAGE = 1;
 let SITE_LIMIT = 20;
 let ALL_TAGS = []; // 缓存全量标签，避免分页后标签过滤选项丢失
 let SUBMISSION_SELECTED = new Set();
+let ALL_SITES = []; // 全量站点，用于健康 tab 等全局视图
+let _savePromise = null; // 保存站点防重入（promise 锁）
 async function api(path, opts = {}) {
   const res = await fetch(path, { ...opts, headers: { "Content-Type": "application/json", "Authorization": "Bearer " + TOKEN, ...(opts.headers || {}) } });
   if (res.status === 401) { doLogout(); throw new Error("登录已过期"); }
   if (path.includes("/export")) return res;
-  const data = await res.json();
+  let data;
+  try { data = await res.json(); } catch { throw new Error("服务器返回异常（状态码 " + res.status + "），请稍后重试"); }
   if (!data.ok) throw new Error(data.error || "请求失败");
   return data;
 }
@@ -31,12 +34,12 @@ function doLogin() {
   TOKEN = document.getElementById("tokenInput").value.trim();
   if (!TOKEN) return;
   localStorage.setItem("sk-free-admin-token", TOKEN);
-  loadSites().then(() => loadDeadUrls()).then(() => { document.getElementById("loginView").style.display = "none"; document.getElementById("mainView").style.display = "block"; }).catch((e) => { toast("密码错误", "error"); TOKEN = ""; localStorage.removeItem("sk-free-admin-token"); });
+  loadSites(true).then(() => loadDeadUrls()).then(() => { document.getElementById("loginView").style.display = "none"; document.getElementById("mainView").style.display = "block"; }).catch((e) => { toast(e.message === "登录已过期" ? "登录已过期" : "登录失败，请检查密码或网络", "error"); TOKEN = ""; localStorage.removeItem("sk-free-admin-token"); document.getElementById("tokenInput").focus(); document.getElementById("tokenInput").select(); });
 }
 function doLogout() { TOKEN = ""; localStorage.removeItem("sk-free-admin-token"); document.getElementById("loginView").style.display = "block"; document.getElementById("mainView").style.display = "none"; }
 document.getElementById("tokenInput").addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
 let _loadSitesSeq = 0;
-async function loadSites() {
+async function loadSites(silent) {
   const seq = ++_loadSitesSeq;
   const q = document.getElementById("searchInput").value.trim();
   const tag = document.getElementById("tagFilter").value;
@@ -45,28 +48,68 @@ async function loadSites() {
   params.set("limit", SITE_LIMIT);
   if (q) params.set("q", q);
   if (tag) params.set("tag", tag);
-  const data = await api("/api/admin/sites?" + params.toString());
-  if (seq !== _loadSitesSeq) return;
-  SITES = data.sites || [];
-  document.getElementById("siteCount").textContent = (data.metadata?.total ?? SITES.length) + " 个站点";
-  if (data.metadata) {
-    renderPagination(data.metadata);
+  try {
+    const data = await api("/api/admin/sites?" + params.toString());
+    if (seq !== _loadSitesSeq) return;
+    SITES = data.sites || [];
+    document.getElementById("siteCount").textContent = (data.metadata?.total ?? SITES.length) + " 个站点";
+    if (data.metadata) {
+      renderPagination(data.metadata);
+    }
+    // 无搜索/标签过滤时刷新全量标签缓存，保证标签过滤选项完整
+    if (!q && !tag && Array.isArray(data.sites)) {
+      var source = ALL_SITES.length > 0 ? ALL_SITES : SITES;
+      ALL_TAGS = [...new Set(source.flatMap((s) => s.tags || []))].sort();
+    }
+    buildTagFilter();
+    renderTable();
+  } catch (e) {
+    // 登录流程（doLogin/自动登录）传 silent=true，由调用方给出更准确的
+    // "密码错误/登录失败"提示，避免同一失败弹两条 toast。
+    if (!silent) toast("加载站点列表失败: " + e.message, "error");
+    throw e;
   }
-  // 无搜索/标签过滤时刷新全量标签缓存，保证标签过滤选项完整
-  if (!q && !tag && Array.isArray(data.sites)) {
-    ALL_TAGS = [...new Set(SITES.flatMap((s) => s.tags || []))].sort();
-  }
-  buildTagFilter();
-  renderTable();
 }
 async function loadDeadUrls() {
   try {
     const data = await api("/api/admin/dead-urls");
-    DEAD_URLS = new Map((data.deadUrls || []).map((d) => [d.url, d]));
+    DEAD_URLS = new Map((data.deadUrls || []).map((d) => [d.url.replace(/[/]+$/, ""), d]));
   } catch (e) {
     console.warn("加载死链库失败", e);
     DEAD_URLS = new Map();
   }
+}
+async function loadAllSites() {
+  // 后端 handleAdminListSites 的 limit 上限是 100（Math.min(100, ...)）。
+  // 站点超过 100 时单次请求会被静默截断，健康报告/一键清理就会漏站，
+  // 所以这里按 metadata.totalPages 循环拉全量，并按 name 去重兜底。
+  var seen = new Set();
+  var all = [];
+  var page = 1;
+  var totalPages = 1;
+  do {
+    const data = await api("/api/admin/sites?limit=100&page=" + page);
+    var rows = data.sites || [];
+    for (var i = 0; i < rows.length; i++) {
+      if (!seen.has(rows[i].name)) { seen.add(rows[i].name); all.push(rows[i]); }
+    }
+    totalPages = (data.metadata && data.metadata.totalPages) || 1;
+    page++;
+  } while (page <= totalPages);
+  ALL_SITES = all;
+}
+// 扫描/清理入口统一先确保全量数据已加载（手动登录直接落在站点 tab 时
+// ALL_SITES 尚为空，不兜底会导致"批量检查所有站点"一个 URL 都不查）。
+async function ensureAllSites() {
+  if (ALL_SITES.length > 0) return;
+  try { await loadAllSites(); }
+  catch (e) { toast("加载全量站点失败: " + e.message, "error"); throw e; }
+}
+// 健康报告的数据源是 ALL_SITES；任何改动了站点状态的动作后，
+// 必须重拉全量再渲染，否则报告停留在旧数据（第一轮回归已踩过）。
+async function refreshHealthFromServer() {
+  try { await loadAllSites(); } catch (e) { /* 渲染旧数据好过空白 */ }
+  renderHealthFromSites();
 }
 function buildTagFilter() {
   const tags = ALL_TAGS.length > 0 ? ALL_TAGS : [...new Set(SITES.flatMap((s) => s.tags || []))].sort();
@@ -88,17 +131,17 @@ function renderTable() {
     const deadBadge = s.dead ? '<span class="badge badge-danger" title="已标记为死链（不可用）">死链</span>' : '';
     const knownDeadBadge = DEAD_URLS.has(s.url.replace(/[/]+$/, "")) ? '<span class="badge badge-warning" title="dead_urls 中有历史记录">已知死链</span>' : '';
     const origUrlHtml = s.originalUrl && s.originalUrl !== s.url ? '<span class="orig-url" title="' + esc(s.originalUrl) + '">原: ' + esc(s.originalUrl.slice(0, 40)) + (s.originalUrl.length > 40 ? '...' : '') + '</span>' : '';
-    return '<tr>' +
+    return '<tr' + (SELECTED.has(s.name) ? ' class="selected"' : '') + '>' +
       '<td class="w-check"><input type="checkbox" ' + checked + ' data-name="' + esc(s.name) + '" data-action="toggle-select"></td>' +
       '<td><label class="toggle"><input type="checkbox" ' + toggleChecked + ' data-name="' + esc(s.name) + '" data-action="toggle-enable"><span class="slider"></span></label></td>' +
       '<td class="name"><a href="' + esc(s.url) + '" target="_blank" title="' + esc(s.url) + '">' + esc(s.name) + '</a>' + deadBadge + knownDeadBadge + origUrlHtml + '</td>' +
       '<td class="health">' + healthBadge(s) + '</td>' +
       '<td class="tags">' + tags + '</td>' +
       '<td>' + esc(s.checkin || "") + '</td>' +
-      '<td title="' + esc(s.ref || "") + '">' + esc(s.ref || "") + '</td>' +
-      '<td>' + esc(s.models || "") + '</td>' +
-      '<td>' + esc(s.rate || "") + '</td>' +
-      '<td class="summary" title="' + esc(s.summary || "") + '">' + esc(s.summary || "") + '</td>' +
+      '<td class="col-ref" title="' + esc(s.ref || "") + '">' + esc(s.ref || "") + '</td>' +
+      '<td class="col-models">' + esc(s.models || "") + '</td>' +
+      '<td class="col-rate">' + esc(s.rate || "") + '</td>' +
+      '<td class="summary col-summary" title="' + esc(s.summary || "") + '">' + esc(s.summary || "") + '</td>' +
       '<td class="w-action actions"><button class="btn btn-sm" data-name="' + esc(s.name) + '" data-action="show-edit">编辑</button> <button class="btn btn-sm btn-danger" data-name="' + esc(s.name) + '" data-action="delete-site">删除</button></td>' +
     '</tr>';
   }).join("");
@@ -112,7 +155,7 @@ function renderPagination(meta) {
 
   const pages = [];
   const add = (p, label, active, disabled) => {
-    pages.push('<button class="page-btn' + (active ? ' active' : '') + '" ' + (disabled ? 'disabled' : 'onclick="goToPage(' + p + ')"') + '>' + esc(label) + '</button>');
+    pages.push('<button class="page-btn' + (active ? ' active' : '') + '"' + (active ? ' aria-current="page"' : '') + ' ' + (disabled ? 'disabled' : 'onclick="goToPage(' + p + ')"') + '>' + esc(label) + '</button>');
   };
 
   add(page - 1, "‹", false, page <= 1);
@@ -138,18 +181,21 @@ function renderPagination(meta) {
 function goToPage(p) {
   SITE_PAGE = p;
   window.scrollTo({ top: 0, behavior: "smooth" });
-  loadSites();
+  var wrap = document.querySelector("#panelSites .table-wrap");
+  if (wrap) wrap.scrollTop = 0;
+  // 失败提示由 loadSites 统一 toast，这里只吞掉拒绝避免 unhandledrejection
+  loadSites().catch(function() {});
 }
 function changePageSize(n) {
   SITE_LIMIT = parseInt(n, 10);
   SITE_PAGE = 1;
-  loadSites();
+  loadSites().catch(function() {});
 }
 var _filterTimer = null;
 function filterTable() {
   SITE_PAGE = 1;
   clearTimeout(_filterTimer);
-  _filterTimer = setTimeout(loadSites, 150);
+  _filterTimer = setTimeout(() => loadSites().catch(function() {}), 150);
 }
 function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
 // D1 的 datetime('now') 产出 "YYYY-MM-DD HH:MM:SS"，内容是 UTC 但字符串不带时区标记。
@@ -165,18 +211,29 @@ function parseUtc(v) {
   return Date.parse(s);
 }
 function fmtTime(v) { var t = parseUtc(v); return isNaN(t) ? "" : new Date(t).toLocaleString("zh-CN"); }
-function toggleSelect(name, checked) { if (checked) SELECTED.add(name); else SELECTED.delete(name); updateBatchBar(); }
+function toggleSelect(name, checked) {
+  if (checked) SELECTED.add(name); else SELECTED.delete(name);
+  var cb = document.querySelector('#sitesBody input[data-action="toggle-select"][data-name="' + name.replace(/"/g, '\\"') + '"]');
+  if (cb) { var tr = cb.closest("tr"); if (tr) tr.classList.toggle("selected", checked); }
+  updateBatchBar();
+}
 function toggleSelectAll() {
   const checked = document.getElementById("selectAll").checked;
   // 只操作选择框（data-action="toggle-select"），绝不触碰启用开关（toggle-enable）
-  document.querySelectorAll('#sitesBody input[data-action="toggle-select"]').forEach((cb) => { 
-    cb.checked = checked; 
-    const name = cb.getAttribute("data-name"); 
-    if (checked) SELECTED.add(name); else SELECTED.delete(name); 
+  document.querySelectorAll('#sitesBody input[data-action="toggle-select"]').forEach((cb) => {
+    cb.checked = checked;
+    const name = cb.getAttribute("data-name");
+    if (checked) SELECTED.add(name); else SELECTED.delete(name);
+    var tr = cb.closest("tr"); if (tr) tr.classList.toggle("selected", checked);
   });
   updateBatchBar();
 }
-function clearSelection() { SELECTED.clear(); document.getElementById("selectAll").checked = false; document.querySelectorAll('#sitesBody input[data-action="toggle-select"]').forEach((cb) => cb.checked = false); updateBatchBar(); }
+function clearSelection() {
+  SELECTED.clear();
+  document.getElementById("selectAll").checked = false;
+  document.querySelectorAll('#sitesBody input[data-action="toggle-select"]').forEach((cb) => { cb.checked = false; var tr = cb.closest("tr"); if (tr) tr.classList.remove("selected"); });
+  updateBatchBar();
+}
 function updateBatchBar() { 
   const bar = document.getElementById("batchBar"); 
   const count = SELECTED.size; 
@@ -206,9 +263,7 @@ function showCreate() {
   document.getElementById("editTitle").textContent = "新增站点";
   document.getElementById("editOriginalName").value = "";
   TEXT_FIELDS.concat(STRUCT_FIELDS.map((f) => f[0])).forEach((id) => { document.getElementById(id).value = ""; });
-  _modalOpen();
-  document.getElementById("editModal").classList.add("active");
-  document.getElementById("editName").focus();
+  openEditModal();
 }
 function showEdit(name) {
   const site = SITES.find((s) => s.name === name);
@@ -230,10 +285,33 @@ function showEdit(name) {
     const v = site[f[1]];
     document.getElementById(f[0]).value = v === null || v === undefined ? "" : String(v);
   });
-  _modalOpen();
-  document.getElementById("editModal").classList.add("active");
+  openEditModal();
 }
-function closeModal() { document.getElementById("editModal").classList.remove("active"); _modalClose(); }
+// 弹窗重复打开时先平衡 modal-open 计数：editModal 已 active 时点"新增/编辑"
+// 会让 _modalOpen 再 +1，关闭只 -1，body.modal-open 永久残留 → 整页滚动锁死。
+function openEditModal() {
+  var em = document.getElementById("editModal");
+  if (em.classList.contains("active")) _modalClose();
+  _editDirty = false;
+  _modalOpen();
+  em.classList.add("active");
+  document.getElementById("editName").focus();
+}
+// 编辑表单脏跟踪：Esc/遮罩/取消关闭时若有未保存修改，先二次确认，
+// 避免误触丢掉整张表单的录入（20+ 字段）。
+var _editDirty = false;
+document.getElementById("editModal").addEventListener("input", function() { _editDirty = true; });
+async function abandonEditConfirm() {
+  var ok = await showConfirm("放弃更改？", "<p>表单有未保存的修改，关闭后将丢失。</p>", "", "放弃更改");
+  if (ok) closeModal(true);
+}
+function closeModal(force) {
+  // 保存成功路径传 force=true；Esc/遮罩/取消走脏检查
+  if (!force && _editDirty) { abandonEditConfirm(); return; }
+  document.getElementById("editModal").classList.remove("active");
+  _editDirty = false;
+  _modalClose();
+}
 async function saveSite() {
   const originalName = document.getElementById("editOriginalName").value;
   const tags = document.getElementById("editTags").value.split(",").map((t) => t.trim()).filter(Boolean);
@@ -281,75 +359,116 @@ async function saveSite() {
     toast("额度上限不能小于下限", "error");
     return;
   }
-  try {
-    if (originalName) { await api("/api/admin/sites/" + encodeURIComponent(originalName), { method: "PUT", body: JSON.stringify(body) }); toast("更新成功", "success"); }
-    else { await api("/api/admin/sites", { method: "POST", body: JSON.stringify(body) }); toast("创建成功", "success"); }
-    closeModal(); await loadSites();
-  } catch (e) { toast(e.message, "error"); }
+  var saveBtn = document.getElementById("saveSiteBtn");
+  if (saveBtn) saveBtn.disabled = true;
+  if (_savePromise) return;
+  _savePromise = (async () => {
+    try {
+      if (originalName) { await api("/api/admin/sites/" + encodeURIComponent(originalName), { method: "PUT", body: JSON.stringify(body) }); toast("更新成功", "success"); }
+      else { await api("/api/admin/sites", { method: "POST", body: JSON.stringify(body) }); toast("创建成功", "success"); }
+      closeModal(true); await loadSites();
+    } catch (e) { toast(e.message, "error"); }
+  })().finally(() => { _savePromise = null; if (saveBtn) saveBtn.disabled = false; });
+  await _savePromise;
 }
 async function deleteSite(name) {
   var site = SITES.find(function(s) { return s.name === name; });
   var deadInfo = site && site.url ? DEAD_URLS.get(site.url.replace(/[/]+$/, "")) : null;
   var extra = "";
   if (deadInfo) {
-    extra += '<label style="display:flex;align-items:center;gap:var(--space-2);padding:var(--space-3);background:var(--amber-soft);border-radius:var(--radius);border:1px solid var(--amber);cursor:pointer;transition:background var(--transition-fast)"><input type="checkbox" id="deleteDeadCheck" checked><span style="font-weight:600;color:var(--amber)">此 URL 在 dead_urls 中有记录</span></label>';
-    extra += '<div class="text-sm text-muted" style="margin-top:var(--space-2);padding:var(--space-2) var(--space-3);background:var(--surface);border-radius:var(--radius);line-height:1.5">added_at: ' + fmtTime(deadInfo.added_at) + '<br>reason: ' + esc(deadInfo.reason) + '</div>';
+    extra += '<div class="text-sm text-muted" style="margin-top:var(--space-2);padding:var(--space-2) var(--space-3);background:var(--amber-soft);border-radius:var(--radius);border:1px solid var(--amber);line-height:1.5">';
+    extra += '<strong style="color:var(--amber)">此 URL 在 dead_urls 中有记录</strong><br>';
+    extra += 'added_at: ' + fmtTime(deadInfo.added_at) + '<br>reason: ' + esc(deadInfo.reason) + '</div>';
   }
   var ok = await showConfirm("确认删除", '<p>站点：<strong>' + esc(name) + '</strong></p>' + (site ? '<p class="text-sm text-muted">URL：' + esc(site.url) + '</p>' : '') + (deadInfo ? '<p class="text-amber text-sm" style="margin-top:var(--space-2)">⚠️ 删除后 dead_urls 将追加 " | site-deleted" 痕迹</p>' : ''), extra, "删除");
   if (!ok) return;
-  var addDead = deadInfo && document.getElementById("deleteDeadCheck").checked;
   try {
     await api("/api/admin/sites/" + encodeURIComponent(name), { method: "DELETE" });
-    toast("已删除" + (addDead ? "（死链已追加记录）" : ""), "success");
+    toast("已删除", "success");
     SELECTED.delete(name);
     await loadSites();
   } catch (e) { toast(e.message, "error"); }
 }
 async function batchDelete() {
   if (SELECTED.size === 0) return;
-  var selectedSites = SITES.filter(function(s) { return SELECTED.has(s.name); });
+  var selectedSites = ALL_SITES.filter(function(s) { return SELECTED.has(s.name); });
   var hasDead = selectedSites.some(function(s) { return DEAD_URLS.has(s.url.replace(/[/]+$/, "")); });
   var ok = await showConfirm("确认批量删除", "<p>将删除 <strong>" + SELECTED.size + "</strong> 个站点</p>" + (hasDead ? '<p class="text-sm" style="color:var(--amber)">⚠️ 其中包含已知死链，删除后 dead_urls 将追加痕迹</p>' : ''), "", "批量删除");
   if (!ok) return;
   var btns = document.querySelectorAll('#batchBar .btn');
   btns.forEach(function(b) { btnLoading(b, true); });
-  try { await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "delete", names: [...SELECTED] }) }); toast("批量删除完成", "success"); SELECTED.clear(); updateBatchBar(); await loadSites(); renderTable(); } catch (e) { toast(e.message, "error"); } finally { btns.forEach(function(b) { btnLoading(b, false); }); }
-}
-async function batchDeleteDisabled() {
-  var disabled = SITES.filter(function(s) { return !s.enabled; });
-  if (disabled.length === 0) { toast("当前没有停用的站点", "info"); return; }
-  var hasDead = disabled.some(function(s) { return DEAD_URLS.has(s.url.replace(/[/]+$/, "")); });
-  var ok = await showConfirm("确认删除停用站点", "<p>将删除 <strong>" + disabled.length + "</strong> 个停用站点</p>" + (hasDead ? '<p class="text-sm" style="color:var(--amber)">⚠️ 其中包含已知死链，删除后 dead_urls 将追加痕迹</p>' : ''), "", "删除停用站点");
-  if (!ok) return;
-  var btns = document.querySelectorAll('#batchBar .btn');
-  btns.forEach(function(b) { btnLoading(b, true); });
   try {
-    var names = disabled.map(function(s) { return s.name; });
+    var names = [...SELECTED];
     var totalAffected = 0;
     for (var i = 0; i < names.length; i += 99) {
       var batch = names.slice(i, i + 99);
       var data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "delete", names: batch }) });
       totalAffected += data.affected || 0;
     }
+    toast("批量删除完成，共 " + totalAffected + " 个", "success");
+    SELECTED.clear(); updateBatchBar(); await loadSites();
+  } catch (e) { toast(e.message, "error"); }
+  finally { btns.forEach(function(b) { btnLoading(b, false); }); }
+}
+async function batchDeleteDisabled() {
+  var disabled = SITES.filter(function(s) { return !s.enabled; });
+  if (disabled.length === 0) { toast("当前页没有停用的站点", "info"); return; }
+  var hasDead = disabled.some(function(s) { return DEAD_URLS.has(s.url.replace(/[/]+$/, "")); });
+  var ok = await showConfirm("确认删除停用站点", "<p>将删除当前页 <strong>" + disabled.length + "</strong> 个停用站点</p>" + (hasDead ? '<p class="text-sm" style="color:var(--amber)">⚠️ 其中包含已知死链，删除后 dead_urls 将追加痕迹</p>' : ''), "", "删除停用站点");
+  if (!ok) return;
+  var btns = document.querySelectorAll('#batchBar .btn');
+  btns.forEach(function(b) { btnLoading(b, true); });
+  try {
+    var totalAffected = await batchSiteAction("delete", disabled.map(function(s) { return s.name; }));
     toast("已删除 " + totalAffected + " 个停用站点", "success");
-    SELECTED.clear(); updateBatchBar(); await loadSites(); renderTable();
-  } catch (e) { toast(e.message, "error"); } finally { btns.forEach(function(b) { btnLoading(b, false); }); }
+    SELECTED.clear(); updateBatchBar(); await loadSites();
+  } catch (e) { toast(e.message, "error"); }
+  finally { btns.forEach(function(b) { btnLoading(b, false); }); }
+}
+// 批量站点操作（自动按 99 个/批分片，避免后端 names 上限报 400）
+async function batchSiteAction(action, names, extra) {
+  var totalAffected = 0;
+  for (var i = 0; i < names.length; i += 99) {
+    var batch = names.slice(i, i + 99);
+    var data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify(Object.assign({ action, names: batch }, extra || {})) });
+    totalAffected += data.affected || 0;
+  }
+  return totalAffected;
 }
 async function batchTag() {
   if (SELECTED.size === 0) return;
   var input = document.getElementById("batchTagInput");
   var tag = input.value.trim();
   if (!tag) { toast("请输入标签名称", "error"); input.focus(); return; }
-  try { const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "add_tag", names: [...SELECTED], tag: tag }) }); toast("已为 " + data.affected + " 个站点添加标签", "success"); SELECTED.clear(); updateBatchBar(); input.value = ""; await loadSites(); renderTable(); } catch (e) { toast(e.message, "error"); }
+  try {
+    var totalAffected = await batchSiteAction("add_tag", [...SELECTED], { tag: tag });
+    toast("已为 " + totalAffected + " 个站点添加标签", "success");
+    SELECTED.clear(); updateBatchBar(); input.value = ""; await loadSites();
+  } catch (e) { toast(e.message, "error"); }
 }
 async function toggleEnable(name, enabled) {
-  try { const site = SITES.find((s) => s.name === name); if (!site) return; await api("/api/admin/sites/" + encodeURIComponent(name), { method: "PUT", body: JSON.stringify({ ...site, enabled }) }); toast(enabled ? "已启用：" + name : "已停用：" + name, "success"); if (!enabled && site.url) { try { await api("/api/admin/dead-urls", { method: "POST", body: JSON.stringify({ url: site.url, action: "add", reason: "manual-marked" }) }); } catch (e) { console.warn("写入 dead_urls 失败", e); } } await loadSites(); await loadDeadUrls(); renderTable(); renderHealthFromSites(); } catch (e) { toast(e.message, "error"); }
+  try {
+    const site = SITES.find((s) => s.name === name);
+    if (!site) return;
+    await api("/api/admin/sites/" + encodeURIComponent(name), { method: "PUT", body: JSON.stringify({ name, enabled }) });
+    toast(enabled ? "已启用：" + name : "已停用：" + name, "success");
+    if (!enabled && site.url) {
+      try { await api("/api/admin/dead-urls", { method: "POST", body: JSON.stringify({ url: site.url, action: "add", reason: "manual-marked" }) }); } catch (e) { console.warn("写入 dead_urls 失败", e); }
+    }
+    await loadSites();
+    renderTable();
+  } catch (e) { toast(e.message, "error"); }
 }
 async function batchEnable() {
   if (SELECTED.size === 0) return;
   var btns = document.querySelectorAll('#batchBar .btn');
   btns.forEach(function(b) { btnLoading(b, true); });
-  try { const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "enable", names: [...SELECTED] }) }); toast("已启用 " + data.affected + " 个站点", "success"); SELECTED.clear(); updateBatchBar(); await loadSites(); await loadDeadUrls(); renderTable(); renderHealthFromSites(); } catch (e) { toast(e.message, "error"); } finally { btns.forEach(function(b) { btnLoading(b, false); }); }
+  try {
+    var totalAffected = await batchSiteAction("enable", [...SELECTED]);
+    toast("已启用 " + totalAffected + " 个站点", "success");
+    SELECTED.clear(); updateBatchBar(); await loadSites();
+  } catch (e) { toast(e.message, "error"); }
+  finally { btns.forEach(function(b) { btnLoading(b, false); }); }
 }
 async function batchDisable() {
   if (SELECTED.size === 0) return;
@@ -357,22 +476,23 @@ async function batchDisable() {
   if (!ok) return;
   var btns = document.querySelectorAll('#batchBar .btn');
   btns.forEach(function(b) { btnLoading(b, true); });
-  try { 
-    await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "disable", names: [...SELECTED] }) }); 
-    var selectedForDead = SITES.filter(function(s) { return SELECTED.has(s.name); });
+  try {
+    var totalAffected = await batchSiteAction("disable", [...SELECTED]);
+    var selectedForDead = ALL_SITES.filter(function(s) { return SELECTED.has(s.name); });
     var deadUrls = selectedForDead.map(function(s) { return s.url; }).filter(Boolean);
     if (deadUrls.length > 0) {
       try { await api("/api/admin/dead-urls/batch", { method: "POST", body: JSON.stringify({ urls: deadUrls, action: "add" }) }); } catch (e) { console.warn("批量写入 dead_urls 失败", e); }
     }
-    toast("已停用 " + SELECTED.size + " 个站点", "success"); 
-    SELECTED.clear(); updateBatchBar(); 
-    await loadSites(); await loadDeadUrls(); renderTable(); renderHealthFromSites();
-  } catch (e) { toast(e.message, "error"); } finally { btns.forEach(function(b) { btnLoading(b, false); }); }
+    toast("已停用 " + totalAffected + " 个站点", "success");
+    SELECTED.clear(); updateBatchBar();
+    await loadSites();
+  } catch (e) { toast(e.message, "error"); }
+  finally { btns.forEach(function(b) { btnLoading(b, false); }); }
 }
 // 对选中的站点重新做健康检查（只查选中的，不查全部）
 async function batchRecheck() {
   if (SELECTED.size === 0) { toast("请先选择要复查的站点", "info"); return; }
-  var selectedSites = SITES.filter(function(s) { return SELECTED.has(s.name); });
+  var selectedSites = ALL_SITES.filter(function(s) { return SELECTED.has(s.name); });
   var urls = selectedSites.map(function(s) { return s.url; }).filter(Boolean);
   if (urls.length === 0) { toast("选中的站点没有可检查的 URL", "error"); return; }
   var statusEl = document.getElementById("sitesCleanStatus");
@@ -384,7 +504,7 @@ async function batchRecheck() {
     statusEl.textContent = "复查完成：" + alive + " 可达，" + dead + " 不可达";
     toast("复查完成：" + alive + " 可达，" + dead + " 不可达", dead > 0 ? "info" : "success");
     // 更新健康 tab 数据
-    await loadSites(); renderTable(); renderHealthFromSites();
+    await loadSites(); await refreshHealthFromServer();
   } catch (e) { statusEl.textContent = "复查失败: " + e.message; toast("复查失败: " + e.message, "error"); }
 }
 function switchTab(tab) {
@@ -398,8 +518,10 @@ function switchTab(tab) {
   if (tab === "submissions") loadSubmissions();
   if (tab === "feedback") loadFeedbacks();
   if (tab === "schema") loadSchema();
-  // 健康 tab：从数据库已有数据构建对账报告，无需扫描
-  if (tab === "health") renderHealthFromSites();
+  // 健康 tab：从全量数据库数据构建对账报告
+  if (tab === "health") {
+    loadAllSites().then(() => renderHealthFromSites()).catch((e) => toast("加载健康数据失败: " + e.message, "error"));
+  }
 }
 async function loadSubmissions() {
   try {
@@ -454,48 +576,34 @@ async function batchApproveSubmissions() {
   if (SUBMISSION_SELECTED.size === 0) { toast("请先选择要批准的提交", "info"); return; }
   var ok = await showConfirm("批量批准", "<p>将批准 <strong>" + SUBMISSION_SELECTED.size + "</strong> 个提交并创建站点</p>", "", "批量批准");
   if (!ok) return;
+  var btns = document.querySelectorAll('#subBatchBar .btn');
+  btns.forEach(function(b) { btnLoading(b, true); });
   try {
     var ids = [...SUBMISSION_SELECTED];
-    var success = 0;
-    var failed = 0;
-    for (const id of ids) {
-      try {
-        await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "approve_submission", ids: [id] }) });
-        success++;
-      } catch (e) {
-        failed++;
-        console.warn("批准提交 " + id + " 失败:", e);
-      }
-    }
-    toast("批量批准完成：成功 " + success + " 个" + (failed > 0 ? "，失败 " + failed + " 个" : ""), failed > 0 ? "warning" : "success");
+    var data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "approve_submission", ids: ids }) });
+    toast("批量批准完成：成功 " + (data.affected || 0) + " 个", "success");
     SUBMISSION_SELECTED.clear();
     updateSubBatchCount();
     await loadSubmissions();
     await loadSites();
   } catch (e) { toast(e.message, "error"); }
+  finally { btns.forEach(function(b) { btnLoading(b, false); }); }
 }
 async function batchRejectSubmissions() {
   if (SUBMISSION_SELECTED.size === 0) { toast("请先选择要驳回的提交", "info"); return; }
   var ok = await showConfirm("批量驳回", "<p>将驳回 <strong>" + SUBMISSION_SELECTED.size + "</strong> 个提交</p>", "", "批量驳回");
   if (!ok) return;
+  var btns = document.querySelectorAll('#subBatchBar .btn');
+  btns.forEach(function(b) { btnLoading(b, true); });
   try {
     var ids = [...SUBMISSION_SELECTED];
-    var success = 0;
-    var failed = 0;
-    for (const id of ids) {
-      try {
-        await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "reject_submission", ids: [id] }) });
-        success++;
-      } catch (e) {
-        failed++;
-        console.warn("驳回提交 " + id + " 失败:", e);
-      }
-    }
-    toast("批量驳回完成：成功 " + success + " 个" + (failed > 0 ? "，失败 " + failed + " 个" : ""), failed > 0 ? "warning" : "success");
+    var data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "reject_submission", ids: ids }) });
+    toast("批量驳回完成：成功 " + (data.affected || 0) + " 个", "success");
     SUBMISSION_SELECTED.clear();
     updateSubBatchCount();
     await loadSubmissions();
   } catch (e) { toast(e.message, "error"); }
+  finally { btns.forEach(function(b) { btnLoading(b, false); }); }
 }
 async function approveSubmission(id) {
   // M6：改单次原子请求（建站 + 标记批准在服务端同一 batch 完成）。
@@ -522,12 +630,12 @@ async function setDeadByName(name, isDead) {
     const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: isDead ? "disable" : "enable", names: [name] }) });
     toast(isDead ? "已标记为死链：" + name : "已恢复为可用：" + name, "success");
     if (isDead) {
-      const site = SITES.find((s) => s.name === name);
+      const site = ALL_SITES.find((s) => s.name === name) || SITES.find((s) => s.name === name);
       if (site && site.url) {
         try { await api("/api/admin/dead-urls", { method: "POST", body: JSON.stringify({ url: site.url, action: "add", reason: "manual-marked" }) }); } catch {}
       }
     }
-    await loadSites(); await loadDeadUrls(); renderHealthFromSites();
+    await loadSites(); await loadDeadUrls(); await refreshHealthFromServer();
   } catch (e) { toast(e.message, "error"); }
 }
 // 站点健康状态徽章（基于数据库已有数据，无需扫描）
@@ -552,23 +660,27 @@ function renderHealthFromSites() {
   var reportEl = document.getElementById("healthReport");
   // 安全防护：元素不存在时静默跳过（admin 页面未完全加载/其他 tab 调用）
   if (!statusEl || !reportEl) return;
-  if (!SITES || SITES.length === 0) { statusEl.textContent = "请先加载站点列表"; return; }
-  // 从数据库数据派生对账报告
-  var unreachEnabled = SITES.filter(function(s) { return s.dead; });
-  var reachWithFails = SITES.filter(function(s) { return !s.dead && s.healthFailCount > 0; });
-  var reachVerified = SITES.filter(function(s) { return !s.dead && s.healthFailCount === 0 && s.verifiedAt; });
-  var reachUnverified = SITES.filter(function(s) { return !s.dead && s.healthFailCount === 0 && !s.verifiedAt; });
+  // 每次重建报告前清空选中集，避免重渲染后残留"看不见的选中"
+  HEALTH_DEAD_SELECTED.clear();
+  HEALTH_FAIL_SELECTED.clear();
+  if (!ALL_SITES || ALL_SITES.length === 0) { statusEl.textContent = "请先加载站点列表"; return; }
+  // 从全量数据库数据派生对账报告
+  // 注意：health_fail_count 可能为 null（从未检查过），null 既不是 >0 也不是 ===0，
+  // 必须显式归入“未验证/无数据”桶，否则会从统计里静默消失。
+  var unreachEnabled = ALL_SITES.filter(function(s) { return s.dead; });
+  var reachWithFails = ALL_SITES.filter(function(s) { return !s.dead && (s.healthFailCount || 0) > 0; });
+  var reachVerified = ALL_SITES.filter(function(s) { return !s.dead && (s.healthFailCount || 0) === 0 && s.verifiedAt; });
+  var reachUnverified = ALL_SITES.filter(function(s) { return !s.dead && (s.healthFailCount || 0) === 0 && !s.verifiedAt; });
   var html = "";
-  // 通用表格样式
-  var tblClass = 'class="table"';
-  var thClass = 'class="text-sm text-muted font-semibold"';
-  var tdClass = 'class="text-sm"';
+  // 通用表格样式（纯类名，拼接时统一包 class="..."，避免属性嵌套损坏）
+  var thClass = 'text-sm text-muted font-semibold';
+  var tdClass = 'text-sm';
   // ── 死链表 ────────────────────────────────────────────────────────────
   html += '<div class="section-header">';
   html += '<strong class="title text-coral">\u2716 已标记为死链（' + unreachEnabled.length + '）</strong>';
   if (unreachEnabled.length > 0) {
     html += '<button class="btn btn-sm btn-primary" data-action="healthBatchRestoreDead">\u2705 恢复选中</button>';
-    html += '<button class="btn btn-sm" data-action="healthBatchRecheckDead">\u200d\u200d🔍 重新复查选中</button>';
+    html += '<button class="btn btn-sm" data-action="healthBatchRecheckDead">🔍 重新复查选中</button>';
     html += '<button class="btn btn-sm btn-danger" data-action="healthRestoreAllDead">\u2705 恢复全部</button>';
     html += '<button class="btn btn-sm" data-action="healthClearDeadSelection">\u2716 取消选择</button>';
     html += '<span id="healthDeadCount" class="count text-muted text-sm">已选 0 个</span>';
@@ -576,19 +688,19 @@ function renderHealthFromSites() {
   html += '</div>';
   html += '<table class="table health-dead-table"><thead><tr>';
   html += '<th class="w-check"><input type="checkbox" id="healthDeadSelectAll" data-action="healthToggleDeadSelectAll"></th>';
-  html += '<th ' + thClass + '>站点名称</th>';
-  html += '<th ' + thClass + '>验证时间</th>';
-  html += '<th ' + thClass + ' class="w-action">操作</th>';
+  html += '<th class="' + thClass + '">站点名称</th>';
+  html += '<th class="' + thClass + '">验证时间</th>';
+  html += '<th class="' + thClass + ' w-action">操作</th>';
   html += '</tr></thead><tbody>';
   if (unreachEnabled.length > 0) {
     html += unreachEnabled.map(function(s) {
       return '<tr>' +
         '<td class="w-check"><input type="checkbox" data-name="' + esc(s.name) + '" data-action="healthToggleDeadSelect"></td>' +
-        '<td ' + tdClass + '><a href="' + esc(s.url) + '" target="_blank">' + esc(s.name) + '</a></td>' +
-        '<td ' + tdClass + ' class="text-muted text-sm">' + (s.verifiedAt ? "\u2705 " + fmtTime(s.verifiedAt) : '\u25cb 未验证') + '</td>' +
-        '<td ' + tdClass + ' class="w-action">' +
+        '<td class="' + tdClass + '"><a href="' + esc(s.url) + '" target="_blank">' + esc(s.name) + '</a></td>' +
+        '<td class="' + tdClass + ' text-muted text-sm">' + (s.verifiedAt ? "\u2705 " + fmtTime(s.verifiedAt) : '\u25cb 未验证') + '</td>' +
+        '<td class="' + tdClass + ' w-action">' +
         '<button class="btn btn-sm btn-primary" data-name="' + esc(s.name) + '" data-action="restore-dead">\u6062\u590d\u4e3a\u53ef\u7528</button>' +
-        '<button class="btn btn-sm" data-name="' + esc(s.name) + '" data-action="recheck-dead">\u200d\u200d🔍 复查</button></td>' +
+        '<button class="btn btn-sm" data-name="' + esc(s.name) + '" data-action="recheck-dead">🔍 复查</button></td>' +
         '</tr>';
     }).join("");
   } else {
@@ -606,17 +718,17 @@ function renderHealthFromSites() {
   html += '</div>';
   html += '<table class="table health-fail-table"><thead><tr>';
   html += '<th class="w-check"><input type="checkbox" id="healthFailSelectAll" data-action="healthToggleFailSelectAll"></th>';
-  html += '<th ' + thClass + '>站点名称</th>';
-  html += '<th ' + thClass + '>失败次数</th>';
-  html += '<th ' + thClass + ' class="w-action">操作</th>';
+  html += '<th class="' + thClass + '">站点名称</th>';
+  html += '<th class="' + thClass + '">失败次数</th>';
+  html += '<th class="' + thClass + ' w-action">操作</th>';
   html += '</tr></thead><tbody>';
   if (reachWithFails.length > 0) {
     html += reachWithFails.map(function(s) {
       return '<tr>' +
         '<td class="w-check"><input type="checkbox" data-name="' + esc(s.name) + '" data-action="healthToggleFailSelect"></td>' +
-        '<td ' + tdClass + '><a href="' + esc(s.url) + '" target="_blank">' + esc(s.name) + '</a></td>' +
-        '<td ' + tdClass + ' class="text-coral text-sm">\u26a0 ' + s.healthFailCount + ' 次</td>' +
-        '<td ' + tdClass + ' class="w-action"><button class="btn btn-sm btn-danger" data-name="' + esc(s.name) + '" data-action="mark-dead">\u6807\u8bb0\u4e3a\u6b7b\u94fe</button></td>' +
+        '<td class="' + tdClass + '"><a href="' + esc(s.url) + '" target="_blank">' + esc(s.name) + '</a></td>' +
+        '<td class="' + tdClass + ' text-coral text-sm">\u26a0 ' + (s.healthFailCount || 0) + ' 次</td>' +
+        '<td class="' + tdClass + ' w-action"><button class="btn btn-sm btn-danger" data-name="' + esc(s.name) + '" data-action="mark-dead">\u6807\u8bb0\u4e3a\u6b7b\u94fe</button></td>' +
         '</tr>';
     }).join("");
   } else {
@@ -624,7 +736,23 @@ function renderHealthFromSites() {
   }
   html += '</tbody></table>';
   // ── 正常区 ────────────────────────────────────────────────────────────
-  html += '<div class="text-muted text-sm" style="margin:var(--space-3) 0 var(--space-1)">\u2705 正常：' + (reachVerified.length + reachUnverified.length) + '（已验证 ' + reachVerified.length + '，未验证 ' + reachUnverified.length + '）。</div>';
+  // 底部做全量对账：死链 + 连续失败 + 正常 必须等于总站点数。
+  // 若出现缺口，说明存在 health_fail_count / verified_at 为 NULL 的
+  // “无检查数据”站点，会明确标出，避免管理员以为数据丢了。
+  var totalCount = ALL_SITES.length;
+  var deadCount = unreachEnabled.length;
+  var failCount = reachWithFails.length;
+  var normalCount = reachVerified.length + reachUnverified.length;
+  var accounted = deadCount + failCount + normalCount;
+  html += '<div class="text-muted text-sm" style="margin:var(--space-3) 0 var(--space-1)">';
+  html += '共 ' + totalCount + ' 个：';
+  html += '死链 ' + deadCount + ' + ';
+  html += '连续失败 ' + failCount + ' + ';
+  html += '正常 ' + normalCount + '（已验证 ' + reachVerified.length + '，未验证 ' + reachUnverified.length + '）';
+  if (accounted < totalCount) {
+    html += '；⚠️ 另有 ' + (totalCount - accounted) + ' 个未纳入（无检查数据）';
+  }
+  html += '。</div>';
   reportEl.innerHTML = html;
   statusEl.textContent = "基于数据库最近一次 cron 检查结果（每 6 小时自动更新）。需要最新数据请点【批量检查】。";
 }
@@ -633,7 +761,7 @@ function healthToggleDeadSelect(cb) {
   if (cb.checked) HEALTH_DEAD_SELECTED.add(cb.getAttribute("data-name"));
   else HEALTH_DEAD_SELECTED.delete(cb.getAttribute("data-name"));
   document.getElementById("healthDeadCount").textContent = "已选 " + HEALTH_DEAD_SELECTED.size + " 个";
-  document.getElementById("healthDeadSelectAll").checked = HEALTH_DEAD_SELECTED.size === SITES.filter(function(s) { return s.dead; }).length;
+  document.getElementById("healthDeadSelectAll").checked = HEALTH_DEAD_SELECTED.size === ALL_SITES.filter(function(s) { return s.dead; }).length;
 }
 function healthToggleDeadSelectAll(cb) {
   document.querySelectorAll('#healthReport .health-dead-table tbody input[type="checkbox"]').forEach(function(el) {
@@ -651,21 +779,21 @@ function healthClearDeadSelection() {
 }
 async function healthBatchRecheckDead() {
   if (HEALTH_DEAD_SELECTED.size === 0) { toast("请先选择要复查的站点", "info"); return; }
-  var urls = SITES.filter(function(s) { return HEALTH_DEAD_SELECTED.has(s.name); }).map(function(s) { return s.url; }).filter(Boolean);
+  var urls = ALL_SITES.filter(function(s) { return HEALTH_DEAD_SELECTED.has(s.name); }).map(function(s) { return s.url; }).filter(Boolean);
   if (urls.length === 0) { toast("选中的站点没有可检查的 URL", "error"); return; }
-  try { var data = await api("/api/admin/check-batch", { method: "POST", body: JSON.stringify({ urls: urls }) }); var alive = data.results.filter(function(r) { return r.ok; }).length; var dead = data.results.filter(function(r) { return !r.ok; }).length; toast("复查完成：" + alive + " 可达，" + dead + " 不可达", dead > 0 ? "info" : "success"); await loadSites(); renderTable(); renderHealthFromSites(); } catch (e) { toast("复查失败: " + e.message, "error"); }
+  try { var data = await api("/api/admin/check-batch", { method: "POST", body: JSON.stringify({ urls: urls }) }); var alive = data.results.filter(function(r) { return r.ok; }).length; var dead = data.results.filter(function(r) { return !r.ok; }).length; toast("复查完成：" + alive + " 可达，" + dead + " 不可达", dead > 0 ? "info" : "success"); await loadSites(); await refreshHealthFromServer(); } catch (e) { toast("复查失败: " + e.message, "error"); }
 }
 async function healthRecheckSingleDead(name) {
   var s = SITES.find(function(s) { return s.name === name; });
   if (!s || !s.url) { toast("站点无 URL", "error"); return; }
-  try { var data = await api("/api/admin/check-batch", { method: "POST", body: JSON.stringify({ urls: [s.url] }) }); var r = data.results[0]; toast("\u200d\u200d🔍 " + name + "：" + (r.ok ? "可达" : "不可达"), r.ok ? "success" : "error"); await loadSites(); renderTable(); renderHealthFromSites(); } catch (e) { toast("复查失败: " + e.message, "error"); }
+  try { var data = await api("/api/admin/check-batch", { method: "POST", body: JSON.stringify({ urls: [s.url] }) }); var r = data.results[0]; toast("🔍 " + name + "：" + (r.ok ? "可达" : "不可达"), r.ok ? "success" : "error"); await loadSites(); await refreshHealthFromServer(); } catch (e) { toast("复查失败: " + e.message, "error"); }
 }
 async function healthBatchRestoreDead() {
   if (HEALTH_DEAD_SELECTED.size === 0) { toast("请先选择要恢复的站点", "info"); return; }
-  try { await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "enable", names: [...HEALTH_DEAD_SELECTED] }) }); toast("已恢复 " + HEALTH_DEAD_SELECTED.size + " 个站点", "success"); HEALTH_DEAD_SELECTED.clear(); await loadSites(); renderTable(); renderHealthFromSites(); } catch (e) { toast(e.message, "error"); }
+  try { await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "enable", names: [...HEALTH_DEAD_SELECTED] }) }); toast("已恢复 " + HEALTH_DEAD_SELECTED.size + " 个站点", "success"); HEALTH_DEAD_SELECTED.clear(); await loadSites(); await refreshHealthFromServer(); } catch (e) { toast(e.message, "error"); }
 }
 async function healthRestoreAllDead() {
-  var names = SITES.filter(function(s) { return s.dead; }).map(function(s) { return s.name; });
+  var names = ALL_SITES.filter(function(s) { return s.dead; }).map(function(s) { return s.name; });
   if (names.length === 0) { toast("没有死链站点", "info"); return; }
   var ok = await showConfirm("确认恢复全部", "<p>将恢复 <strong>" + names.length + "</strong> 个死链站点为可用</p>", "", "恢复全部");
   if (!ok) return;
@@ -678,7 +806,7 @@ async function healthRestoreAllDead() {
     }
     toast("已恢复 " + totalAffected + " 个站点", "success");
     HEALTH_DEAD_SELECTED.clear();
-    await loadSites(); renderTable(); renderHealthFromSites();
+    await loadSites(); await refreshHealthFromServer();
   } catch (e) { toast(e.message, "error"); }
 }
 // 异常区的批量选择
@@ -686,7 +814,7 @@ function healthToggleFailSelect(cb) {
   if (cb.checked) HEALTH_FAIL_SELECTED.add(cb.getAttribute("data-name"));
   else HEALTH_FAIL_SELECTED.delete(cb.getAttribute("data-name"));
   document.getElementById("healthFailCount").textContent = "已选 " + HEALTH_FAIL_SELECTED.size + " 个";
-  document.getElementById("healthFailSelectAll").checked = HEALTH_FAIL_SELECTED.size === SITES.filter(function(s) { return !s.dead && s.healthFailCount > 0; }).length;
+  document.getElementById("healthFailSelectAll").checked = HEALTH_FAIL_SELECTED.size === ALL_SITES.filter(function(s) { return !s.dead && (s.healthFailCount || 0) > 0; }).length;
 }
 function healthToggleFailSelectAll(cb) {
   document.querySelectorAll('#healthReport .health-fail-table tbody input[type="checkbox"]').forEach(function(el) {
@@ -704,7 +832,7 @@ function healthClearFailSelection() {
 }
 async function healthBatchMarkDead() {
   if (HEALTH_FAIL_SELECTED.size === 0) { toast("请先选择要标记的站点", "info"); return; }
-  var selectedSites = SITES.filter(function(s) { return HEALTH_FAIL_SELECTED.has(s.name); });
+  var selectedSites = ALL_SITES.filter(function(s) { return HEALTH_FAIL_SELECTED.has(s.name); });
   var urls = selectedSites.map(function(s) { return s.url; }).filter(Boolean);
   try {
     await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "disable", names: [...HEALTH_FAIL_SELECTED] }) });
@@ -713,7 +841,7 @@ async function healthBatchMarkDead() {
     }
     toast("已标记 " + HEALTH_FAIL_SELECTED.size + " 个站点为死链", "success");
     HEALTH_FAIL_SELECTED.clear();
-    await loadSites(); await loadDeadUrls(); renderTable(); renderHealthFromSites();
+    await loadSites(); await loadDeadUrls(); await refreshHealthFromServer();
   } catch (e) { toast(e.message, "error"); }
 }
 /**
@@ -727,7 +855,7 @@ async function runHealthScan({ onProgress, onResult }) {
   // 服务端会硬截断并在响应里回传 maxBatch，下面做漂移检测——
   // 万一两边不一致，宁可报出来也不要静默丢掉后半批 URL。
   let BATCH_SIZE = 20;
-  const allUrls = SITES.map(s => s.url).filter(Boolean);
+  const allUrls = ALL_SITES.map(s => s.url).filter(Boolean);
   if (allUrls.length === 0) { onProgress("没有可检查的站点"); return; }
   const allResults = [];
   let i = 0;
@@ -754,6 +882,8 @@ async function runHealthScan({ onProgress, onResult }) {
 async function batchCheckUrls() {
   const statusEl = document.getElementById("healthStatus"); const scanEl = document.getElementById("healthScanResults");
   if (!statusEl || !scanEl) { toast("健康检查面板未就绪", "error"); return; }
+  statusEl.textContent = "正在加载站点清单...";
+  try { await ensureAllSites(); } catch (e) { statusEl.textContent = "加载失败"; return; }
   statusEl.textContent = "正在检查中，请稍候..."; scanEl.innerHTML = ""; scanEl.style.display = "none";
   try {
     await runHealthScan({
@@ -764,7 +894,7 @@ async function batchCheckUrls() {
         // 交互模式与下方 renderHealthFromSites 一致：表格 + 全选 + 行选 + 批量按钮，
         // 且所有操作都是"原位更新"（移除已处理行），报告在清账完成前常驻不被覆盖。
         var byUrl = {};
-        SITES.forEach(function(s) { byUrl[s.url] = s; });
+        ALL_SITES.forEach(function(s) { byUrl[s.url] = s; });
         var unreachEnabled = [];  // 不可达 + 当前启用 → 建议标记死链
         var unreachDisabled = []; // 不可达 + 当前禁用 → 已在死链
         var reachDisabled = [];   // 可达 + 当前禁用 → 可能已恢复
@@ -775,9 +905,6 @@ async function batchCheckUrls() {
           if (r.ok) { if (isEnabled) reachEnabled.push(r); else reachDisabled.push(r); }
           else { if (isEnabled) unreachEnabled.push(r); else unreachDisabled.push(r); }
         });
-        var tblClass = 'class="table"';
-        var thClass = 'class="text-sm text-muted font-semibold"';
-        var tdClass = 'class="text-sm"';
         function section(id, title, color, rows, batchBtn, evidence) {
           if (rows.length === 0) return "";
           var h = '<div id="' + id + 'Section">';
@@ -796,9 +923,9 @@ async function batchCheckUrls() {
             var s = byUrl[r.url];
             return '<tr data-name="' + esc(s.name) + '">' +
               '<td class="w-check"><input type="checkbox" data-name="' + esc(s.name) + '" data-body="' + id + 'Body" data-action="scanCkChanged"></td>' +
-              '<td ' + tdClass + '><a href="' + esc(r.url) + '" target="_blank">' + esc(s.name) + '</a> <span class="text-muted text-xs">' + esc(r.url) + '</span></td>' +
+              '<td class="text-sm"><a href="' + esc(r.url) + '" target="_blank">' + esc(s.name) + '</a> <span class="text-muted text-xs">' + esc(r.url) + '</span></td>' +
               '<td class="text-sm" style="white-space:nowrap;color:' + color + '">' + evidence(r) + '</td>' +
-              '<td ' + tdClass + ' class="w-action">' +
+              '<td class="text-sm w-action">' +
               '<button class="btn btn-sm ' + (id === "scanMark" ? "btn-danger" : "btn-primary") + '" data-action="scanOne" data-mark="' + (id === "scanMark" ? "true" : "false") + '">' + (id === "scanMark" ? "\u6807\u8bb0\u4e3a\u6b7b\u94fe" : "\u6062\u590d\u4e3a\u53ef\u7528") + '</button></td>' +
               '</tr>';
           }).join("");
@@ -876,7 +1003,10 @@ async function scanApply(names, action, bodyId) {
     toast((action === "disable" ? "已标记 " : "已恢复 ") + data.affected + " 个站点", "success");
     scanRemoveRows(bodyId, names);
     if (action === "disable") {
-      var scanSites = SITES.filter(function(s) { return names.indexOf(s.name) !== -1; });
+      // 扫描报告基于全量站点；被处理的行可能不在当前分页页里，
+      // 所以 dead_urls 名单必须从 ALL_SITES 取，不能只看 SITES。
+      var scanPool = ALL_SITES.length > 0 ? ALL_SITES : SITES;
+      var scanSites = scanPool.filter(function(s) { return names.indexOf(s.name) !== -1; });
       var scanUrls = scanSites.map(function(s) { return s.url; }).filter(Boolean);
       if (scanUrls.length > 0) {
         try { await api("/api/admin/dead-urls/batch", { method: "POST", body: JSON.stringify({ urls: scanUrls, action: "add" }) }); } catch (e) { console.warn("扫描批量写入 dead_urls 失败", e); }
@@ -896,8 +1026,10 @@ function scanOne(btn, isDead) {
 // ── 站点管理 tab 一键清理死链 ──────────────────────────────────────────────
 async function sitesCleanupDeadLinks() {
   var statusEl = document.getElementById("sitesCleanStatus");
-  if (SITES.length === 0) { toast("请先加载站点列表", "error"); return; }
-  var ok = await showConfirm("确认扫描", "<p>将检查全部 <strong>" + SITES.length + "</strong> 个站点的 URL 可达性</p><p class='text-sm text-muted'>结果支持一键标记/恢复</p>", "", "开始扫描");
+  if (SITES.length === 0 && ALL_SITES.length === 0) { toast("请先加载站点列表", "error"); return; }
+  // 确认框里写"全部 N 个站点"，就必须真的按全量扫——ALL_SITES 未加载时先拉
+  try { await ensureAllSites(); } catch (e) { return; }
+  var ok = await showConfirm("确认扫描", "<p>将检查全部 <strong>" + ALL_SITES.length + "</strong> 个站点的 URL 可达性</p><p class='text-sm text-muted'>结果支持一键标记/恢复</p>", "", "开始扫描");
   if (!ok) return;
   statusEl.textContent = "正在检查中...";
   try {
@@ -905,7 +1037,7 @@ async function sitesCleanupDeadLinks() {
       onProgress: (msg) => { statusEl.textContent = msg; },
       onResult: ({ alive, dead, allResults }) => {
         var byUrl = {};
-        SITES.forEach(function(s) { byUrl[s.url] = s; });
+        ALL_SITES.forEach(function(s) { byUrl[s.url] = s; });
         var unreachEnabled = [], reachDisabled = [];
         allResults.forEach(function(r) {
           var s = byUrl[r.url];
@@ -913,29 +1045,9 @@ async function sitesCleanupDeadLinks() {
           if (r.ok) { if (!isEnabled) reachDisabled.push(r); }
           else { if (isEnabled) unreachEnabled.push(r); }
         });
-        // 构建与 batchCheckUrls 一致的对账报告，存入缓存供健康 tab 查看
-        var html = "";
-        if (unreachEnabled.length > 0) {
-          html += '<div style="margin-bottom:var(--space-2)"><strong style="color:var(--coral)">\u26a1 \u4e0d\u53ef\u8fbe\u4f46\u5f53\u524d\u53ef\u7528\uff08\u5efa\u8bae\u6807\u8bb0\u4e3a\u6b7b\u94fe\uff09(' + unreachEnabled.length + ')</strong></div>';
-          html += unreachEnabled.map(function(r) {
-            var s = byUrl[r.url];
-            return '<div class="section-header" style="padding:var(--space-1) 0;font-size:12px;border-bottom:1px solid var(--line)">' +
-              '<span style="flex:1;word-break:break-all"><a href="' + esc(r.url) + '" target="_blank">' + esc(s.name) + '</a> <span style="color:var(--muted)">' + esc(r.url) + '</span></span>' +
-              '<span style="color:var(--coral);white-space:nowrap">' + esc(r.error || ("HTTP " + r.status)) + '</span>' +
-              '<button class="btn btn-sm btn-danger" data-name="' + esc(s.name) + '" data-action="mark-dead">\u6807\u8bb0\u4e3a\u6b7b\u94fe</button></div>';
-          }).join("");
-        }
-        if (reachDisabled.length > 0) {
-          html += '<div style="margin:var(--space-3) 0 var(--space-2)"><strong style="color:var(--teal)">\ud83d\udd04 \u5df2\u53ef\u8fbe\u4f46\u5f53\u524d\u4e3a\u6b7b\u94fe\uff08\u5efa\u8bae\u6062\u590d\u4e3a\u53ef\u7528\uff09(' + reachDisabled.length + ')</strong></div>';
-          html += reachDisabled.map(function(r) {
-            var s = byUrl[r.url];
-            return '<div class="section-header" style="padding:var(--space-1) 0;font-size:12px;border-bottom:1px solid var(--line)">' +
-              '<span style="flex:1;word-break:break-all"><a href="' + esc(r.url) + '" target="_blank">' + esc(s.name) + '</a> <span style="color:var(--muted)">' + esc(r.url) + '</span></span>' +
-              '<span style="color:var(--teal);white-space:nowrap">HTTP ' + r.status + '</span>' +
-              '<button class="btn btn-sm btn-primary" data-name="' + esc(s.name) + '" data-action="restore-dead">\u6062\u590d\u4e3a\u53ef\u7528</button></div>';
-          }).join("");
-        }
-        html += '<div style="margin:var(--space-3) 0 var(--space-1);color:var(--muted);font-size:12px">\u5df2\u4e00\u81f4\uff08\u65e0\u9700\u64cd\u4f5c\uff09\uff1a\u4e0d\u53ef\u8fbe\u4e14\u5df2\u6807\u8bb0\u6b7b\u94fe ' + (allResults.length - unreachEnabled.length - reachDisabled.length) + ' \u4e2a\uff1b\u53ef\u8fbe\u4e14\u53ef\u7528 0 \u4e2a\u3002</div>';
+        // 注意：这里只做文案汇总；交互式对账报告在链接健康 tab
+        // （renderHealthFromSites / batchCheckUrls），不要在此拼 HTML——
+        // 旧版曾拼过一份从未插入 DOM 的 html（还引用了未定义变量），已删。
         var msg = "检查完成：" + alive + " 正常，" + dead + " 不可达";
         if (unreachEnabled.length > 0) msg += "（" + unreachEnabled.length + " 个待标记死链）";
         if (reachDisabled.length > 0) msg += "（" + reachDisabled.length + " 个待恢复）";
@@ -959,10 +1071,14 @@ async function loadFeedbacks() {
     var feedbacks = data.feedbacks || [];
     statusEl.textContent = "共 " + (data.total || 0) + " 条" + (data.unread ? "（" + data.unread + " 条未读）" : "");
     if (data.unread > 0) { countEl.textContent = data.unread; countEl.style.display = "inline"; } else { countEl.style.display = "none"; }
-    if (feedbacks.length === 0) { list.innerHTML = '<div class="empty-state">暂无反馈</div>'; if (batchBar) { batchBar.style.display = "none"; batchBar.classList.remove("active"); } return; }
 
     // 批量操作栏（HTML 中已静态定义，此处确保显示）
     var batchBar = document.getElementById("fbBatchBar");
+    if (feedbacks.length === 0) {
+      list.innerHTML = '<div class="empty-state">暂无反馈</div>';
+      if (batchBar) { batchBar.style.display = "none"; batchBar.classList.remove("active"); }
+      return;
+    }
     if (batchBar) { batchBar.style.display = ""; batchBar.classList.add("active"); }
 
     var typeColors = { error: "var(--coral)", correction: "var(--amber)", positive: "var(--teal)" };
@@ -973,10 +1089,11 @@ async function loadFeedbacks() {
       var statusClass = f.status === "new" ? "font-semibold" : "text-muted";
       var typeClass = f.type === "error" ? "badge-danger" : f.type === "correction" ? "badge-warning" : f.type === "positive" ? "badge-success" : "badge-neutral";
       var borderColor = typeColors[f.type] || "var(--line)";
+      var typeLabel = f.typeLabel || typeLabels[f.type] || f.type;
       return '<div class="sub-card" style="border-left:3px solid ' + borderColor + '">' +
         '<div class="sub-header"><span class="sub-name">' + esc(f.siteName) + '</span>' +
         '<span class="sub-time">' + esc(time) + ' | ' + esc(f.ip) + '</span></div>' +
-        '<div class="mt-1"><span class="badge ' + typeClass + '">' + esc(typeLabels[f.type] || f.type) + '</span> ' +
+        '<div class="mt-1"><span class="badge ' + typeClass + '">' + esc(typeLabel) + '</span> ' +
         '<span class="' + statusClass + ' text-sm">' + esc(statusLabels[f.status] || f.status) + '</span></div>' +
         '<div class="sub-summary" style="white-space:normal">' + esc(f.content) + '</div>' +
         '<div class="sub-actions">' +
@@ -1061,7 +1178,7 @@ function exportSites() {
   }).catch(function(e) { toast(e.message || "网络错误", "error"); });
 }
 let IMPORT_DATA = null;
-function showImport() { IMPORT_DATA = null; document.getElementById("importFile").value = ""; document.getElementById("importPreview").style.display = "none"; document.getElementById("importBtn").disabled = true; document.getElementById("importOverwrite").checked = false; document.getElementById("importSkipDead").checked = true; _modalOpen(); document.getElementById("importModal").classList.add("active"); }
+function showImport() { var im = document.getElementById("importModal"); if (im.classList.contains("active")) _modalClose(); IMPORT_DATA = null; document.getElementById("importFile").value = ""; document.getElementById("importPreview").style.display = "none"; document.getElementById("importBtn").disabled = true; document.getElementById("importOverwrite").checked = false; document.getElementById("importSkipDead").checked = true; _modalOpen(); im.classList.add("active"); document.getElementById("importFile").focus(); }
 function closeImportModal() { document.getElementById("importModal").classList.remove("active"); IMPORT_DATA = null; _modalClose(); }
 function previewImport(input) {
   const file = input.files[0]; if (!file) return;
@@ -1114,6 +1231,15 @@ function _modalOpen() { _modalCount++; document.body.classList.add("modal-open")
 function _modalClose() { _modalCount = Math.max(0, _modalCount - 1); if (_modalCount === 0) document.body.classList.remove("modal-open"); }
 function showConfirm(title, body, extraHtml, okText) {
   return new Promise(function(resolve) {
+    // 单弹窗 + promise 防孤儿：若上一次确认尚未处理就再次弹窗，
+    // 立即以 false（取消）回给旧调用者并平衡 modal-open 计数，
+    // 否则旧 promise 永远 pending（调用方 await 卡死）。
+    if (_confirmCb) {
+      var prev = _confirmCb;
+      _confirmCb = null;
+      _modalClose();
+      try { prev(false); } catch (e) {}
+    }
     _confirmCb = resolve;
     document.getElementById("confirmTitle").textContent = title || "确认操作";
     document.getElementById("confirmBody").innerHTML = body || "";
@@ -1122,6 +1248,10 @@ function showConfirm(title, body, extraHtml, okText) {
     document.getElementById("confirmOkBtn").textContent = okText || "确认";
     _modalOpen();
     document.getElementById("confirmModal").classList.add("active");
+    // 焦点默认落在"取消"上：危险确认不会因顺手回车而误触发；
+    // 键盘用户 Tab 一次即达确认键，鼠标用户不受影响。
+    var cancelBtn = document.getElementById("confirmCancelBtn");
+    if (cancelBtn) cancelBtn.focus();
   });
 }
 function confirmResolve(result) {
@@ -1138,17 +1268,26 @@ function confirmResolve(result) {
 document.getElementById("confirmModal").addEventListener("click", function(e) {
   if (e.target === this) confirmResolve(false);
 });
+// 编辑/导入弹窗：点遮罩或按 Esc 均可关闭（此前只有确认弹窗支持，行为不一致）
+document.getElementById("editModal").addEventListener("click", function(e) {
+  if (e.target === this) closeModal();
+});
+document.getElementById("importModal").addEventListener("click", function(e) {
+  if (e.target === this) closeImportModal();
+});
 // ESC 关闭
 document.addEventListener("keydown", function(e) {
-  if (e.key === "Escape" && document.getElementById("confirmModal").classList.contains("active")) {
-    confirmResolve(false);
+  if (e.key === "Escape") {
+    if (document.getElementById("confirmModal").classList.contains("active")) { confirmResolve(false); return; }
+    if (document.getElementById("editModal").classList.contains("active")) { closeModal(); return; }
+    if (document.getElementById("importModal").classList.contains("active")) closeImportModal();
   }
   // 批量标签输入框回车提交
   if (e.key === "Enter" && document.activeElement && document.activeElement.id === "batchTagInput") {
     batchTag();
   }
 });
-if (TOKEN) { loadSites().then(() => loadDeadUrls()).then(() => { document.getElementById("loginView").style.display = "none"; document.getElementById("mainView").style.display = "block"; switchTab("health"); }).catch(() => { toast("密码错误", "error"); TOKEN = ""; localStorage.removeItem("sk-free-admin-token"); }); }
+if (TOKEN) { loadSites(true).then(() => loadDeadUrls()).then(() => { document.getElementById("loginView").style.display = "none"; document.getElementById("mainView").style.display = "block"; switchTab("health"); }).catch(() => { toast("密码错误", "error"); TOKEN = ""; localStorage.removeItem("sk-free-admin-token"); }); }
 document.addEventListener("click", function(e) {
   var el = e.target.closest("[data-action]"); if (!el) return;
   var action = el.getAttribute("data-action");
