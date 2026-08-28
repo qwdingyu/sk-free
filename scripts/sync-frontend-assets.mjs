@@ -27,10 +27,24 @@ cpSync(sourceDir, targetDir, { recursive: true });
 const indexPath = join(targetDir, "index.html");
 const indexContent = readFileSync(indexPath, "utf-8");
 // 先移除旧的 build 注释（如果有），避免重复插入
-const cleaned = indexContent.replace(/\n?\s*<!-- build:[a-f0-9]+ -->/g, "");
-const buildHash = createHash("sha256").update(cleaned).digest("hex").slice(0, 12);
-const patched = cleaned.replace(/<html[^>]*>/i, (m) => `${m}\n    <!-- build:${buildHash} -->`);
-writeFileSync(indexPath, patched, "utf-8");
+const cleanedIndex = indexContent.replace(/\n?\s*<!-- build:[a-f0-9]+ -->/g, "");
+const buildHash = createHash("sha256").update(cleanedIndex).digest("hex").slice(0, 12);
+const patchedIndex = cleanedIndex.replace(/<html[^>]*>/i, (m) => `${m}\n    <!-- build:${buildHash} -->`);
+writeFileSync(indexPath, patchedIndex, "utf-8");
 console.log(`✅ 构建标识已注入: build:${buildHash}`);
+
+// 为 admin.html 的脚本标签添加 cache-busting 查询参数，避免浏览器缓存旧 JS
+const adminPath = join(targetDir, "admin.html");
+if (existsSync(adminPath)) {
+  const adminContent = readFileSync(adminPath, "utf-8");
+  const patchedAdmin = adminContent.replace(
+    /<script type="module" crossorigin src="\/_app\/admin\.js">/g,
+    `<script type="module" crossorigin src="/_app/admin.js?build=${buildHash}">`
+  );
+  if (patchedAdmin !== adminContent) {
+    writeFileSync(adminPath, patchedAdmin, "utf-8");
+    console.log(`✅ admin.html cache-busting 已注入: build=${buildHash}`);
+  }
+}
 
 console.log("frontend assets synced to public/_app");

@@ -1137,7 +1137,7 @@ document.addEventListener("keydown", function(e) {
     batchTag();
   }
 });
-if (TOKEN) { loadSites().then(() => loadDeadUrls()).then(() => { document.getElementById("loginView").style.display = "none"; document.getElementById("mainView").style.display = "block"; }).catch(() => { toast("密码错误", "error"); TOKEN = ""; localStorage.removeItem("sk-free-admin-token"); }); }
+if (TOKEN) { loadSites().then(() => loadDeadUrls()).then(() => { document.getElementById("loginView").style.display = "none"; document.getElementById("mainView").style.display = "block"; switchTab("health"); }).catch(() => { toast("密码错误", "error"); TOKEN = ""; localStorage.removeItem("sk-free-admin-token"); }); }
 document.addEventListener("click", function(e) {
   var el = e.target.closest("[data-action]"); if (!el) return;
   var action = el.getAttribute("data-action");
