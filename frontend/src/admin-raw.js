@@ -343,13 +343,13 @@ async function batchTag() {
   try { const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "add_tag", names: [...SELECTED], tag: tag }) }); toast("已为 " + data.affected + " 个站点添加标签", "success"); SELECTED.clear(); updateBatchBar(); input.value = ""; await loadSites(); renderTable(); } catch (e) { toast(e.message, "error"); }
 }
 async function toggleEnable(name, enabled) {
-  try { const site = SITES.find((s) => s.name === name); if (!site) return; await api("/api/admin/sites/" + encodeURIComponent(name), { method: "PUT", body: JSON.stringify({ ...site, enabled }) }); toast(enabled ? "已启用：" + name : "已停用：" + name, "success"); if (!enabled && site.url) { try { await api("/api/admin/dead-urls", { method: "POST", body: JSON.stringify({ url: site.url, action: "add", reason: "manual-marked" }) }); } catch (e) { console.warn("写入 dead_urls 失败", e); } } await loadSites(); await loadDeadUrls(); renderTable(); } catch (e) { toast(e.message, "error"); }
+  try { const site = SITES.find((s) => s.name === name); if (!site) return; await api("/api/admin/sites/" + encodeURIComponent(name), { method: "PUT", body: JSON.stringify({ ...site, enabled }) }); toast(enabled ? "已启用：" + name : "已停用：" + name, "success"); if (!enabled && site.url) { try { await api("/api/admin/dead-urls", { method: "POST", body: JSON.stringify({ url: site.url, action: "add", reason: "manual-marked" }) }); } catch (e) { console.warn("写入 dead_urls 失败", e); } } await loadSites(); await loadDeadUrls(); renderTable(); renderHealthFromSites(); } catch (e) { toast(e.message, "error"); }
 }
 async function batchEnable() {
   if (SELECTED.size === 0) return;
   var btns = document.querySelectorAll('#batchBar .btn');
   btns.forEach(function(b) { btnLoading(b, true); });
-  try { const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "enable", names: [...SELECTED] }) }); toast("已启用 " + data.affected + " 个站点", "success"); SELECTED.clear(); updateBatchBar(); await loadSites(); renderTable(); } catch (e) { toast(e.message, "error"); } finally { btns.forEach(function(b) { btnLoading(b, false); }); }
+  try { const data = await api("/api/admin/sites/batch", { method: "POST", body: JSON.stringify({ action: "enable", names: [...SELECTED] }) }); toast("已启用 " + data.affected + " 个站点", "success"); SELECTED.clear(); updateBatchBar(); await loadSites(); await loadDeadUrls(); renderTable(); renderHealthFromSites(); } catch (e) { toast(e.message, "error"); } finally { btns.forEach(function(b) { btnLoading(b, false); }); }
 }
 async function batchDisable() {
   if (SELECTED.size === 0) return;
@@ -366,7 +366,7 @@ async function batchDisable() {
     }
     toast("已停用 " + SELECTED.size + " 个站点", "success"); 
     SELECTED.clear(); updateBatchBar(); 
-    await loadSites(); await loadDeadUrls(); renderTable();
+    await loadSites(); await loadDeadUrls(); renderTable(); renderHealthFromSites();
   } catch (e) { toast(e.message, "error"); } finally { btns.forEach(function(b) { btnLoading(b, false); }); }
 }
 // 对选中的站点重新做健康检查（只查选中的，不查全部）
