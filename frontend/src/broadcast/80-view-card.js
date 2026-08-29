@@ -116,8 +116,11 @@ function makeCard(site) {
     proxy.textContent = "🔓无需魔法";
     markers.appendChild(proxy);
   }
+  // parseThreshold 是全函数，无门槛站点返回 ["无门槛"]：
+  // 卡片上不为"没有门槛"这件事单独立一个徽标（它是好事，不是限制），
+  // 所以只在有真实门槛时才渲染。
   const thresholds = parseThreshold(site.register);
-  if (thresholds.length && thresholds[0] !== "无门槛") {
+  if (thresholds[0] !== "无门槛") {
     const th = document.createElement("span");
     th.className = "marker-threshold";
     th.textContent = thresholds.join("/");

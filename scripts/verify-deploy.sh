@@ -72,7 +72,7 @@ assert_html() {
 }
 
 assert_html "线上内容哈希与本地构建一致" "build:${BUILD_ID}"
-assert_html "广播页面标题 (sk-free 公益站导航)" "sk-free 公益站导航"
+assert_html "广播页面标题 (白嫖 API 速查)" "白嫖 API 速查"
 assert_html "广播页面主入口 (page-shell)" 'id="main-content"'
 assert_html "Vite 入口脚本 (main.js)" 'src="/_app/main.js"'
 
@@ -99,7 +99,7 @@ assert_admin() {
 assert_admin "管理后台登录框 (loginView)" 'id="loginView"'
 assert_admin "管理后台主视图 (mainView)" 'id="mainView"'
 assert_admin "站点表格 (sitesBody)" 'id="sitesBody"'
-assert_admin "Vite 管理脚本 (admin.js)" 'src="/_app/admin.js"'
+assert_admin "Vite 管理脚本 (admin.js)" "src=\"/_app/admin.js?build=${BUILD_ID}\""
 
 if echo "$API" | grep -q '"ok":true'; then
   echo "  [OK] /api/sites 正常返回"

@@ -130,10 +130,9 @@ function makeTableRow(site) {
     : '<div class="cell-cap dim">—</div>';
 
   // ── 门槛列 ──────────────────────────────────────────────────────────────────
+  // parseThreshold 是全函数（任何输入至少返回一个标签），空数组分支不可达
   const thresholds = parseThreshold(site.register);
-  const thHtml = thresholds.length
-    ? `<div class="cell-threshold">${thresholds.map((t) => `<span class="threshold-tag">${esc(t)}</span>`).join(" ")}</div>`
-    : '<div class="cell-threshold dim">—</div>';
+  const thHtml = `<div class="cell-threshold">${thresholds.map((t) => `<span class="threshold-tag">${esc(t)}</span>`).join(" ")}</div>`;
 
   // ── 鲜度列 ──────────────────────────────────────────────────────────────────
   const fresh = freshnessLevel(site.verifiedAt);

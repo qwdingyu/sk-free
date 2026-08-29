@@ -17,13 +17,16 @@
   --amber: #f57c00;
   --amber-soft: #fff3e0;
   --amber-ink: #835a10;
-  --red: #d32f2f;
   --graphite: #1b2428;
   --hover: #f0f0f0;
   --th-bg: #fafafa;
   --tag-bg: #eeeeee;
   --tag-text: #666666;
-  --font: system-ui, -apple-system, sans-serif;
+  /* 实心强调按钮（teal/coral 底）的前景色。
+     不能写死 #fff：暗色主题的 --teal 是 #4ecdc4，白字对比只有 1.93 —— 远低于
+     WCAG AA 的 4.5，实测"快捷视图选中态"、"视图切换选中态"、成功 toast 的文字
+     在暗色下几乎糊在底色里。亮色下 #fff/teal 是 4.86 达标，所以按主题分流。 */
+  --on-accent: #ffffff;
   --shadow: 0 1px 3px rgba(0, 0, 0, .08);
   --body-wash: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(247, 248, 244, 0.94));
   --card-shadow: 0 10px 26px rgba(23, 32, 28, 0.06);
@@ -41,7 +44,6 @@
   --hero-border: rgba(23, 32, 28, 0.14);
   --hero-ink: #17201c;
   --hero-muted: rgba(42, 60, 52, 0.72);
-  --hero-eyebrow: #087f78;
   --hero-overlay:
     radial-gradient(circle at 18% 18%, rgba(8, 127, 120, 0.12), transparent 28%),
     radial-gradient(circle at 74% 74%, rgba(200, 84, 69, 0.1), transparent 30%);
@@ -67,16 +69,26 @@
   --teal-ink: #9bf1e7;
   --coral: #ef5350;
   --coral-soft: #3a1a1a;
-  --danger-ink: #ef5350;
+  /* 负向文字专用墨色。原值 #ef5350（= --coral 本身）在暗色卡面 #23262b 上
+     实测只有 4.35，低于 AA 4.5；在偶数行底 #22302d 上更低（3.94）。
+     --coral 是给徽章底色用的，直接当文字不够亮。#ff8d7d 在卡面 6.76、
+     偶数行 6.12、页面底 7.54、coral-soft 底 6.97，全部达标。
+     （下方 .vote-score-inline.negative 的注释早就写着暗色应为 #ff8d7d，
+       但 token 实际一直是 #ef5350 —— 注释与代码脱节，此处对齐到注释。） */
+  --danger-ink: #ff8d7d;
   --amber: #ffb74d;
   --amber-soft: #3a2a10;
   --amber-ink: #ffb74d;
-  --red: #ef5350;
   --graphite: #0e1718;
   --hover: #2a2d32;
   --th-bg: #2a2d32;
   --tag-bg: #3a3d42;
-  --tag-text: #999999;
+  /* 原值 #999999 在 --tag-bg #3a3d42 上实测 3.83，低于 AA 4.5 ——
+     门槛标签、能力标签、卡片门槛徽标在暗色下都读不清。#bcc4c1 为 6.13。 */
+  --tag-text: #bcc4c1;
+  /* 暗色的 --teal/--coral 是高明度色，白字压不住（白/teal 仅 1.93）。
+     换成深墨字：#0e1718 on teal 9.40、on coral 5.22，都达标。 */
+  --on-accent: #0e1718;
   --shadow: 0 1px 3px rgba(0, 0, 0, .3);
   --body-wash: linear-gradient(180deg, rgba(12, 18, 18, 0.98), rgba(16, 21, 20, 0.96));
   --card-shadow: 0 10px 26px rgba(0, 0, 0, 0.18);
@@ -94,7 +106,6 @@
   --hero-border: rgba(190, 224, 212, 0.14);
   --hero-ink: #f8fff9;
   --hero-muted: rgba(237, 250, 242, 0.76);
-  --hero-eyebrow: #bdebd9;
   --hero-overlay:
     radial-gradient(circle at 24% 20%, rgba(120, 155, 40, 0.18), transparent 26%),
     radial-gradient(circle at 62% 84%, rgba(200, 84, 69, 0.14), transparent 28%);
@@ -211,7 +222,7 @@ h1 {
 
 .cta-button:hover {
   background: var(--teal);
-  color: #fff;
+  color: var(--on-accent);
   transform: translateY(-1px);
   box-shadow: 0 6px 16px rgba(8, 127, 120, 0.3);
 }
@@ -225,7 +236,7 @@ h1 {
 }
 .cta-primary {
   background: var(--teal);
-  color: #fff;
+  color: var(--on-accent);
   border-color: var(--teal);
   box-shadow: 0 4px 12px rgba(8, 127, 120, 0.25);
 }
@@ -367,7 +378,7 @@ h1 {
   border: none;
   border-radius: 6px;
   background: var(--teal);
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 700;
   cursor: pointer;
   transition: opacity 0.15s ease;
@@ -476,7 +487,7 @@ h1 {
 .feedback-type-btn.is-active {
   border-color: var(--teal);
   background: var(--teal);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .feedback-field textarea {
@@ -532,7 +543,7 @@ h1 {
   border: none;
   border-radius: 6px;
   background: var(--teal);
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 700;
   cursor: pointer;
   transition: opacity 0.15s ease;
@@ -722,7 +733,11 @@ h1 {
   background: var(--surface);
   text-decoration: none;
   color: inherit;
-  transition: box-shadow var(--transition-fast), border-color var(--transition-fast), transform 0.18s ease;
+  /* 时长写字面量，不用 var(--transition-fast)：那个 token 只在 admin.css 里
+     定义，而本文件是 index.html 加载的独立样式表，两者不共享 :root。
+     含无效 var() 的声明在计算值阶段整条失效 → transition 会回落到初始值
+     all 0s，连同一行里的 transform 过渡一起失效（悬停位移会瞬间跳变）。 */
+  transition: box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
 }
 .trusted-card:hover {
   border-color: var(--teal);
@@ -1024,7 +1039,10 @@ h1 {
 }
 
 .vote-score.negative {
-  color: var(--coral);
+  /* 与 .vote-score-inline.negative 保持同一个墨色 token：
+     两者是同一语义（负票数）在卡片/表格两种视图下的呈现，
+     此前一个用 --coral 一个用 --danger-ink，暗色下深浅不一致。 */
+  color: var(--danger-ink);
 }
 
 @keyframes vote-flash {
@@ -1476,7 +1494,10 @@ h1 {
 
 .btn-reported-dead:hover {
   background: var(--coral-soft);
-  color: var(--coral);
+  /* 同 .clear-filters-btn：--coral on --coral-soft 实测亮 4.30 / 暗 4.49，
+     两个主题都差一点到 AA。--danger-ink 分别是 5.48 / 6.97。
+     这是"标记已失效"的悬停态，误读代价高，不能糊。 */
+  color: var(--danger-ink);
   border-color: var(--coral);
 }
 
@@ -1574,11 +1595,17 @@ h1 {
   color: var(--muted);
 }
 
+/* 鲜度墨色：亮色下必须同时压住白卡面与 :nth-child(even) 的 --surface-soft
+   #f0f4ee 两种底。原值 #16a34a 在白底只有 3.30 / 偶数行 2.96，#a16207 是
+   4.92 / 4.43 —— 都低于 AA 4.5，而"多久前验证过"是本页最核心的决策信息。
+   换成 green-800 / yellow-800：7.13/6.41 与 6.85/6.16，全部达标。
+   圆点（.fresh-dot）保持原来的高饱和色：它是图形不是文字，
+   AA 文字阈值不适用，且亮色圆点+深色文字的搭配反而更易辨认。 */
 .fresh-green .fresh-dot  { background: #22c55e; }
-.fresh-green .fresh-label { color: #16a34a; }
+.fresh-green .fresh-label { color: #166534; }
 
 .fresh-yellow .fresh-dot  { background: #eab308; }
-.fresh-yellow .fresh-label { color: #a16207; }
+.fresh-yellow .fresh-label { color: #854d0e; }
 
 .fresh-stale .fresh-dot  { background: #a3a3a3; }
 .fresh-stale .fresh-label { color: var(--muted); }
@@ -1625,7 +1652,7 @@ h1 {
 
 .preset-btn.is-active {
   background: var(--teal);
-  color: #fff;
+  color: var(--on-accent);
   border-color: var(--teal);
   font-weight: 600;
 }
@@ -1805,7 +1832,7 @@ h1 {
 
 .view-btn.is-active {
   background: var(--teal);
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 600;
 }
 
@@ -1815,7 +1842,10 @@ h1 {
   border: 1px solid var(--coral);
   border-radius: 6px;
   background: transparent;
-  color: var(--coral);
+  /* 文字用 --danger-ink 而不是 --coral：--coral 是徽章底色，当文字时暗色下
+     只有 4.35（低于 AA）。--danger-ink 在两个主题的所有落地底色上都 ≥5.48。
+     边框仍用 --coral：边框是图形，不受文字对比阈值约束，且保持视觉一致。 */
+  color: var(--danger-ink);
   font-size: 0.8rem;
   cursor: pointer;
   transition: background 0.15s;
@@ -2060,13 +2090,13 @@ h1 {
 
 .toast-success {
   background: var(--teal);
-  color: #fff;
+  color: var(--on-accent);
   box-shadow: 0 8px 24px rgba(8, 127, 120, 0.35);
 }
 
 .toast-error {
   background: var(--coral);
-  color: #fff;
+  color: var(--on-accent);
   box-shadow: 0 8px 24px rgba(200, 84, 69, 0.35);
 }
 
@@ -2088,7 +2118,7 @@ h1 {
   z-index: 9999;
   padding: 8px 16px;
   background: var(--teal);
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 700;
   border-radius: 0 0 6px 0;
   text-decoration: none;
@@ -2242,9 +2272,9 @@ h1 {
 }
 
 .vote-score-inline.positive { color: var(--teal-ink, var(--teal)); }
-/* 负票数专用墨色（--coral 主体是给徽章底色用的，直接当文字不够深：
-   浅色 #c85445 在白卡面实测仅 4.37 < AA 4.5）。
-   --danger-ink：浅 #a83a2e/白卡 6.35、soft 底 5.41；暗=coral #ff8d7d/卡面 7.35 */
+/* 负票数专用墨色（--coral 主体是给徽章底色用的，直接当文字不够深）。
+   --danger-ink 实测：亮 #a83a2e 白卡 6.35 / 偶数行底 5.70；
+                     暗 #ff8d7d 卡面 6.76 / 偶数行底 6.12 —— 均达 AA。 */
 .vote-score-inline.negative { color: var(--danger-ink); }
 
 /* 死链分组：整组降饱和，明确"看得见但不该优先考虑" */
@@ -2338,48 +2368,4 @@ h1 {
   }
 
   .col-name { min-width: 100px; }
-}
-
-/* 站点管理分页 */
-#sitePagination {
-  margin-top: var(--space-2);
-}
-#sitePagination .pagination {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-#sitePagination .page-btn {
-  min-width: 32px;
-  height: 32px;
-  padding: 0 8px;
-  border: 1px solid var(--line);
-  background: var(--bg);
-  color: var(--text);
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.8rem;
-}
-#sitePagination .page-btn:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-#sitePagination .page-btn.active {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-}
-#sitePagination .page-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-#sitePagination .page-ellipsis {
-  padding: 0 4px;
-  color: var(--muted);
-}
-#sitePagination .page-info {
-  margin-left: auto;
-  font-size: 0.78rem;
-  color: var(--muted);
 }

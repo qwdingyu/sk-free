@@ -253,6 +253,89 @@ console.log("\n7. 额度文本的 0 与 null");
   check("真未知如实显示「额度未知」", quotaOf("真未知站"), "额度未知");
 }
 
+// ══ 8. Hero 主 CTA「查看高额度」必须与筛选栏状态一致 ═══════════════════════════
+// 这个入口绕过 preset chip 的点击处理器，直接改 state.activePreset。
+// 它曾经只调 updateResultBar（经 applyFilterChange），于是列表被筛了、
+// "高额度" chip 却不高亮、"清除筛选"按钮也不出现 —— 用户看到一个筛过的
+// 列表却找不到是哪个条件在生效，也没有一键还原的入口。
+// 另外它清了 state.query 但没清搜索框的 value，输入框会留着已失效的关键词。
+console.log("\n8. Hero 主 CTA 与筛选栏同步");
+{
+  const { window, doc } = await boot(SITES);
+  // jsdom 未实现 scrollIntoView（typeof === "undefined"），而处理器会调它。
+  // 补空实现，否则测到的是 jsdom 的缺失而不是我们的逻辑。
+  window.Element.prototype.scrollIntoView = function () {};
+
+  // 用真实输入路径写关键词：state 是 const，在 window.eval 里只建立词法绑定、
+  // 既不挂 window 也不跨 eval 调用可见，所以断言全部走 DOM 与真实事件，
+  // 这也更接近用户"先搜索、再点 Hero CTA"的实际操作。
+  const search = doc.getElementById("searchInput");
+  search.value = "中额度";
+  search.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await tick(320); // 越过 SEARCH_DEBOUNCE_MS(250)
+  check("前置条件：搜索已生效，只匹配中额度站", doc.getElementById("resultCount").textContent, "1 条中匹配 1 条");
+
+  click(window, doc.getElementById("heroPresetBtn"));
+  await tick();
+
+  const highBtn = Array.from(doc.querySelectorAll(".preset-btn")).find((b) => b.textContent.includes("高额度"));
+  check("「高额度」chip 高亮（说明 updateFilterUI 被调用）", highBtn.classList.contains("is-active"), true);
+  check("「高额度」chip aria-pressed=true", highBtn.getAttribute("aria-pressed"), "true");
+  check("其余 chip 未被误高亮", doc.querySelectorAll(".preset-btn.is-active").length, 1);
+  check("「清除筛选」按钮可见", doc.getElementById("clearFiltersBtn").hidden, false);
+  check("搜索框已清空（不留失效关键词）", search.value, "");
+  check("结果只剩活的高额度站", doc.getElementById("resultCount").textContent, "2 条中匹配 1 条");
+}
+
+// ══ 9. 「无门槛」筛选必须真的筛得出无门槛站点 ══════════════════════════════════
+// parseThreshold 曾经第一行是 `if (!register) return []`，而后端 formatSiteRow
+// 对缺失的 register 返回的是 ""（不是 null）—— 于是"无门槛"标签只在 register 是
+// 纯空白串这种数据异常时才产生。后果：同一页面上两个都叫「无门槛」的入口结论相反，
+// 快捷视图 chip 自己判空（!s.register）能筛出来，筛选面板的「无门槛」拿到 []，
+// some() 恒假 → 勾选后列表直接清空，看起来像"一个站都不符合"。
+// 本节同时锁定 parseThreshold 的全函数契约与两个入口的一致性。
+console.log("\n9. 「无门槛」筛选一致性");
+{
+  const noAuthSites = [
+    makeSite({ name: "零门槛站", slug: "n1", register: "" }),          // 后端真实产物
+    makeSite({ name: "GitHub站", slug: "n2", register: "GitHub 授权登录" }),
+    makeSite({ name: "邮箱站", slug: "n3", register: "邮箱注册" }),
+  ];
+  const { window, doc } = await boot(noAuthSites);
+
+  // parseThreshold 全函数契约：任何输入都至少一个标签，绝不返回 []
+  const probe = window.eval(
+    'JSON.stringify(["", null, undefined, "   ", "手机号"].map(parseThreshold))'
+  );
+  check("parseThreshold 对 \"\"/null/undefined/空白 都返回「无门槛」",
+    JSON.parse(probe).slice(0, 4), [["无门槛"], ["无门槛"], ["无门槛"], ["无门槛"]]);
+  check("填了但识别不出渠道 → 「其他」", JSON.parse(probe)[4], ["其他"]);
+
+  // 表格门槛列：无门槛站点必须显示「无门槛」标签，而不是占位破折号
+  const cellOf = (siteName) => {
+    const row = Array.from(doc.querySelectorAll("tbody:first-of-type tr")).find(
+      (tr) => tr.querySelector(".site-name")?.textContent.trim() === siteName
+    );
+    return row?.querySelector(".cell-threshold")?.textContent.trim();
+  };
+  check("表格里无门槛站显示「无门槛」而不是「—」", cellOf("零门槛站"), "无门槛");
+  check("表格里 GitHub 站显示「GitHub」", cellOf("GitHub站"), "GitHub");
+
+  // 筛选面板勾选「无门槛」→ 必须只剩那一条，而不是清空
+  click(window, doc.querySelector(".filter-toggle-btn"));
+  await tick();
+  const chips = Array.from(doc.querySelectorAll("#filterPanel .filter-chip"));
+  const noAuthChip = chips.find((c) => c.textContent.trim() === "无门槛");
+  check("筛选面板存在「无门槛」chip", !!noAuthChip, true);
+  click(window, noAuthChip);
+  await tick();
+  check("勾选「无门槛」后不是清空，而是精确剩 1 条",
+    doc.getElementById("resultCount").textContent, "1 条中匹配 1 条");
+  const names = Array.from(doc.querySelectorAll("tbody:first-of-type .site-name"))
+    .map((e) => e.textContent.trim());
+  check("剩下的正是那个零门槛站", names, ["零门槛站"]);
+}
+
 // ── 汇总 ──────────────────────────────────────────────────────────────────────
 console.log(`\n${"─".repeat(60)}`);
 if (failures.length === 0) {

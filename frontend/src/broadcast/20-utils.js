@@ -136,17 +136,32 @@ function netVotes(siteName) {
 
 /**
  * 解析门槛文本为标签
- * @param {string} register - 注册要求文本
- * @returns {string[]} 如 ["GitHub", "Telegram"]
+ *
+ * 本函数是**全函数**：任何输入都至少返回一个标签，绝不返回 []。
+ * 这一点是契约，调用方依赖它：
+ *   - 60-filter.js 的门槛筛选组用 thresholds.includes("无门槛") 判定
+ *   - 80-view-card.js 用 thresholds[0] !== "无门槛" 决定是否显示门槛徽标
+ *
+ * 曾经第一行是 `if (!register) return []`，而后端 formatSiteRow 对缺失的
+ * register 返回的正是 ""（不是 null）—— 于是"无门槛"标签只在 register 是
+ * 纯空白串这种数据异常时才产生。后果是同一页面上两个都叫「无门槛」的入口
+ * 结论相反：快捷视图 chip 自己判空（!s.register）能筛出来，而筛选面板的
+ * 「无门槛」走本函数拿到 []，some() 恒假 → 勾选后列表直接清空，
+ * 用户看到的是"一个站都不符合"，而不是本该出现的那批零门槛站点。
+ *
+ * @param {string} register - 注册要求文本（可能是 ""、null、undefined）
+ * @returns {string[]} 至少一个标签，如 ["GitHub"]、["无门槛"]
  */
 function parseThreshold(register) {
-  if (!register) return [];
-  const text = register.toLowerCase();
+  // 统一成字符串再判断，把 ""/null/undefined 收敛到同一条路径
+  const raw = typeof register === "string" ? register : "";
+  const text = raw.toLowerCase();
   const tags = [];
   if (text.includes("github")) tags.push("GitHub");
   if (text.includes("telegram") || text.includes("tg")) tags.push("Telegram");
   if (text.includes("邮箱") || text.includes("email")) tags.push("邮箱");
-  if (tags.length === 0 && register.trim()) tags.push("其他");
+  // 填了内容但识别不出具体渠道 → "其他"；真的没填 → "无门槛"
+  if (tags.length === 0 && raw.trim()) tags.push("其他");
   if (tags.length === 0) tags.push("无门槛");
   return tags;
 }

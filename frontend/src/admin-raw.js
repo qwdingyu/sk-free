@@ -456,7 +456,6 @@ async function toggleEnable(name, enabled) {
       try { await api("/api/admin/dead-urls", { method: "POST", body: JSON.stringify({ url: site.url, action: "add", reason: "manual-marked" }) }); } catch (e) { console.warn("写入 dead_urls 失败", e); }
     }
     await loadSites();
-    renderTable();
   } catch (e) { toast(e.message, "error"); }
 }
 async function batchEnable() {
